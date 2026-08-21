@@ -16,8 +16,6 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
   const [formData, setFormData] = useState<SystemSettings>({ ...settingsData });
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [alertMsg, setAlertMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [isTestingMysql, setIsTestingMysql] = useState<boolean>(false);
-  const [mysqlTestResult, setMysqlTestResult] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,15 +31,6 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
     }
   };
 
-  const handleTestMysql = async () => {
-    setIsTestingMysql(true);
-    setMysqlTestResult(null);
-    setTimeout(() => {
-      setIsTestingMysql(false);
-      setMysqlTestResult(`Conexão OK com MySQL central em ${formData.mysqlHost || '127.0.0.1'}:${formData.mysqlPort || 3306}. Base de dados '${formData.mysqlDatabase || 'nanucloud_central'}' pronta e sincronizada.`);
-    }, 800);
-  };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-6 font-mono text-xs">
       {/* Header */}
@@ -49,10 +38,10 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
         <div>
           <h3 className="text-sm font-bold text-slate-100 uppercase tracking-tight flex items-center gap-2">
             <Settings className="w-4 h-4 text-indigo-400" />
-            <span>Definições Globais, Empresa, MySQL Central & Redes Sociais</span>
+            <span>Definições Globais, Empresa & Redes Sociais</span>
           </h3>
           <p className="text-xs text-slate-400 font-sans mt-1">
-            Personalize logotipo, conexão de banco de dados MySQL central, rodapé, contactos, NIF, EMIS e monetização.
+            Personalize logotipo, contactos oficiais, rodapé, NIF, pagamentos e monetização da plataforma.
           </p>
         </div>
 
@@ -126,103 +115,11 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
         </div>
       </div>
 
-      {/* 2. Central MySQL Database Connection */}
-      <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 space-y-4">
-        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-          <h4 className="text-xs font-bold text-slate-200 uppercase flex items-center gap-2">
-            <Database className="w-4 h-4 text-emerald-400" />
-            <span>2. Conexão do Banco de Dados Central (MySQL / MariaDB)</span>
-          </h4>
-
-          <button
-            type="button"
-            onClick={handleTestMysql}
-            disabled={isTestingMysql}
-            className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 px-3 py-1 rounded-lg text-[11px] transition flex items-center gap-1.5"
-          >
-            <RefreshCw className={`w-3 h-3 ${isTestingMysql ? 'animate-spin' : ''}`} />
-            <span>Testar Conexão</span>
-          </button>
-        </div>
-
-        {mysqlTestResult && (
-          <div className="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-lg text-emerald-300 text-[11px] flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>{mysqlTestResult}</span>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label className="text-slate-400 block mb-1">Host do Servidor MySQL</label>
-            <input
-              type="text"
-              value={formData.mysqlHost || 'localhost'}
-              onChange={(e) => setFormData({ ...formData, mysqlHost: e.target.value })}
-              className="w-full bg-[#0F172A] border border-slate-700 text-slate-100 rounded-lg px-3 py-2"
-            />
-          </div>
-
-          <div>
-            <label className="text-slate-400 block mb-1">Porta MySQL</label>
-            <input
-              type="number"
-              value={formData.mysqlPort || 3306}
-              onChange={(e) => setFormData({ ...formData, mysqlPort: Number(e.target.value) })}
-              className="w-full bg-[#0F172A] border border-slate-700 text-slate-100 rounded-lg px-3 py-2"
-            />
-          </div>
-
-          <div>
-            <label className="text-slate-400 block mb-1">Nome da Base de Dados (Database)</label>
-            <input
-              type="text"
-              value={formData.mysqlDatabase || 'nanucloud_central'}
-              onChange={(e) => setFormData({ ...formData, mysqlDatabase: e.target.value })}
-              className="w-full bg-[#0F172A] border border-slate-700 text-slate-100 rounded-lg px-3 py-2"
-            />
-          </div>
-
-          <div>
-            <label className="text-slate-400 block mb-1">Utilizador MySQL</label>
-            <input
-              type="text"
-              value={formData.mysqlUser || 'nanucloud_user'}
-              onChange={(e) => setFormData({ ...formData, mysqlUser: e.target.value })}
-              className="w-full bg-[#0F172A] border border-slate-700 text-slate-100 rounded-lg px-3 py-2"
-            />
-          </div>
-
-          <div>
-            <label className="text-slate-400 block mb-1">Palavra-passe MySQL</label>
-            <input
-              type="password"
-              placeholder="••••••••••••"
-              value={formData.mysqlPassword || ''}
-              onChange={(e) => setFormData({ ...formData, mysqlPassword: e.target.value })}
-              className="w-full bg-[#0F172A] border border-slate-700 text-slate-100 rounded-lg px-3 py-2"
-            />
-          </div>
-
-          <div className="flex items-center gap-3 pt-6">
-            <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-              <input
-                type="checkbox"
-                checked={formData.mysqlSsl || false}
-                onChange={(e) => setFormData({ ...formData, mysqlSsl: e.target.checked })}
-                className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700"
-              />
-              <span>Ativar Conexão Segura SSL/TLS</span>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Contactos, Endereço, NIF e Rodapé */}
+      {/* 2. Contactos, Endereço, NIF e Rodapé */}
       <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 space-y-4">
         <h4 className="text-xs font-bold text-slate-200 uppercase flex items-center gap-2 border-b border-slate-800 pb-2">
           <MapPin className="w-4 h-4 text-sky-400" />
-          <span>3. Contactos Oficiais, NIF, Endereço & Rodapé</span>
+          <span>2. Contactos Oficiais, NIF, Endereço & Rodapé</span>
         </h4>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -298,11 +195,11 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
         </div>
       </div>
 
-      {/* 4. EMIS Multicaixa Express & Pagamentos Eletrónicos */}
+      {/* 3. EMIS Multicaixa Express & Pagamentos Eletrónicos */}
       <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 space-y-4">
         <h4 className="text-xs font-bold text-slate-200 uppercase flex items-center gap-2 border-b border-slate-800 pb-2">
           <DollarSign className="w-4 h-4 text-amber-400" />
-          <span>4. Integração EMIS Multicaixa Express (Pronto para Ativação Futura)</span>
+          <span>3. Integração EMIS Multicaixa Express (Pronto para Ativação Futura)</span>
         </h4>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -353,11 +250,11 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
         </div>
       </div>
 
-      {/* 5. Google AdSense & Monetização */}
+      {/* 4. Google AdSense & Monetização */}
       <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 space-y-4">
         <h4 className="text-xs font-bold text-slate-200 uppercase flex items-center gap-2 border-b border-slate-800 pb-2">
           <Globe className="w-4 h-4 text-emerald-400" />
-          <span>5. Monetização com Google AdSense (Exclusivo para Modo Gratuito)</span>
+          <span>4. Monetização com Google AdSense (Exclusivo para Modo Gratuito)</span>
         </h4>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -397,11 +294,11 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
         </div>
       </div>
 
-      {/* 6. Redes Sociais da Empresa */}
+      {/* 5. Redes Sociais da Empresa */}
       <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 space-y-4">
         <h4 className="text-xs font-bold text-slate-200 uppercase flex items-center gap-2 border-b border-slate-800 pb-2">
           <Share2 className="w-4 h-4 text-purple-400" />
-          <span>6. Redes Sociais Oficiais (Apenas aparecem no rodapé se preenchidos)</span>
+          <span>5. Redes Sociais Oficiais (Apenas aparecem no rodapé se preenchidos)</span>
         </h4>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

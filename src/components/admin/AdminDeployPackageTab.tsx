@@ -5,7 +5,7 @@ export const AdminDeployPackageTab: React.FC = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<'web' | 'exe' | 'apk' | 'ios' | 'wordpress' | 'docker'>('web');
   
   // Database Configuration Wizard State
-  const [dbType, setDbType] = useState<'json_sqlite' | 'postgres' | 'mysql' | 'cloudsql'>('json_sqlite');
+  const [dbType, setDbType] = useState<'json_sqlite' | 'postgres' | 'cloudsql'>('json_sqlite');
   const [dbAction, setDbAction] = useState<'create_new' | 'connect_existing'>('create_new');
   const [dbHost, setDbHost] = useState<string>('localhost');
   const [dbPort, setDbPort] = useState<string>('5432');
@@ -201,7 +201,6 @@ export const AdminDeployPackageTab: React.FC = () => {
             >
               <option value="json_sqlite">Base Local JSON / SQLite Embutido (Zero Configuração)</option>
               <option value="postgres">PostgreSQL 14+ (Recomendado para Produção)</option>
-              <option value="mysql">MySQL 8+ / MariaDB</option>
               <option value="cloudsql">Google Cloud SQL / AWS RDS</option>
             </select>
           </div>

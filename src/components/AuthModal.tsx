@@ -236,15 +236,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           <div>
-            <label className="text-slate-400 font-bold block mb-1">{t.lblEmail} *</label>
+            <label className="text-slate-400 font-bold block mb-1">
+              {mode === 'login' ? 'Email ou Utilizador *' : `${t.lblEmail} *`}
+            </label>
             <div className="relative">
               <Mail className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
               <input
-                type="email"
+                type={mode === 'login' ? 'text' : 'email'}
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu.email@exemplo.com"
+                placeholder={mode === 'login' ? 'admin ou seu.email@exemplo.com' : 'seu.email@exemplo.com'}
                 className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-indigo-500"
               />
             </div>
@@ -272,6 +274,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           >
             {isLoading ? 'A processar...' : mode === 'login' ? t.btnLogin : t.btnRegister}
           </button>
+
+          {mode === 'login' && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('admin');
+                  setPassword('admin');
+                }}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 font-mono py-1.5 px-3 rounded-lg text-[11px] flex items-center justify-center gap-1.5 transition"
+              >
+                <span>Preencher Teste: <strong>user admin / pass admin</strong></span>
+              </button>
+            </div>
+          )}
         </form>
 
         <div className="mt-4 pt-4 border-t border-slate-800 text-center">

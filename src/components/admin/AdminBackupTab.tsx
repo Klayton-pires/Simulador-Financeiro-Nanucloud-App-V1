@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Database, HardDrive, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, FileCode } from 'lucide-react';
+import { Download, Database, HardDrive, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, FileJson } from 'lucide-react';
 
 interface AdminBackupTabProps {
   isSuperAdmin: boolean;
@@ -36,27 +36,6 @@ export const AdminBackupTab: React.FC<AdminBackupTabProps> = ({ isSuperAdmin }) 
     }
   };
 
-  const handleDownloadSqlSchema = async () => {
-    try {
-      const res = await fetch('/api/admin/database/export-sql');
-      if (res.ok) {
-        const data = await res.json();
-        const blob = new Blob([data.sql], { type: 'text/sql' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = data.filename || `nanucloud_mysql_schema_${new Date().toISOString().split('T')[0]}.sql`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-        setAlertMsg({ text: 'Script MySQL exportado com sucesso!', type: 'success' });
-      }
-    } catch (err) {
-      setAlertMsg({ text: 'Erro ao descarregar script SQL.', type: 'error' });
-    }
-  };
-
   return (
     <div className="space-y-6 font-mono text-xs">
       {/* Header */}
@@ -74,20 +53,12 @@ export const AdminBackupTab: React.FC<AdminBackupTabProps> = ({ isSuperAdmin }) 
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleDownloadSqlSchema}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 transition border border-slate-700"
-            >
-              <FileCode className="w-4 h-4 text-sky-400" />
-              <span>Exportar MySQL (.sql)</span>
-            </button>
-
-            <button
               onClick={handleDownloadFullBackup}
               disabled={isGenerating}
               className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 transition shadow"
             >
               <Download className="w-4 h-4" />
-              <span>{isGenerating ? 'A Empacotar...' : 'Descarregar Backup Completo'}</span>
+              <span>{isGenerating ? 'A Empacotar...' : 'Descarregar Backup Completo (JSON)'}</span>
             </button>
           </div>
         </div>
@@ -110,9 +81,9 @@ export const AdminBackupTab: React.FC<AdminBackupTabProps> = ({ isSuperAdmin }) 
           </div>
 
           <div className="bg-[#0F172A] p-4 rounded-xl border border-slate-800 space-y-1">
-            <span className="text-[10px] text-slate-500 uppercase font-bold">Estrutura de Tabelas</span>
-            <p className="text-slate-200 font-bold text-xs">6 Tabelas Relacionais</p>
-            <span className="text-[10px] text-indigo-400">MySQL 8.0 InnoDB UTF8MB4</span>
+            <span className="text-[10px] text-slate-500 uppercase font-bold">Estrutura de Coleções</span>
+            <p className="text-slate-200 font-bold text-xs">Coleções do Sistema</p>
+            <span className="text-[10px] text-indigo-400">JSON Schema Validado</span>
           </div>
 
           <div className="bg-[#0F172A] p-4 rounded-xl border border-slate-800 space-y-1">
@@ -127,9 +98,9 @@ export const AdminBackupTab: React.FC<AdminBackupTabProps> = ({ isSuperAdmin }) 
       <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 space-y-3 font-sans text-xs text-slate-300 leading-relaxed">
         <h4 className="font-bold text-slate-100 font-mono uppercase text-sm">Instruções para Restauro em Caso de Desastre:</h4>
         <ol className="list-decimal pl-5 space-y-1.5">
-          <li>Descarregue o ficheiro JSON ou o script MySQL gerado pelo painel.</li>
-          <li>No servidor MySQL de destino (ex: RDS, phpMyAdmin ou linha de comandos), execute: <code className="bg-slate-900 px-2 py-0.5 rounded font-mono text-emerald-400">mysql -u nanucloud -p nanucloud_central &lt; backup.sql</code></li>
-          <li>Os parâmetros, utilizadores e chaves de segurança serão imediatamente restaurados sem necessidade de reinicialização.</li>
+          <li>Descarregue o ficheiro JSON de backup gerado pelo painel.</li>
+          <li>Em caso de reinstalação ou migração para novo servidor, coloque o ficheiro <code className="bg-slate-900 px-2 py-0.5 rounded font-mono text-emerald-400">data.json</code> na diretoria de dados da aplicação.</li>
+          <li>Os parâmetros, utilizadores, saldos e chaves de segurança serão imediatamente restaurados sem perda de integridade.</li>
         </ol>
       </div>
     </div>

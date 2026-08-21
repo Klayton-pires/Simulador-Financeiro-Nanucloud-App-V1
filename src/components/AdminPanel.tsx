@@ -18,7 +18,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
   const isSuperAdmin = user.role === 'admin_level1';
 
   const [activeTab, setActiveTab] = useState<
-    'kpis' | 'payments' | 'statements' | 'users' | 'plans' | 'bank_accounts' | 'fiscal_ai' | 'security_apis' | 'bot_learning' | 'deploy_packages' | 'chat' | 'logs' | 'settings' | 'db' | 'backup' | 'support'
+    'kpis' | 'payments' | 'statements' | 'users' | 'plans' | 'bank_accounts' | 'fiscal_ai' | 'security_apis' | 'bot_learning' | 'deploy_packages' | 'chat' | 'logs' | 'settings' | 'backup' | 'support'
   >('kpis');
 
   const [stats, setStats] = useState<any>(null);
@@ -375,10 +375,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
     }
   };
 
-  const handleExportMySQL = () => {
-    window.location.href = '/api/admin/database/export-sql';
-  };
-
   return (
     <div className="space-y-6">
       {/* Top Banner with Admin Level Indicator */}
@@ -591,16 +587,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
             >
               <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
               <span>Backups</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('db')}
-              className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-                activeTab === 'db' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-              }`}
-            >
-              <Database className="w-3.5 h-3.5 text-emerald-400" />
-              <span>MySQL Relacional</span>
             </button>
           </>
         )}
@@ -1605,7 +1591,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
         </div>
       )}
 
-      {/* 7. TAB: CONFIGURAÇÕES GLOBAIS DA EMPRESA & MYSQL (Super Admin) */}
+      {/* 7. TAB: CONFIGURAÇÕES GLOBAIS DA EMPRESA & SISTEMA (Super Admin) */}
       {activeTab === 'settings' && isSuperAdmin && settingsData && (
         <AdminAdvancedSettingsTab
           settingsData={settingsData}
@@ -1619,59 +1605,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
         <AdminBackupTab isSuperAdmin={isSuperAdmin} />
       )}
 
-      {/* 9. TAB: BANCO DE DADOS & MYSQL (Super Admin) */}
-      {activeTab === 'db' && isSuperAdmin && (
-        <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 md:p-6 shadow-sm space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-800 pb-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-100 font-mono uppercase tracking-tight">Exportação & Esquema do Banco Relacional MySQL</h3>
-              <p className="text-xs text-slate-400">Descarregue o script completo DDL/DML para MySQL 8.0, MariaDB ou phpMyAdmin</p>
-            </div>
-
-            <button
-              onClick={handleExportMySQL}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 transition shadow-sm"
-            >
-              <Download className="w-4 h-4" />
-              <span>Descarregar Schema MySQL (.sql)</span>
-            </button>
-          </div>
-
-          <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-5 space-y-3 text-xs">
-            <h4 className="font-bold text-slate-200 font-mono uppercase">Tabelas Relacionais Criadas & Mapeadas:</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 font-mono text-[11px]">
-              <div className="bg-[#1E293B] p-3 rounded-lg border border-slate-800">
-                <strong className="text-indigo-400">1. users</strong>
-                <p className="text-slate-400 font-sans mt-0.5">Utilizadores, senhas bcrypt, plano ativo, créditos e permissões.</p>
-              </div>
-              <div className="bg-[#1E293B] p-3 rounded-lg border border-slate-800">
-                <strong className="text-indigo-400">2. plans</strong>
-                <p className="text-slate-400 font-sans mt-0.5">5 Planos pré-configurados, limites e planos customizados.</p>
-              </div>
-              <div className="bg-[#1E293B] p-3 rounded-lg border border-slate-800">
-                <strong className="text-indigo-400">3. transactions</strong>
-                <p className="text-slate-400 font-sans mt-0.5">Histórico de compras, comprovativos de pagamento e validações.</p>
-              </div>
-              <div className="bg-[#1E293B] p-3 rounded-lg border border-slate-800">
-                <strong className="text-indigo-400">4. query_history</strong>
-                <p className="text-slate-400 font-sans mt-0.5">Histórico de simulações com descrições editáveis e exportação.</p>
-              </div>
-              <div className="bg-[#1E293B] p-3 rounded-lg border border-slate-800">
-                <strong className="text-indigo-400">5. audit_logs</strong>
-                <p className="text-slate-400 font-sans mt-0.5">Rastreamento de todas as ações de utilizadores e administradores.</p>
-              </div>
-              <div className="bg-[#1E293B] p-3 rounded-lg border border-slate-800">
-                <strong className="text-indigo-400">6. system_settings</strong>
-                <p className="text-slate-400 font-sans mt-0.5">Parâmetros operacionais, contactos WhatsApp e dados bancários.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* 10. TAB: ROBÔ APRENDIZAGEM & DÚVIDAS (Super Admin) */}
+      {/* 9. TAB: ROBÔ APRENDIZAGEM & DÚVIDAS (Super Admin) */}
       {activeTab === 'bot_learning' && isSuperAdmin && <AdminBotLearningTab />}
 
-      {/* 11. TAB: INSTALADOR MULTIPLATAFORMA (Super Admin) */}
+      {/* 10. TAB: INSTALADOR MULTIPLATAFORMA (Super Admin) */}
       {activeTab === 'deploy_packages' && isSuperAdmin && <AdminDeployPackageTab />}
     </div>
   );

@@ -144,7 +144,7 @@ export default config;
           }`}
         >
           <Globe className="w-3.5 h-3.5 text-sky-400" />
-          <span>Deploy Web & MySQL</span>
+          <span>Deploy Web & Servidor</span>
         </button>
 
         <button
@@ -242,7 +242,7 @@ export default config;
                   <li>Auditoria completa de logs com IP, horários e ações.</li>
                   <li>Ajuste das taxas unitárias por pesquisa (padrão 50 Kz).</li>
                   <li>Atualização dos dados bancários (IBAN e Multicaixa Express).</li>
-                  <li>Acesso e exportação do schema do banco MySQL (.sql).</li>
+                  <li>Geração e restauro de backups completos do sistema (JSON).</li>
                 </ul>
               </div>
 
@@ -262,15 +262,15 @@ export default config;
           </div>
         )}
 
-        {/* 3. WEB & MYSQL DEPLOY */}
+        {/* 3. WEB & SERVER DEPLOY */}
         {activeSection === 'web' && (
           <div className="space-y-4">
             <h3 className="text-base font-extrabold text-slate-100 border-b border-slate-700/80 pb-3">
-              3. Instalação Web & Integração com Banco MySQL / MariaDB
+              3. Instalação Web & Servidor Node.js
             </h3>
 
             <p>
-              O sistema foi construído em arquitetura full-stack (Node.js + Express + TypeScript + React). O ficheiro de base de dados relacional é compatível com MySQL 8.0 e MariaDB.
+              O sistema foi construído em arquitetura full-stack autossuficiente (Node.js + Express + TypeScript + React) com persistência atómica local.
             </p>
 
             <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-2 font-mono text-[11px]">

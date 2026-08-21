@@ -181,15 +181,6 @@ export interface SystemSettings {
   companyLogoUrl?: string;
   footerCopyrightText?: string;
   
-  // Central MySQL connection
-  mysqlHost?: string;
-  mysqlPort?: number;
-  mysqlDatabase?: string;
-  mysqlUser?: string;
-  mysqlPassword?: string;
-  mysqlSsl?: boolean;
-  mysqlStatus?: 'connected' | 'configured' | 'offline';
-
   // Electronic payments & EMIS
   emisEnabled?: boolean;
   emisEntityId?: string;

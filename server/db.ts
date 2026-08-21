@@ -234,8 +234,46 @@ class DatabaseEngine {
     
     // Filter out old placeholder demo test accounts
     this.data.users = this.data.users.filter(
-      (u) => u.email !== 'admin@nanucloud.com' && u.email !== 'teste@nanucloud.com' && u.email !== 'demo@nanucloud.com'
+      (u) => u.email !== 'teste@nanucloud.com' && u.email !== 'demo@nanucloud.com'
     );
+
+    // 0. Ensure default test Admin user (user: admin / password: admin)
+    let defaultAdmin = this.data.users.find(u => u.email.toLowerCase() === 'admin' || u.email.toLowerCase() === 'admin@nanucloud.com');
+    if (!defaultAdmin) {
+      const superAdminDefault: User = {
+        id: 'usr_admin_default',
+        name: 'Administrador (Admin)',
+        email: 'admin',
+        phone: '+244929462681',
+        company: 'NANUCLOUD Lda',
+        address: 'Angola, Luanda',
+        nif: '5001294819',
+        country: 'AO',
+        passwordHash: bcrypt.hashSync('admin', salt),
+        role: 'admin_level1',
+        isActive: true,
+        queriesRemaining: 999999,
+        totalQueriesUsed: 0,
+        activePlanId: 'plan_diamante',
+        activePlanName: 'Diamante Ilimitado (Super Admin)',
+        planExpiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000).toISOString(),
+        isImportUnlocked: true,
+        isBatchUnlocked: true,
+        twoFactorEnabled: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString()
+      };
+      this.data.users.unshift(superAdminDefault);
+    } else {
+      defaultAdmin.email = 'admin';
+      defaultAdmin.role = 'admin_level1';
+      defaultAdmin.isActive = true;
+      defaultAdmin.passwordHash = bcrypt.hashSync('admin', salt);
+      defaultAdmin.isImportUnlocked = true;
+      defaultAdmin.isBatchUnlocked = true;
+      defaultAdmin.queriesRemaining = 999999;
+    }
 
     // 1. Ensure Joaquim Monteiro is super admin Level 1
     let joaquim = this.findUserByEmail('joaquim.monteiro@nanucloud.com');
@@ -358,11 +396,6 @@ class DatabaseEngine {
       this.data.settings.chatBotEnabled = true;
       this.data.settings.chatAdminHoursStart = '08:00';
       this.data.settings.chatAdminHoursEnd = '18:00';
-      this.data.settings.mysqlHost = '127.0.0.1';
-      this.data.settings.mysqlPort = 3306;
-      this.data.settings.mysqlDatabase = 'nanucloud_db';
-      this.data.settings.mysqlUser = 'nanucloud_user';
-      this.data.settings.mysqlStatus = 'configured';
       this.data.settings.emisEnabled = true;
       this.data.settings.visaMastercardEnabled = true;
       this.data.settings.paypalEnabled = true;
@@ -558,14 +591,6 @@ class DatabaseEngine {
       companyLogoUrl: '',
       footerCopyrightText: '© 2025-2026 NANUCLOUD - Tecnologia e Soluções Lda. Todos os direitos reservados. Software de Gestão e Simulação Fiscal de Angola.',
       
-      mysqlHost: '127.0.0.1',
-      mysqlPort: 3306,
-      mysqlDatabase: 'nanucloud_db',
-      mysqlUser: 'nanucloud_user',
-      mysqlPassword: '',
-      mysqlSsl: true,
-      mysqlStatus: 'configured',
-
       emisEnabled: true,
       emisEntityId: '00123',
       emisTerminalId: 'TER99',
@@ -1038,7 +1063,11 @@ class DatabaseEngine {
   }
 
   public findUserByEmail(email: string): User | undefined {
-    return this.data.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    const clean = email.trim().toLowerCase();
+    return this.data.users.find(u => {
+      const uEmail = u.email.toLowerCase();
+      return uEmail === clean || (clean === 'admin' && (uEmail === 'admin' || uEmail === 'admin@nanucloud.com'));
+    });
   }
 
   public addUser(user: User): User {
@@ -1263,167 +1292,37 @@ class DatabaseEngine {
     return this.data.settings;
   }
 
-  // Full System & Central MySQL Backup Generator
-  public generateFullBackup(): { sql: string; json: string; filename: string; instructions: string } {
+  // Full System Database Backup Generator
+  public generateFullBackup(): { json: string; filename: string; instructions: string } {
     const nowStr = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `nanucloud_backup_${nowStr}`;
-    const sql = this.generateMySQLDump();
     const json = JSON.stringify(this.data, null, 2);
 
     const instructions = `================================================================================
-GUIA COMPLETO DE RESTAURO, INSTALAÇÃO E MANUTENÇÃO - NANUCLOUD
+GUIA DE RESTAURO, INSTALAÇÃO E MANUTENÇÃO - NANUCLOUD
 ================================================================================
-1. ARQUITETURA CENTRAL:
-   - Base de Dados Central: MySQL 8.0+ / MariaDB 10.5+
+1. ARQUITETURA DE DADOS:
+   - Base de Dados: JSON / SQLite local e cloud-ready.
    - Servidor Node.js / Express com TypeScript e Vite.
-   - Aplicação Multiplataforma (Web Desktop, Tablet, Mobile).
+   - Aplicação Multiplataforma (Web Desktop, Tablet, Mobile, PWA).
 
-2. COMO RESTAURAR A BASE DE DADOS MYSQL:
-   a) Crie a base de dados no seu servidor:
-      CREATE DATABASE nanucloud_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   b) Importe o ficheiro SQL incluído neste backup:
-      mysql -u nanucloud_user -p nanucloud_db < ${filename}.sql
+2. COMO RESTAURAR O BACKUP DO SISTEMA:
+   a) No painel de administração, importe o arquivo JSON de backup ou
+      substitua o arquivo /data/nanucloud_db.json na pasta do servidor.
+   b) Reinicie o servidor para carregar todas as contas e transações.
 
-3. CREDENCIAIS PADRÃO DO SUPER ADMINISTRADOR:
-   - E-mail Principal: joaquim.monteiro@nanucloud.com
-   - E-mail Alternativo: klayton_pires@hotmail.com
-   - Telefone Principal: +244 929 462 681
-   - Telefone Alternativo: +244 954 269 353
-   - Senha Inicial: admin123 (recomenda-se alteração no primeiro login)
+3. CREDENCIAIS PADRÃO DE TESTE E ADMINISTRAÇÃO:
+   - Utilizador Padrão de Teste: admin
+   - Senha Padrão de Teste: admin
+   - Super Administrador: joaquim.monteiro@nanucloud.com (admin123)
 
-4. MANUTENÇÃO E POLÍTICA DE BACKUP:
-   - Execute cópias de segurança diárias automatizadas via cronjob.
-   - Os ficheiros JSON em /data/nanucloud_db.json servem de fallback local.
+4. POLÍTICA DE BACKUP:
+   - Os ficheiros JSON em /data/nanucloud_db.json contêm o estado completo do sistema.
 
 © NANUCLOUD Lda - Todos os direitos reservados.
 ================================================================================`;
 
-    return { sql, json, filename, instructions };
-  }
-
-  public generateMySQLDump(): string {
-    const now = new Date().toISOString();
-    return `-- ==========================================================
--- NANUCLOUD ADVANCED FINANCIAL SIMULATOR - MYSQL CENTRAL DATABASE DUMP
--- Generated At: ${now}
--- Host: ${this.data.settings.mysqlHost || '127.0.0.1'} | Database: ${this.data.settings.mysqlDatabase || 'nanucloud_db'}
--- ==========================================================
-
-SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
-
--- 1. Table: users
-DROP TABLE IF EXISTS \`users\`;
-CREATE TABLE \`users\` (
-  \`id\` VARCHAR(64) NOT NULL PRIMARY KEY,
-  \`name\` VARCHAR(255) NOT NULL,
-  \`email\` VARCHAR(191) NOT NULL UNIQUE,
-  \`phone\` VARCHAR(50) DEFAULT NULL,
-  \`company\` VARCHAR(255) DEFAULT NULL,
-  \`address\` TEXT DEFAULT NULL,
-  \`nif\` VARCHAR(50) DEFAULT NULL,
-  \`country\` VARCHAR(10) NOT NULL DEFAULT 'AO',
-  \`password_hash\` VARCHAR(255) NOT NULL,
-  \`role\` ENUM('user', 'admin_level2', 'admin_level1') NOT NULL DEFAULT 'user',
-  \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
-  \`queries_remaining\` INT NOT NULL DEFAULT 3,
-  \`total_queries_used\` INT NOT NULL DEFAULT 0,
-  \`active_plan_id\` VARCHAR(64) DEFAULT NULL,
-  \`active_plan_name\` VARCHAR(255) DEFAULT NULL,
-  \`plan_expires_at\` DATETIME DEFAULT NULL,
-  \`is_import_unlocked\` TINYINT(1) NOT NULL DEFAULT 0,
-  \`is_batch_unlocked\` TINYINT(1) NOT NULL DEFAULT 0,
-  \`two_factor_enabled\` TINYINT(1) NOT NULL DEFAULT 0,
-  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  \`last_login_at\` DATETIME DEFAULT NULL,
-  INDEX \`idx_user_email\` (\`email\`),
-  INDEX \`idx_user_role\` (\`role\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 2. Table: plans
-DROP TABLE IF EXISTS \`plans\`;
-CREATE TABLE \`plans\` (
-  \`id\` VARCHAR(64) NOT NULL PRIMARY KEY,
-  \`name\` VARCHAR(255) NOT NULL,
-  \`price_kz\` DECIMAL(12,2) NOT NULL,
-  \`queries_count\` INT NOT NULL,
-  \`validity_days\` INT NOT NULL DEFAULT 30,
-  \`unit_price_kz\` DECIMAL(10,2) NOT NULL DEFAULT 50.00,
-  \`features_json\` TEXT NOT NULL,
-  \`unlocks_import\` TINYINT(1) NOT NULL DEFAULT 0,
-  \`unlocks_batch\` TINYINT(1) NOT NULL DEFAULT 0,
-  \`is_custom\` TINYINT(1) NOT NULL DEFAULT 0,
-  \`min_price_kz\` DECIMAL(12,2) DEFAULT NULL,
-  \`badge\` VARCHAR(100) DEFAULT NULL,
-  \`sort_order\` INT NOT NULL DEFAULT 0
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 3. Table: transactions
-DROP TABLE IF EXISTS \`transactions\`;
-CREATE TABLE \`transactions\` (
-  \`id\` VARCHAR(64) NOT NULL PRIMARY KEY,
-  \`user_id\` VARCHAR(64) NOT NULL,
-  \`user_name\` VARCHAR(255) NOT NULL,
-  \`user_email\` VARCHAR(191) NOT NULL,
-  \`plan_id\` VARCHAR(64) NOT NULL,
-  \`plan_name\` VARCHAR(255) NOT NULL,
-  \`amount_kz\` DECIMAL(12,2) NOT NULL,
-  \`queries_granted\` INT NOT NULL,
-  \`validity_days\` INT NOT NULL DEFAULT 30,
-  \`payment_method\` VARCHAR(50) NOT NULL,
-  \`payment_proof_url\` TEXT DEFAULT NULL,
-  \`payment_reference\` VARCHAR(255) DEFAULT NULL,
-  \`notes\` TEXT DEFAULT NULL,
-  \`status\` ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
-  \`reviewed_by_admin_id\` VARCHAR(64) DEFAULT NULL,
-  \`reviewed_by_admin_name\` VARCHAR(255) DEFAULT NULL,
-  \`reviewed_at\` DATETIME DEFAULT NULL,
-  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX \`idx_tx_user\` (\`user_id\`),
-  INDEX \`idx_tx_status\` (\`status\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 4. Table: query_history
-DROP TABLE IF EXISTS \`query_history\`;
-CREATE TABLE \`query_history\` (
-  \`id\` VARCHAR(64) NOT NULL PRIMARY KEY,
-  \`user_id\` VARCHAR(64) NOT NULL,
-  \`type\` ENUM('local', 'import', 'batch') NOT NULL,
-  \`title\` VARCHAR(255) NOT NULL,
-  \`description\` TEXT DEFAULT NULL,
-  \`country_code\` VARCHAR(10) NOT NULL,
-  \`cost_base\` DECIMAL(14,2) NOT NULL,
-  \`vat_rate\` DECIMAL(5,2) NOT NULL,
-  \`margin_applied\` DECIMAL(7,2) NOT NULL,
-  \`final_price\` DECIMAL(14,2) NOT NULL,
-  \`net_profit\` DECIMAL(14,2) NOT NULL,
-  \`currency\` VARCHAR(10) NOT NULL,
-  \`details_json\` LONGTEXT DEFAULT NULL,
-  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX \`idx_qh_user\` (\`user_id\`),
-  INDEX \`idx_qh_created\` (\`created_at\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 5. Table: audit_logs
-DROP TABLE IF EXISTS \`audit_logs\`;
-CREATE TABLE \`audit_logs\` (
-  \`id\` VARCHAR(64) NOT NULL PRIMARY KEY,
-  \`user_id\` VARCHAR(64) DEFAULT NULL,
-  \`user_name\` VARCHAR(255) DEFAULT NULL,
-  \`user_role\` VARCHAR(50) DEFAULT NULL,
-  \`action\` VARCHAR(100) NOT NULL,
-  \`entity_type\` VARCHAR(50) NOT NULL,
-  \`entity_id\` VARCHAR(64) DEFAULT NULL,
-  \`ip_address\` VARCHAR(45) DEFAULT NULL,
-  \`details\` TEXT NOT NULL,
-  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX \`idx_log_action\` (\`action\`),
-  INDEX \`idx_log_created\` (\`created_at\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-SET FOREIGN_KEY_CHECKS = 1;
-`;
+    return { json, filename, instructions };
   }
 }
 

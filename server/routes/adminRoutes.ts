@@ -511,27 +511,8 @@ router.delete('/bank-accounts/:id', requireAdminLevel1, (req: AuthRequest, res: 
 });
 
 // =========================================================================
-// 9. BANCO DE DADOS & EXPORTAÇÃO MYSQL & BACKUP COMPLETO (Nível 1 - Super Admin)
+// 9. BANCO DE DADOS & BACKUP COMPLETO (Nível 1 - Super Admin)
 // =========================================================================
-router.get('/database/export-sql', requireAdminLevel1, (req: AuthRequest, res: Response) => {
-  const admin = req.user!;
-  const sqlDump = db.generateMySQLDump();
-
-  db.addAuditLog({
-    userId: admin.id,
-    userName: admin.name,
-    userRole: admin.role,
-    action: 'MYSQL_DUMP_EXPORTED',
-    entityType: 'system',
-    ipAddress: req.ip || req.socket.remoteAddress,
-    details: `Script DDL/DML MySQL exportado pelo Super Administrador ${admin.name}.`
-  });
-
-  res.setHeader('Content-Disposition', 'attachment; filename=nanucloud_database_mysql_schema.sql');
-  res.setHeader('Content-Type', 'application/sql; charset=utf-8');
-  return res.send(sqlDump);
-});
-
 router.get('/backup/full', requireAdminLevel1, (req: AuthRequest, res: Response) => {
   const admin = req.user!;
   const backup = db.generateFullBackup();
@@ -543,7 +524,7 @@ router.get('/backup/full', requireAdminLevel1, (req: AuthRequest, res: Response)
     action: 'FULL_SYSTEM_BACKUP_DOWNLOADED',
     entityType: 'system',
     ipAddress: req.ip || req.socket.remoteAddress,
-    details: `Backup completo do sistema (MySQL + JSON + Instruções de Restauro) gerado por ${admin.name}.`
+    details: `Backup completo do sistema (JSON + Instruções de Restauro) gerado por ${admin.name}.`
   });
 
   return res.json(backup);

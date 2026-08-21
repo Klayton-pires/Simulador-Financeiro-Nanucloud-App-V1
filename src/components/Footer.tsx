@@ -135,7 +135,7 @@ export const Footer: React.FC<FooterProps> = ({ settings }) => {
             SESSION TIMEOUT: <span className="text-slate-400">24H</span>
           </span>
           <span className="hidden md:inline">
-            DB: <span className="text-indigo-400 font-bold">MySQL Central</span>
+            SYSTEM: <span className="text-emerald-400 font-bold">ONLINE & SECURE</span>
           </span>
         </div>
         <span>&copy; {copyright}</span>
