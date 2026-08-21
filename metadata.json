@@ -1,0 +1,6 @@
+{
+  "name": "NANUCLOUD",
+  "description": "Sistema completo de simulação financeira de produtos e serviços com retenção na fonte, comércio e importação aduaneira, gestão de planos, robô assistente multilíngue com aprendizagem e instalador multiplataforma.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

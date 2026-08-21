@@ -1,0 +1,443 @@
+import { Router, Response } from 'express';
+import * as XLSX from 'xlsx';
+import { db } from '../db.js';
+import { AuthRequest, requireAuth } from '../auth.js';
+import { QueryHistoryItem } from '../types.js';
+
+const router = Router();
+
+// 1. SIMULAÇÃO COMÉRCIO LOCAL & SERVIÇOS COM RETENÇÃO NA FONTE
+router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const {
+      countryCode,
+      costNet,
+      vatRate,
+      tpaRate,
+      marginPct,
+      fixedFinalPrice,
+      productName,
+      itemType, // 'product' | 'service'
+      retentionRate, // % retenção na fonte
+      notes
+    } = req.body;
+
+    if (costNet === undefined || costNet <= 0) {
+      return res.status(400).json({ error: 'O Custo Base deve ser superior a zero.' });
+    }
+
+    // Check query credits
+    if (user.queriesRemaining <= 0) {
+      return res.status(402).json({
+        error: 'As suas consultas gratuitas esgotaram. Por favor, adquira um plano ou recarregue créditos para continuar a simular.',
+        code: 'CREDITS_EXHAUSTED'
+      });
+    }
+
+    const cCostNet = Number(costNet);
+    const cVatRate = Number(vatRate) || 0;
+    const cTpaRate = Number(tpaRate) || 0;
+    const cMargin = Number(marginPct) || 0;
+    const cFixedPrice = Number(fixedFinalPrice) || 0;
+    const cRetentionRate = Number(retentionRate) || 0;
+    const isService = itemType === 'service' || cRetentionRate > 0;
+
+    let pvpBase = 0;
+    let pvpFinal = 0;
+    let vatSale = 0;
+    let profit = 0;
+    let actualMarginApplied = 0;
+
+    if (cFixedPrice > 0) {
+      pvpFinal = cFixedPrice;
+      pvpBase = pvpFinal / (1 + cVatRate / 100);
+      vatSale = pvpFinal - pvpBase;
+      profit = pvpBase - cCostNet;
+      actualMarginApplied = cCostNet > 0 ? (profit / cCostNet) * 100 : 0;
+    } else {
+      profit = cCostNet * (cMargin / 100);
+      pvpBase = cCostNet + profit;
+      vatSale = pvpBase * (cVatRate / 100);
+      pvpFinal = pvpBase + vatSale;
+      actualMarginApplied = cMargin;
+    }
+
+    const vatCost = cCostNet * (cVatRate / 100);
+    const netVatToPay = Math.max(0, vatSale - vatCost);
+    const tpaCost = pvpFinal * (cTpaRate / 100);
+    
+    // Retenção na fonte (deduzida no preço final/base de faturação conforme lei de cada país)
+    const retentionAmount = pvpBase * (cRetentionRate / 100);
+    
+    // Montante Líquido Efetivo a Receber (PVP Final - Retenção na Fonte - Taxa TPA)
+    const netReceived = pvpFinal - retentionAmount - tpaCost;
+
+    const operatingProfit = profit - tpaCost - (isService ? 0 : 0); // retention counts towards company income tax credit
+
+    // Industrial tax approximation (default 25% for AO, 21% for PT, etc.)
+    const industrialTaxRate = countryCode === 'PT' ? 21 : (countryCode === 'AO' ? 25 : 20);
+    const estimatedTax = operatingProfit > 0 ? operatingProfit * (industrialTaxRate / 100) : 0;
+    // Withholding tax can be offset against corporate income tax
+    const incomeTax = Math.max(0, estimatedTax - retentionAmount);
+    const netProfit = operatingProfit - incomeTax;
+
+    // Decrement credits
+    const updatedUser = db.updateUser(user.id, {
+      queriesRemaining: user.queriesRemaining - 1,
+      totalQueriesUsed: user.totalQueriesUsed + 1
+    });
+
+    const historyItem: QueryHistoryItem = {
+      id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      userId: user.id,
+      type: 'local',
+      itemType: isService ? 'service' : 'product',
+      retentionRate: cRetentionRate,
+      retentionAmount: retentionAmount,
+      netReceived: netReceived,
+      title: productName ? productName.trim() : (isService ? `Prestação de Serviços (${countryCode})` : `Comércio Local (${countryCode})`),
+      description: notes ? notes.trim() : `${isService ? 'Serviço' : 'Produto'} | Margem ${actualMarginApplied.toFixed(1)}% | Retenção ${cRetentionRate}% | Custo ${cCostNet.toFixed(2)}`,
+      countryCode: countryCode || 'AO',
+      costBase: cCostNet,
+      vatRate: cVatRate,
+      marginApplied: actualMarginApplied,
+      finalPrice: pvpFinal,
+      netProfit: netProfit,
+      currency: countryCode === 'PT' ? 'EUR' : (countryCode === 'AO' ? 'Kz' : 'USD'),
+      details: {
+        costNet: cCostNet,
+        vatCost,
+        grossProfit: profit,
+        pvpBase,
+        vatSale,
+        pvpFinal,
+        netVatToPay,
+        tpaCost,
+        retentionRate: cRetentionRate,
+        retentionAmount,
+        netReceived,
+        industrialTaxRate,
+        incomeTax,
+        netProfit,
+        itemType: isService ? 'service' : 'product',
+        fixedPriceUsed: cFixedPrice > 0
+      },
+      createdAt: new Date().toISOString()
+    };
+
+    db.addQueryHistory(historyItem);
+
+    return res.json({
+      success: true,
+      calculation: historyItem.details,
+      historyItem,
+      queriesRemaining: updatedUser?.queriesRemaining ?? 0
+    });
+  } catch (err: any) {
+    console.error('Error on calculate-local:', err);
+    return res.status(500).json({ error: 'Erro ao calcular simulação local.' });
+  }
+});
+
+// 2. SIMULAÇÃO IMPORTAÇÃO & DESPACHO ADUANEIRO
+router.post('/calculate-import', requireAuth, (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+
+    // Check if import module is unlocked
+    if (!user.isImportUnlocked && user.role === 'user') {
+      return res.status(403).json({
+        error: 'O Módulo de Importação Aduaneira encontra-se bloqueado. Adquira o Plano Ouro, Platina, Diamante ou Plano Personalizado para desbloquear.',
+        code: 'MODULE_LOCKED'
+      });
+    }
+
+    // Check query credits
+    if (user.queriesRemaining <= 0) {
+      return res.status(402).json({
+        error: 'As suas consultas esgotaram. Adquira um plano ou recarregue créditos para continuar.',
+        code: 'CREDITS_EXHAUSTED'
+      });
+    }
+
+    const {
+      originCountry,
+      destCountry,
+      fob,
+      freight,
+      insurance,
+      customsRate,
+      iecRate,
+      otherFees,
+      vatRate,
+      marginPct,
+      productName,
+      notes
+    } = req.body;
+
+    const cFob = Number(fob) || 0;
+    const cFreight = Number(freight) || 0;
+    const cInsurance = Number(insurance) || 0;
+    const cCustomsRate = Number(customsRate) || 0;
+    const cIecRate = Number(iecRate) || 0;
+    const cOtherFees = Number(otherFees) || 0;
+    const cVatRate = Number(vatRate) || 0;
+    const cMargin = Number(marginPct) || 0;
+
+    if (cFob <= 0) {
+      return res.status(400).json({ error: 'O valor FOB (Mercadoria) deve ser superior a zero.' });
+    }
+
+    // CIF = FOB + Frete + Seguro
+    const cif = cFob + cFreight + cInsurance;
+    // Direitos Aduaneiros
+    const customsDuty = cif * (cCustomsRate / 100);
+    // Imposto Especial de Consumo (IEC)
+    const iecTax = cif * (cIecRate / 100);
+    // Custo Base Nacionalizado (SEM IVA)
+    const nationalizedCostNet = cif + customsDuty + iecTax + cOtherFees;
+
+    // Venda Nacionalizada
+    const profit = nationalizedCostNet * (cMargin / 100);
+    const pvpBase = nationalizedCostNet + profit;
+    const vatSale = pvpBase * (cVatRate / 100);
+    const pvpFinal = pvpBase + vatSale;
+
+    const vatCost = nationalizedCostNet * (cVatRate / 100);
+    const netVatToPay = Math.max(0, vatSale - vatCost);
+    const tpaCost = pvpFinal * 0.01; // 1%
+    const industrialTaxRate = 25;
+    const operatingProfit = profit - tpaCost;
+    const incomeTax = operatingProfit > 0 ? operatingProfit * (industrialTaxRate / 100) : 0;
+    const netProfit = operatingProfit - incomeTax;
+
+    // Decrement credits
+    const updatedUser = db.updateUser(user.id, {
+      queriesRemaining: user.queriesRemaining - 1,
+      totalQueriesUsed: user.totalQueriesUsed + 1
+    });
+
+    const historyItem: QueryHistoryItem = {
+      id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      userId: user.id,
+      type: 'import',
+      title: productName ? productName.trim() : `Importação ${originCountry || 'CN'} -> ${destCountry || 'AO'}`,
+      description: notes ? notes.trim() : `FOB: ${cFob.toFixed(2)} | CIF: ${cif.toFixed(2)} | Custo Nacionalizado: ${nationalizedCostNet.toFixed(2)}`,
+      countryCode: destCountry || 'AO',
+      costBase: nationalizedCostNet,
+      vatRate: cVatRate,
+      marginApplied: cMargin,
+      finalPrice: pvpFinal,
+      netProfit: netProfit,
+      currency: destCountry === 'PT' ? 'EUR' : (destCountry === 'AO' ? 'Kz' : 'USD'),
+      details: {
+        originCountry,
+        destCountry,
+        fob: cFob,
+        freight: cFreight,
+        insurance: cInsurance,
+        cif,
+        customsRate: cCustomsRate,
+        customsDuty,
+        iecRate: cIecRate,
+        iecTax,
+        otherFees: cOtherFees,
+        nationalizedCostNet,
+        marginPct: cMargin,
+        profit,
+        pvpBase,
+        vatSale,
+        pvpFinal,
+        netVatToPay,
+        tpaCost,
+        incomeTax,
+        netProfit
+      },
+      createdAt: new Date().toISOString()
+    };
+
+    db.addQueryHistory(historyItem);
+
+    return res.json({
+      success: true,
+      calculation: historyItem.details,
+      historyItem,
+      queriesRemaining: updatedUser?.queriesRemaining ?? 0
+    });
+  } catch (err: any) {
+    console.error('Error on calculate-import:', err);
+    return res.status(500).json({ error: 'Erro ao calcular custos de importação aduaneira.' });
+  }
+});
+
+// 3. SIMULAÇÃO EM LOTE EXCEL
+router.post('/calculate-batch', requireAuth, (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+
+    // Check if batch module is unlocked
+    if (!user.isBatchUnlocked && user.role === 'user') {
+      return res.status(403).json({
+        error: 'O Módulo de Operações e Cálculos em Lote (Excel) encontra-se bloqueado. Adquira o Plano Platina, Diamante ou Personalizado para desbloquear.',
+        code: 'MODULE_LOCKED'
+      });
+    }
+
+    if (user.queriesRemaining <= 0) {
+      return res.status(402).json({
+        error: 'Consultas esgotadas. Recarregue a sua conta para continuar.',
+        code: 'CREDITS_EXHAUSTED'
+      });
+    }
+
+    const { items, countryCode, vatRate, marginPct, listName } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Nenhum item fornecido para processamento em lote.' });
+    }
+
+    const cVatRate = Number(vatRate) || 0;
+    const cMargin = Number(marginPct) || 0;
+    const industrialTaxRate = countryCode === 'PT' ? 21 : 25;
+
+    const processed = items.map((row: any, idx: number) => {
+      const keys = Object.keys(row);
+      const costKey = keys.find(k => ['custo', 'preço', 'preco', 'compra', 'price', 'cost', 'valor'].includes(k.toLowerCase().trim())) || keys[1] || keys[0];
+      const costNet = parseFloat(row[costKey]) || 0;
+
+      const profit = costNet * (cMargin / 100);
+      const pvpBase = costNet + profit;
+      const vatSale = pvpBase * (cVatRate / 100);
+      const pvpFinal = pvpBase + vatSale;
+      const vatCost = costNet * (cVatRate / 100);
+      const netVatToPay = Math.max(0, vatSale - vatCost);
+      const tpaCost = pvpFinal * 0.01;
+      const operatingProfit = profit - tpaCost;
+      const incomeTax = operatingProfit > 0 ? operatingProfit * (industrialTaxRate / 100) : 0;
+      const netProfit = operatingProfit - incomeTax;
+
+      return {
+        ...row,
+        'Custo Base (S/ IVA)': costNet.toFixed(2),
+        'Margem (%)': `${cMargin}%`,
+        'Lucro Bruto': profit.toFixed(2),
+        'PVP Base (S/ IVA)': pvpBase.toFixed(2),
+        'IVA Venda': vatSale.toFixed(2),
+        'PVP Final (C/ IVA)': pvpFinal.toFixed(2),
+        'IVA a Pagar': netVatToPay.toFixed(2),
+        'Lucro Líquido': netProfit.toFixed(2)
+      };
+    });
+
+    const updatedUser = db.updateUser(user.id, {
+      queriesRemaining: user.queriesRemaining - 1,
+      totalQueriesUsed: user.totalQueriesUsed + 1
+    });
+
+    const historyItem: QueryHistoryItem = {
+      id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      userId: user.id,
+      type: 'batch',
+      title: listName ? listName.trim() : `Lote Excel (${items.length} produtos)`,
+      description: `${items.length} itens calculados com ${cMargin}% margem e ${cVatRate}% IVA`,
+      countryCode: countryCode || 'AO',
+      costBase: processed.reduce((acc: number, r: any) => acc + (parseFloat(r['Custo Base (S/ IVA)']) || 0), 0),
+      vatRate: cVatRate,
+      marginApplied: cMargin,
+      finalPrice: processed.reduce((acc: number, r: any) => acc + (parseFloat(r['PVP Final (C/ IVA)']) || 0), 0),
+      netProfit: processed.reduce((acc: number, r: any) => acc + (parseFloat(r['Lucro Líquido']) || 0), 0),
+      currency: countryCode === 'PT' ? 'EUR' : (countryCode === 'AO' ? 'Kz' : 'USD'),
+      details: {
+        totalItems: items.length,
+        processedSample: processed.slice(0, 10),
+        marginPct: cMargin,
+        vatRate: cVatRate
+      },
+      createdAt: new Date().toISOString()
+    };
+
+    db.addQueryHistory(historyItem);
+
+    return res.json({
+      success: true,
+      processedItems: processed,
+      historyItem,
+      queriesRemaining: updatedUser?.queriesRemaining ?? 0
+    });
+  } catch (err: any) {
+    console.error('Error on calculate-batch:', err);
+    return res.status(500).json({ error: 'Erro ao processar ficheiro em lote.' });
+  }
+});
+
+// 4. HISTÓRICO DE CONSULTAS DO UTILIZADOR
+router.get('/history', requireAuth, (req: AuthRequest, res: Response) => {
+  const user = req.user!;
+  const history = db.getQueryHistory().filter(q => q.userId === user.id);
+  return res.json({ history });
+});
+
+// 5. ATUALIZAR DESCRIÇÃO / NOTAS NA TABELA DO HISTÓRICO
+router.put('/history/:id', requireAuth, (req: AuthRequest, res: Response) => {
+  const user = req.user!;
+  const { id } = req.params;
+  const { title, description } = req.body;
+
+  const item = db.findQueryHistoryById(id);
+  if (!item || item.userId !== user.id) {
+    return res.status(404).json({ error: 'Registo de histórico não encontrado ou sem permissão.' });
+  }
+
+  const updated = db.updateQueryHistory(id, {
+    title: title !== undefined ? title.trim() : item.title,
+    description: description !== undefined ? description.trim() : item.description
+  });
+
+  return res.json({ message: 'Registo atualizado com sucesso!', item: updated });
+});
+
+// 6. ELIMINAR REGISTO DO HISTÓRICO
+router.delete('/history/:id', requireAuth, (req: AuthRequest, res: Response) => {
+  const user = req.user!;
+  const { id } = req.params;
+
+  const deleted = db.deleteQueryHistory(id, user.id);
+  if (!deleted) {
+    return res.status(404).json({ error: 'Registo não encontrado.' });
+  }
+
+  return res.json({ message: 'Registo removido do histórico com sucesso.' });
+});
+
+// 7. EXPORTAR HISTÓRICO PARA EXCEL (.xlsx)
+router.get('/history-export', requireAuth, (req: AuthRequest, res: Response) => {
+  const user = req.user!;
+  const history = db.getQueryHistory().filter(q => q.userId === user.id);
+
+  const exportData = history.map(item => ({
+    'ID Simulação': item.id,
+    'Data / Hora': new Date(item.createdAt).toLocaleString('pt-PT'),
+    'Tipo': item.type === 'local' ? 'Comércio Local' : (item.type === 'import' ? 'Importação' : 'Lote Excel'),
+    'Título / Produto': item.title,
+    'Descrição / Notas': item.description,
+    'País Fiscal': item.countryCode,
+    'Custo Base': item.costBase,
+    'Taxa IVA (%)': item.vatRate,
+    'Margem Aplicada (%)': item.marginApplied,
+    'Preço Final (PVP)': item.finalPrice,
+    'Lucro Líquido': item.netProfit,
+    'Moeda': item.currency
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData.length > 0 ? exportData : [{ 'Aviso': 'Sem registos no histórico' }]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Histórico de Simulações');
+
+  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Disposition', `attachment; filename=Historico_Simulacoes_${user.name.replace(/\s+/g, '_')}.xlsx`);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  return res.send(buffer);
+});
+
+export default router;
