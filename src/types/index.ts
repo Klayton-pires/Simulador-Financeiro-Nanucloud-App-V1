@@ -1,4 +1,43 @@
-export type UserRole = 'user' | 'admin_level2' | 'admin_level1';
+export type UserRole = 'super_admin' | 'admin' | 'manager' | 'user' | 'client' | 'admin_level1' | 'admin_level2';
+
+export interface PermissionGroup {
+  id: string;
+  name: string;
+  description: string;
+  permissions: string[]; // List of permission keys
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PermissionKey =
+  | 'calc_local'
+  | 'calc_services'
+  | 'calc_import_sea'
+  | 'calc_import_land'
+  | 'calc_import_air'
+  | 'batch_excel'
+  | 'api_integration'
+  | 'view_clients'
+  | 'create_clients'
+  | 'edit_clients'
+  | 'manage_tickets'
+  | 'transfer_tickets'
+  | 'fiscal_matrix_edit'
+  | 'manual_payment_validate'
+  | 'export_reports'
+  | 'sms_email_marketing'
+  | 'db_engines_config'
+  | 'backup_system'
+  | 'docs_deploy'
+  | 'metrics_view'
+  | 'system_settings_edit';
+
+export interface PermissionDef {
+  key: PermissionKey;
+  label: string;
+  category: 'Simulação e Cálculos' | 'Clientes e Atendimento' | 'Fiscal e Auditoria' | 'Integrações e APIs' | 'Marketing e Comunicação' | 'Administração e Sistema';
+  description: string;
+}
 
 export interface UserSafe {
   id: string;
@@ -10,6 +49,8 @@ export interface UserSafe {
   nif?: string;
   country: string;
   role: UserRole;
+  permissionGroupId?: string;
+  customPermissions?: string[];
   isActive: boolean;
   queriesRemaining: number;
   totalQueriesUsed: number;
@@ -18,7 +59,11 @@ export interface UserSafe {
   planExpiresAt: string | null;
   isImportUnlocked: boolean;
   isBatchUnlocked: boolean;
+  isApiUnlocked?: boolean;
   twoFactorEnabled?: boolean;
+  twoFactorPhone?: string;
+  loginSmsEnabled?: boolean;
+  birthDate?: string;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
@@ -27,11 +72,13 @@ export interface UserSafe {
 export interface BankAccount {
   id: string;
   bankName: string;
+  accountNumber?: string;
   iban: string;
   swift?: string;
   holder: string;
   currency?: string;
   isActive: boolean;
+  isVisible: boolean; // Checkbox to show/hide to clients
 }
 
 export interface VatOption {
@@ -47,6 +94,8 @@ export interface CountryFiscal {
   vatOptions: VatOption[];
   ii: number; // Industrial / corporate tax %
   tpa: number; // Default card fee %
+  retentionServiceRate?: number; // Withholding tax rate (e.g. 6.5% Angola, 11.5% Portugal)
+  statisticalTax?: number; // Statistical customs fee %
   margins: number[];
   defaultCustomsRate?: number;
 }
@@ -61,8 +110,15 @@ export interface Plan {
   features: string[];
   unlocksImport: boolean;
   unlocksBatch: boolean;
+  unlocksApi?: boolean;
   isCustom?: boolean;
   minPriceKz?: number;
+  moduleMinPrices?: {
+    importMultimodal: number;
+    batchExcel: number;
+    apiIntegration: number;
+    extraQueriesUnit: number;
+  };
   badge?: string;
   sortOrder: number;
 }
@@ -90,10 +146,28 @@ export interface Transaction {
   createdAt: string;
 }
 
+export interface ManualPaymentValidation {
+  id: string;
+  transactionId: string;
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+  planId: string;
+  planName: string;
+  amountKz: number;
+  paymentMethod: string;
+  proofDocumentName?: string;
+  validatedByUserId: string;
+  validatedByUserName: string;
+  validationNotes: string;
+  status: 'approved' | 'rejected';
+  validatedAt: string;
+}
+
 export interface QueryHistoryItem {
   id: string;
   userId: string;
-  type: 'local' | 'import' | 'batch';
+  type: 'local' | 'import' | 'batch' | 'api';
   itemType?: 'product' | 'service';
   title: string;
   description: string;
@@ -107,76 +181,144 @@ export interface QueryHistoryItem {
   retentionAmount?: number;
   netReceived?: number;
   currency: string;
+  transportMode?: 'sea' | 'land' | 'air';
   details: Record<string, any>;
   createdAt: string;
 }
 
-export interface BotKnowledgeItem {
+export interface SupportTicket {
   id: string;
-  question: string;
-  keywords: string[];
-  answer: string;
-  language: string;
-  category?: string;
-  isApproved: boolean;
-  learnedFromAdminId?: string;
-  learnedFromAdminName?: string;
-  learnedAt: string;
-}
-
-export interface UnresolvedBotQuestion {
-  id: string;
-  sessionId: string;
+  ticketNumber: string;
+  userId: string;
   userName: string;
-  userEmail?: string;
-  question: string;
-  detectedLanguage: string;
-  importance: 'low' | 'normal' | 'high';
-  status: 'pending' | 'ignored' | 'answered';
-  adminAnswer?: string;
-  answeredByAdminId?: string;
-  answeredByAdminName?: string;
-  answeredAt?: string;
+  userEmail: string;
+  userPhone?: string;
+  subject: string;
+  message: string;
+  priority: 'baixa' | 'normal' | 'alta' | 'urgente';
+  status: 'aberto' | 'em_analise' | 'aguardando_cliente' | 'transferido' | 'resolvido' | 'fechado';
+  assignedToUserId?: string;
+  assignedToUserName?: string;
+  department?: string;
+  history: {
+    timestamp: string;
+    action: string;
+    actorName: string;
+    notes?: string;
+  }[];
   createdAt: string;
+  updatedAt: string;
 }
 
-export interface AuditLog {
-  id: string;
-  userId?: string;
-  userName?: string;
-  userRole?: string;
-  action: string;
-  entityType: string;
-  entityId?: string;
-  ipAddress?: string;
-  details: string;
-  createdAt: string;
-}
-
-export interface FiscalProposal {
+export interface FiscalNotification {
   id: string;
   countryCode: string;
   countryName: string;
-  taxType: 'IVA' | 'II' | 'DU' | 'PautaAduaneira';
-  currentValue: number | string;
-  proposedValue: number | string;
-  sourceLaw: string;
-  reason: string;
-  detectedAt: string;
-  status: 'pending' | 'approved' | 'rejected';
-  reviewedBy?: string;
-  reviewedAt?: string;
+  agencyName: string;
+  title: string;
+  summary: string;
+  taxType: 'IVA' | 'Imposto Industrial' | 'Retenção Fonte' | 'Pauta Aduaneira' | 'Taxa Estatística';
+  oldRate?: number | string;
+  newRate?: number | string;
+  effectiveDate: string;
+  sourceUrl: string;
+  lawReference: string;
+  isCritical: boolean;
+  readByManagers: {
+    managerId: string;
+    managerName: string;
+    readAt: string;
+  }[];
+  createdAt: string;
 }
 
-export interface ApiKeyItem {
+export interface DatabaseEngineConfig {
+  id: string;
+  type: 'mysql' | 'mssql' | 'postgres' | 'sqlite' | 'json';
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password?: string;
+  ssl: boolean;
+  isActive: boolean;
+  connectionStatus: 'connected' | 'error' | 'disconnected' | 'testing';
+  lastTestedAt?: string;
+  errorMessage?: string;
+}
+
+export interface ApiIntegrationConfig {
+  id: string;
+  systemName: 'PHC' | 'Primavera' | 'SAP' | 'Sage' | 'Odoo' | 'Moloni' | 'WooCommerce' | 'Shopify' | 'Magento' | 'PrestaShop' | 'Excel / Power Query' | 'Custom REST';
+  systemCategory: 'ERP Gestão' | 'E-commerce' | 'Planilhas & BI' | 'Personalizado';
+  apiKey: string;
+  apiSecret?: string;
+  webhookUrl?: string;
+  syncPriceFieldOnly: boolean; // Systems with single sales price field
+  recommendedFields: string[];
+  isActive: boolean;
+  queriesHandled: number;
+  lastCallAt?: string;
+  createdAt: string;
+}
+
+export interface MarketingCampaign {
+  id: string;
+  title: string;
+  type: 'sms' | 'email';
+  category: 'promocao' | 'alerta_saldo' | 'atualizacao_fiscal' | 'comemorativa_feriado' | 'personalizada';
+  targetAudience: 'todos' | 'clientes_ativos' | 'clientes_expirados' | 'sem_saldo';
+  subject?: string;
+  messageTemplate: string; // Supports variables: {nome}, {empresa}, {saldo}, {plano}
+  sentCount: number;
+  status: 'draft' | 'scheduled' | 'sent';
+  sentAt?: string;
+  createdAt: string;
+}
+
+export interface ConsultingAuditEntry {
+  id: string;
+  operationType: string;
+  operatorId: string;
+  operatorName: string;
+  operatorRole: string;
+  clientAffectedId?: string;
+  clientAffectedName?: string;
+  ipAddress: string;
+  details: string;
+  beforeSnapshot?: any;
+  afterSnapshot?: any;
+  timestamp: string;
+}
+
+export interface SystemTheme {
   id: string;
   name: string;
-  key: string;
-  system: 'xd' | 'winrest' | 'primavera' | 'sap' | 'phc' | 'sage' | 'custom';
-  permissions: string[];
-  status: 'active' | 'revoked';
-  createdAt: string;
-  lastUsedAt?: string;
+  accent: string;
+  bodyBg: string;
+  cardBg: string;
+  fontFamily: string;
+  description: string;
+}
+
+export interface AdsenseSlotConfig {
+  id: string;
+  slotNumber: 1 | 2 | 3;
+  title: string;
+  position: 'topo_banner' | 'lateral_banner' | 'rodape_banner';
+  slotId: string;
+  format: 'auto' | 'horizontal' | 'rectangle';
+  isActive: boolean;
+}
+
+export interface CentralServerConfig {
+  serverUrl: string;
+  clusterId: string;
+  syncIntervalMinutes: number;
+  autoSync: boolean;
+  status: 'online' | 'offline' | 'syncing';
+  lastSyncedAt?: string;
 }
 
 export interface SystemSettings {
@@ -186,17 +328,50 @@ export interface SystemSettings {
   freeQueriesDaily: number;
   whatsappSupport1: string;
   whatsappSupport2: string;
+  whatsappSupport3?: string;
+  whatsappSupport4?: string;
   supportEmail: string;
   companyName: string;
   companyAddress: string;
   companyNif?: string;
   companyPhone1?: string;
   companyPhone2?: string;
+  companyPhone3?: string;
+  companyPhone4?: string;
   companyEmail1?: string;
   companyEmail2?: string;
   companyLogoUrl?: string;
   footerCopyrightText?: string;
   
+  // Bank Accounts (up to 6 coordinates with checkbox)
+  bankAccounts: BankAccount[];
+
+  // Database Engines
+  dbEngines?: DatabaseEngineConfig[];
+
+  // Central Server Link
+  centralServer?: CentralServerConfig;
+
+  // Google AdSense (Up to 3 slots in free mode)
+  googleAdsenseEnabled?: boolean;
+  googleAdsensePublisherId?: string;
+  googleAdsenseSlots?: AdsenseSlotConfig[];
+
+  // Themes & Fonts
+  activeThemeId?: string;
+  activeFontFamily?: string;
+  holidayCelebrationEnabled?: boolean;
+  birthdayGreetingEnabled?: boolean;
+
+  // Security & SMS Login
+  loginSmsEnabled?: boolean;
+  twoFactorAuthEnabled?: boolean;
+  cyberSecurityAiEnabled?: boolean;
+  maxUploadSizeBytes?: number; // File upload limits
+
+  // Fiscal AI
+  fiscalAiAutoCheckEnabled?: boolean;
+
   // Electronic payments & EMIS
   emisEnabled?: boolean;
   emisEntityId?: string;
@@ -212,47 +387,13 @@ export interface SystemSettings {
   stripePublicKey?: string;
   stripeSecretKey?: string;
 
-  // Support & Chat
+  // Chat & Support
   chatBotEnabled?: boolean;
   chatAdminHoursStart?: string;
   chatAdminHoursEnd?: string;
   chatWelcomeMessage?: string;
   chatOfflineMessage?: string;
-  chatMaxInactivityMinutes?: number;
 
-  // Security & 2FA
-  twoFactorAuthEnabled?: boolean;
-  cyberSecurityAiEnabled?: boolean;
-  blockedIps?: string[];
-
-  // Social & Marketing
-  socialFacebook?: string;
-  socialInstagram?: string;
-  socialTwitterX?: string;
-  socialLinkedIn?: string;
-  socialMessenger?: string;
-  socialTikTok?: string;
-  socialSnapchat?: string;
-  socialWhatsApp?: string;
-  socialYouTube?: string;
-
-  // Themes
-  activeThemeId?: string;
-  autoHolidayThemeEnabled?: boolean;
-
-  // Fiscal AI
-  fiscalAiAutoCheckEnabled?: boolean;
-
-  // Marketing & Google AdSense
-  googleAdsenseEnabled?: boolean;
-  googleAdsensePublisherId?: string;
-  googleAdsenseSlotId?: string;
-
-  bankName: string;
-  bankIban: string;
-  bankHolder: string;
-  expressPhone: string;
-  bankAccounts?: BankAccount[];
   allowRegistration: boolean;
   maintenanceMode: boolean;
 }
@@ -285,18 +426,4 @@ export interface ChatMessage {
   attachmentType?: string;
   timestamp: string;
   isRead?: boolean;
-}
-
-export interface AppTheme {
-  id: string;
-  name: string;
-  category: 'angola_holiday' | 'corporate' | 'modern_dark' | 'professional_light' | 'special';
-  holidayDate?: string; // DD/MM for automatic activation
-  holidayName?: string;
-  primaryColor: string;
-  accentColor: string;
-  bgDark: string;
-  cardBg: string;
-  badgeBg: string;
-  description: string;
 }

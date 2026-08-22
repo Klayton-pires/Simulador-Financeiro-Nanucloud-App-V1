@@ -1,8 +1,28 @@
 import React, { useState } from 'react';
-import { BookOpen, Shield, Globe, Terminal, Smartphone, Monitor, Code, HelpCircle, Copy, Check, FileText } from 'lucide-react';
+import {
+  BookOpen,
+  Shield,
+  Globe,
+  Terminal,
+  Smartphone,
+  Monitor,
+  Code,
+  Download,
+  FileText,
+  Copy,
+  Check,
+  Printer,
+  Sparkles,
+  Layers,
+  Wrench,
+  RefreshCw,
+  FileSpreadsheet
+} from 'lucide-react';
+import { MANUALS_DATA, generateManualPdf, generateConsolidatedManualsPdf } from '../utils/manualsPdf';
+import { downloadOfficialExcelTemplate } from '../utils/excelTemplate';
 
 export const DocumentationTab: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<'user' | 'admin' | 'web' | 'wordpress' | 'exe' | 'apk' | 'ios' | 'support'>('user');
+  const [activeSection, setActiveSection] = useState<string>('manual_01');
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, id: string) => {
@@ -56,7 +76,7 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadURL('http://localhost:3000'); // Ou URL de produção
+  mainWindow.loadURL('http://localhost:3000');
   mainWindow.setMenuBarVisibility(false);
 }
 
@@ -96,273 +116,259 @@ export default config;
 */
 `;
 
+  const currentManual = MANUALS_DATA.find((m) => m.id === activeSection);
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header & Quick Action Buttons */}
       <div className="bg-slate-850 border border-slate-700/80 rounded-3xl p-6 shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center font-black">
-            <BookOpen className="w-6 h-6" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center font-black shrink-0 shadow-lg shadow-indigo-950/40">
+              <BookOpen className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-100 flex items-center gap-2">
+                <span>Manuais Técnicos Oficiais & Documentação Completa</span>
+                <span className="text-[10px] uppercase font-mono bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30">
+                  v2.5 Enterprise
+                </span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Guia completo desde a instalação, manutenção, utilização, alterações, atualizações, administração e relatórios em PDF.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-black text-slate-100">
-              Manual Completo de Utilização, Administração & Instalação
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Guias técnicos passo a passo com código pronto para Web, WordPress, Desktop (.EXE), Android (.APK) e iOS.
-            </p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => generateConsolidatedManualsPdf()}
+              className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-black px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 transition shadow-lg shadow-indigo-950/50 cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>Descarregar Todos os Manuais em PDF</span>
+            </button>
+
+            <button
+              onClick={() => downloadOfficialExcelTemplate('xlsx')}
+              className="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 transition cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Modelo Excel Oficial (.xlsx)</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Navigation Sub-Tabs */}
+      {/* Navigation Tabs - 6 Official Manuals + 3 Embed Extensions */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-        <button
-          onClick={() => setActiveSection('user')}
-          className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-            activeSection === 'user' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5" />
-          <span>Manual de Utilização</span>
-        </button>
+        {MANUALS_DATA.map((m) => (
+          <button
+            key={m.id}
+            onClick={() => setActiveSection(m.id)}
+            className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              activeSection === m.id
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/40'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-750 hover:text-white'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 opacity-80" />
+            <span>Manual {m.number}: {m.title.split('Manual de ')[1] || m.title}</span>
+          </button>
+        ))}
 
-        <button
-          onClick={() => setActiveSection('admin')}
-          className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-            activeSection === 'admin' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
-          }`}
-        >
-          <Shield className="w-3.5 h-3.5 text-amber-400" />
-          <span>Manual de Administração</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSection('web')}
-          className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-            activeSection === 'web' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
-          }`}
-        >
-          <Globe className="w-3.5 h-3.5 text-sky-400" />
-          <span>Deploy Web & Servidor</span>
-        </button>
+        <div className="h-6 w-px bg-slate-700 mx-1 shrink-0" />
 
         <button
           onClick={() => setActiveSection('wordpress')}
-          className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+          className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
             activeSection === 'wordpress' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
           }`}
         >
           <Code className="w-3.5 h-3.5 text-indigo-400" />
-          <span>WordPress (Plugin / Shortcode)</span>
+          <span>WordPress</span>
         </button>
 
         <button
           onClick={() => setActiveSection('exe')}
-          className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+          className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
             activeSection === 'exe' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
           }`}
         >
           <Monitor className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Windows (.EXE Electron)</span>
+          <span>Desktop (.EXE)</span>
         </button>
 
         <button
           onClick={() => setActiveSection('apk')}
-          className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+          className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
             activeSection === 'apk' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
           }`}
         >
           <Smartphone className="w-3.5 h-3.5 text-teal-400" />
-          <span>Android (.APK) & iOS</span>
+          <span>Mobile (.APK / iOS)</span>
         </button>
       </div>
 
       {/* Content Area */}
       <div className="bg-slate-850 border border-slate-700/80 rounded-3xl p-6 md:p-8 shadow-xl text-xs text-slate-300 space-y-6">
-        {/* 1. USER MANUAL */}
-        {activeSection === 'user' && (
-          <div className="space-y-4">
-            <h3 className="text-base font-extrabold text-slate-100 border-b border-slate-700/80 pb-3">
-              1. Manual do Utilizador & Operação do Simulador
-            </h3>
-
-            <div className="space-y-3 leading-relaxed">
-              <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <h4 className="font-bold text-indigo-300 text-sm">A. Registo e 3 Consultas Gratuitas</h4>
-                <p>
-                  Todo o novo utilizador ao criar conta recebe de imediato <strong>3 consultas gratuitas</strong> para testar a formação de preços de venda e lucros no Comércio Local.
-                </p>
-              </div>
-
-              <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <h4 className="font-bold text-indigo-300 text-sm">B. Simulador de Comércio Local</h4>
-                <p>
-                  1. Selecione o país fiscal (ex: Angola AGT, Portugal AT, Moçambique AT).<br />
-                  2. Escolha a taxa de IVA aplicável (ex: Geral 14%, Reduzida 5%, Isento 0%).<br />
-                  3. Introduza o Custo de Compra (SEM IVA) ou com IVA (o sistema sincroniza automaticamente).<br />
-                  4. Indique a margem percentual desejada ou um Preço Fixo Final de Venda.<br />
-                  5. Clique em <strong>"Calcular Formação de Preço"</strong> para visualizar os 3 cenários padrão (10%, 20%, 30%) e o seu cenário personalizado, com o Lucro Líquido Real destacado.
-                </p>
-              </div>
-
-              <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <h4 className="font-bold text-indigo-300 text-sm">C. Desembaraço Aduaneiro de Importação (Módulo PRO)</h4>
-                <p>
-                  Permite calcular o valor CIF (FOB + Frete + Seguro), Direitos Aduaneiros (Pauta Aduaneira), IEC e despesas portuárias para apurar o Custo Base Nacionalizado e a margem de revenda.
-                </p>
-              </div>
-
-              <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <h4 className="font-bold text-indigo-300 text-sm">D. Histórico e Exportação em Excel (.xlsx)</h4>
-                <p>
-                  No separador <strong>"Meu Histórico"</strong>, o utilizador pode editar as descrições de cada consulta diretamente na tabela, pesquisar e descarregar relatórios formatados em Excel.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 2. ADMIN MANUAL */}
-        {activeSection === 'admin' && (
-          <div className="space-y-4">
-            <h3 className="text-base font-extrabold text-slate-100 border-b border-slate-700/80 pb-3">
-              2. Manual de Administração & Níveis de Acesso (RBAC)
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-amber-950/20 border border-amber-500/30 p-4 rounded-2xl space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2 py-0.5 rounded">
-                  NÍVEL 1: SUPER ADMINISTRADOR
+        {/* Render Selected Official Manual */}
+        {currentManual && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-700/80 pb-4">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded-md border border-indigo-500/30">
+                  {currentManual.category}
                 </span>
-                <p className="font-bold text-slate-100">Controlo Total e Irrestrito</p>
-                <ul className="list-disc list-inside space-y-1 text-slate-300">
-                  <li>Criação e gestão de outros administradores e utilizadores.</li>
-                  <li>Ativação, suspensão e exclusão de contas.</li>
-                  <li>Auditoria completa de logs com IP, horários e ações.</li>
-                  <li>Ajuste das taxas unitárias por pesquisa (padrão 50 Kz).</li>
-                  <li>Atualização dos dados bancários (IBAN e Multicaixa Express).</li>
-                  <li>Geração e restauro de backups completos do sistema (JSON).</li>
-                </ul>
+                <h3 className="text-lg md:text-xl font-black text-slate-100 mt-2">
+                  Manual {currentManual.number}: {currentManual.title}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">{currentManual.description}</p>
               </div>
 
-              <div className="bg-sky-950/20 border border-sky-500/30 p-4 rounded-2xl space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-wider bg-sky-400 text-slate-950 px-2 py-0.5 rounded">
-                  NÍVEL 2: ADMINISTRADOR / GERENTE
-                </span>
-                <p className="font-bold text-slate-100">Gestão Comercial e Suporte</p>
-                <ul className="list-disc list-inside space-y-1 text-slate-300">
-                  <li>Validação e aprovação de pagamentos recebidos por Multicaixa/IBAN.</li>
-                  <li>Alteração de preços, validades e nomes dos 5 planos.</li>
-                  <li>Visualização de relatórios de vendas e gráficos de receita.</li>
-                  <li>Atendimento de tickets de suporte e moderação de conteúdo.</li>
-                </ul>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => generateManualPdf(currentManual)}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 transition shadow cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Descarregar Este Manual em PDF</span>
+                </button>
               </div>
             </div>
+
+            <div className="space-y-5">
+              {currentManual.contentSections.map((section, idx) => (
+                <div key={idx} className="bg-slate-900/80 p-5 rounded-2xl border border-slate-800 space-y-3">
+                  <h4 className="font-bold text-indigo-300 text-sm flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                    <span>{section.heading}</span>
+                  </h4>
+                  <p className="text-slate-300 leading-relaxed text-xs">{section.text}</p>
+                  {section.bullets && section.bullets.length > 0 && (
+                    <ul className="space-y-1.5 pl-2 pt-1">
+                      {section.bullets.map((b, bIdx) => (
+                        <li key={bIdx} className="flex items-start gap-2 text-slate-300">
+                          <span className="text-indigo-400 font-bold">•</span>
+                          <span className="leading-relaxed">{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Practical Quick Commands for Manual 01, 04, 05 */}
+            {currentManual.id === 'manual_01' && (
+              <div className="bg-slate-900 border border-slate-700/80 p-5 rounded-2xl space-y-3 font-mono">
+                <div className="flex items-center justify-between">
+                  <span className="text-emerald-400 font-bold text-xs">Comandos Rápidos de Instalação & Arranque:</span>
+                  <button
+                    onClick={() => copyToClipboard('npm install && npm run dev', 'cmd_install')}
+                    className="text-slate-400 hover:text-white text-[11px] flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedCodeId === 'cmd_install' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCodeId === 'cmd_install' ? 'Copiado!' : 'Copiar'}</span>
+                  </button>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-lg text-emerald-300 text-xs">
+                  # 1. Instalar dependências<br />
+                  npm install<br /><br />
+                  # 2. Iniciar servidor de desenvolvimento<br />
+                  npm run dev<br /><br />
+                  # 3. Compilar para produção<br />
+                  npm run build
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* 3. WEB & SERVER DEPLOY */}
-        {activeSection === 'web' && (
-          <div className="space-y-4">
-            <h3 className="text-base font-extrabold text-slate-100 border-b border-slate-700/80 pb-3">
-              3. Instalação Web & Servidor Node.js
-            </h3>
-
-            <p>
-              O sistema foi construído em arquitetura full-stack autossuficiente (Node.js + Express + TypeScript + React) com persistência atómica local.
-            </p>
-
-            <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-2 font-mono text-[11px]">
-              <p className="text-emerald-400 font-bold"># Passos para deploy em VPS / Linux (Ubuntu/Debian):</p>
-              <p>1. git clone https://github.com/nanucloud/simulador.git</p>
-              <p>2. cd simulador && npm install</p>
-              <p>3. npm run build</p>
-              <p>4. pm2 start dist/server.cjs --name "nanucloud-simulator"</p>
-            </div>
-          </div>
-        )}
-
-        {/* 4. WORDPRESS INTEGRATION */}
+        {/* Integration: WordPress Shortcode */}
         {activeSection === 'wordpress' && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-700/80 pb-3">
-              <h3 className="text-base font-extrabold text-slate-100">
-                4. Plugin & Shortcode para WordPress
-              </h3>
-              <button
-                onClick={() => copyToClipboard(wpCode, 'wp')}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-xl text-xs flex items-center gap-1 transition"
-              >
-                {copiedCodeId === 'wp' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                <span>{copiedCodeId === 'wp' ? 'Copiado!' : 'Copiar Código PHP'}</span>
-              </button>
-            </div>
-
-            <p>
-              Crie uma pasta em <code>wp-content/plugins/nanucloud-simulador/</code> e cole o código abaixo num arquivo chamado <code>nanucloud-simulador.php</code>. Depois use o shortcode <code>[nanucloud_simulador]</code> em qualquer página ou post do Elementor, Gutenberg ou Divi.
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <h3 className="text-base font-extrabold text-slate-100 border-b border-slate-700/80 pb-3 flex items-center gap-2">
+              <Code className="w-5 h-5 text-indigo-400" />
+              <span>Integração no WordPress (Plugin PHP & Shortcode)</span>
+            </h3>
+            <p className="text-slate-400 text-xs">
+              Pode incorporar o simulador em qualquer página ou post do seu site WordPress criando um mini-plugin ou inserindo o código no ficheiro <code className="text-indigo-300">functions.php</code> do seu tema.
             </p>
 
-            <pre className="bg-slate-900 border border-slate-800 p-4 rounded-2xl overflow-x-auto text-[11px] font-mono text-indigo-300">
-              {wpCode}
-            </pre>
+            <div className="relative">
+              <div className="flex justify-between items-center bg-slate-900 px-4 py-2 rounded-t-xl border border-slate-700 text-[11px] text-slate-400 font-mono">
+                <span>nanucloud-simulator.php</span>
+                <button
+                  onClick={() => copyToClipboard(wpCode, 'wp')}
+                  className="hover:text-white flex items-center gap-1 cursor-pointer text-indigo-400"
+                >
+                  {copiedCodeId === 'wp' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedCodeId === 'wp' ? 'Copiado!' : 'Copiar Código'}</span>
+                </button>
+              </div>
+              <pre className="bg-slate-950 p-4 rounded-b-xl border-x border-b border-slate-700 text-slate-300 font-mono text-xs overflow-x-auto">
+                <code>{wpCode}</code>
+              </pre>
+            </div>
           </div>
         )}
 
-        {/* 5. WINDOWS DESKTOP (.EXE) */}
+        {/* Integration: Desktop .EXE */}
         {activeSection === 'exe' && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-700/80 pb-3">
-              <h3 className="text-base font-extrabold text-slate-100">
-                5. Empacotamento Desktop Windows (.EXE) com Electron
-              </h3>
-              <button
-                onClick={() => copyToClipboard(electronCode, 'exe')}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-xl text-xs flex items-center gap-1 transition"
-              >
-                {copiedCodeId === 'exe' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                <span>{copiedCodeId === 'exe' ? 'Copiado!' : 'Copiar main.js'}</span>
-              </button>
-            </div>
-
-            <p>
-              Para gerar o instalador executável <code>.EXE</code> autônomo para Windows:
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <h3 className="text-base font-extrabold text-slate-100 border-b border-slate-700/80 pb-3 flex items-center gap-2">
+              <Monitor className="w-5 h-5 text-emerald-400" />
+              <span>Compilação para Desktop Windows (.EXE) via Electron</span>
+            </h3>
+            <p className="text-slate-400 text-xs">
+              Transforme a aplicação num executável nativo do Windows com ícone na barra de tarefas e execução offline.
             </p>
-            <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 font-mono text-[11px] text-emerald-400">
-              npm install --save-dev electron electron-builder
-              <br />
-              npx electron-builder --win nsis:ia32,x64
-            </div>
 
-            <pre className="bg-slate-900 border border-slate-800 p-4 rounded-2xl overflow-x-auto text-[11px] font-mono text-emerald-300">
-              {electronCode}
-            </pre>
+            <div className="relative">
+              <div className="flex justify-between items-center bg-slate-900 px-4 py-2 rounded-t-xl border border-slate-700 text-[11px] text-slate-400 font-mono">
+                <span>main.js (Electron Entry)</span>
+                <button
+                  onClick={() => copyToClipboard(electronCode, 'electron')}
+                  className="hover:text-white flex items-center gap-1 cursor-pointer text-emerald-400"
+                >
+                  {copiedCodeId === 'electron' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedCodeId === 'electron' ? 'Copiado!' : 'Copiar Código'}</span>
+                </button>
+              </div>
+              <pre className="bg-slate-950 p-4 rounded-b-xl border-x border-b border-slate-700 text-slate-300 font-mono text-xs overflow-x-auto">
+                <code>{electronCode}</code>
+              </pre>
+            </div>
           </div>
         )}
 
-        {/* 6. ANDROID (.APK) & IOS */}
+        {/* Integration: Mobile APK / iOS */}
         {activeSection === 'apk' && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-700/80 pb-3">
-              <h3 className="text-base font-extrabold text-slate-100">
-                6. Compilação Mobile Android (.APK) & iOS (Capacitor)
-              </h3>
-              <button
-                onClick={() => copyToClipboard(capacitorCode, 'cap')}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-xl text-xs flex items-center gap-1 transition"
-              >
-                {copiedCodeId === 'cap' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                <span>{copiedCodeId === 'cap' ? 'Copiado!' : 'Copiar Config'}</span>
-              </button>
-            </div>
-
-            <p>
-              Utilizando Capacitor, o simulador transforma-se num aplicativo nativo para Android e iOS:
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <h3 className="text-base font-extrabold text-slate-100 border-b border-slate-700/80 pb-3 flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-teal-400" />
+              <span>Compilação Mobile Nativa: Android (.APK) & iOS (Capacitor)</span>
+            </h3>
+            <p className="text-slate-400 text-xs">
+              Gere os pacotes móveis nativos para publicação na Google Play Store e Apple App Store utilizando o Capacitor.
             </p>
 
-            <pre className="bg-slate-900 border border-slate-800 p-4 rounded-2xl overflow-x-auto text-[11px] font-mono text-teal-300">
-              {capacitorCode}
-            </pre>
+            <div className="relative">
+              <div className="flex justify-between items-center bg-slate-900 px-4 py-2 rounded-t-xl border border-slate-700 text-[11px] text-slate-400 font-mono">
+                <span>capacitor.config.ts</span>
+                <button
+                  onClick={() => copyToClipboard(capacitorCode, 'capacitor')}
+                  className="hover:text-white flex items-center gap-1 cursor-pointer text-teal-400"
+                >
+                  {copiedCodeId === 'capacitor' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedCodeId === 'capacitor' ? 'Copiado!' : 'Copiar Código'}</span>
+                </button>
+              </div>
+              <pre className="bg-slate-950 p-4 rounded-b-xl border-x border-b border-slate-700 text-slate-300 font-mono text-xs overflow-x-auto">
+                <code>{capacitorCode}</code>
+              </pre>
+            </div>
           </div>
         )}
       </div>

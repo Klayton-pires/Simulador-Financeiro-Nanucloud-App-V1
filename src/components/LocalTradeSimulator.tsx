@@ -36,6 +36,7 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
   const [calculationResults, setCalculationResults] = useState<any[] | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const country = COUNTRIES_DB[countryCode] || COUNTRIES_DB['AO'];
 
@@ -55,6 +56,15 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
     }
   }, [countryCode, itemType]);
 
+  const clearFieldError = (field: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const copy = { ...prev };
+      delete copy[field];
+      return copy;
+    });
+  };
+
   const recalcGrossFromNet = (net: number, vRate: number) => {
     if (!net || net <= 0) {
       setCostGross('');
@@ -66,6 +76,8 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
 
   const handleNetInput = (val: string) => {
     setCostNet(val);
+    clearFieldError('costNet');
+    clearFieldError('servicePrice');
     if (!val || parseFloat(val) <= 0) {
       setCostGross('');
       return;
@@ -76,6 +88,8 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
 
   const handleGrossInput = (val: string) => {
     setCostGross(val);
+    clearFieldError('costGross');
+    clearFieldError('servicePrice');
     if (!val || parseFloat(val) <= 0) {
       setCostNet('');
       return;
@@ -87,6 +101,7 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
 
   const handleVatChange = (newVat: number) => {
     setVatRate(newVat);
+    clearFieldError('vatRate');
     if (costNet) {
       const net = parseFloat(costNet) || 0;
       recalcGrossFromNet(net, newVat);
@@ -183,13 +198,45 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
 
+    const errors: Record<string, string> = {};
     const net = parseFloat(costNet) || 0;
-    if (net <= 0) {
-      setErrorMessage('O Custo Base de Operação (SEM IVA) deve ser superior a zero.');
+    const fPrice = parseFloat(fixedPrice) || 0;
+    const mPct = parseFloat(marginPct) || 0;
+    const curRetention = parseFloat(retentionRate) || 0;
+
+    // Field Validation Rules
+    if (itemType === 'product') {
+      if (!costNet || costNet.trim() === '') {
+        errors.costNet = 'Campo obrigatório: introduza o Preço de Custo Base (SEM IVA).';
+      } else if (isNaN(net) || net <= 0) {
+        errors.costNet = 'O Preço de Custo deve ser um número positivo superior a 0.';
+      }
+
+      if (marginPct === '' && fixedPrice === '') {
+        errors.pricing = 'Defina a Margem Desejada (%) ou o Preço de Venda Fixo (PVP).';
+      }
+    } else {
+      // Service Mode: No purchase cost is required. User can set service value (fixedPrice) or costNet
+      if (fPrice <= 0 && net <= 0) {
+        errors.fixedPrice = 'Indique o Valor do Serviço / Honorário Pretendido (PVP) ou os Custos Operacionais.';
+      }
+    }
+
+    if (isNaN(tpaRate) || tpaRate < 0 || tpaRate > 100) {
+      errors.tpaRate = 'A taxa TPA deve situar-se entre 0% e 100%.';
+    }
+
+    if (isNaN(curRetention) || curRetention < 0 || curRetention > 100) {
+      errors.retentionRate = 'A taxa de retenção deve situar-se entre 0% e 100%.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMessage('Existem campos sem preenchimento ou com valores incorretos. Por favor, verifique os campos assinalados a vermelho.');
       return;
     }
 
-    const curRetention = parseFloat(retentionRate) || 0;
+    setFieldErrors({});
 
     // GUEST FLOW (Without creating account, 3 free queries)
     if (!user) {
@@ -204,32 +251,108 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
       setTimeout(() => {
         const scenarios = [];
 
-        if (marginPct !== '' || (parseFloat(fixedPrice) || 0) > 0) {
-          const customCalc = processMathScenario(
+        if (itemType === 'service' && fPrice > 0) {
+          // Dedicated service scenario matrix
+          const mainServiceCalc = processMathScenario(
             net,
-            parseFloat(marginPct) || 0,
-            parseFloat(fixedPrice) || 0,
+            0,
+            fPrice,
             vatRate,
             tpaRate,
             country.ii,
             curRetention,
-            itemType
+            'service'
           );
           scenarios.push({
-            title: `Cenário Personalizado (${itemType === 'service' ? 'Serviço' : 'Produto'})`,
-            calc: customCalc,
+            title: `Cenário Pretendido: ${formatMoney(fPrice)} (Retenção ${curRetention}%)`,
+            calc: mainServiceCalc,
             isCustom: true
           });
-        }
 
-        country.margins.forEach((m) => {
-          const stdCalc = processMathScenario(net, m, 0, vatRate, tpaRate, country.ii, curRetention, itemType);
+          // Scenario without withholding tax (0%)
+          if (curRetention > 0) {
+            const noRetentionCalc = processMathScenario(
+              net,
+              0,
+              fPrice,
+              vatRate,
+              tpaRate,
+              country.ii,
+              0,
+              'service'
+            );
+            scenarios.push({
+              title: `Cenário Isenção de Retenção (0%)`,
+              calc: noRetentionCalc,
+              isCustom: false
+            });
+          }
+
+          // Scenario Direct / Cash (No POS/TPA fee 0%)
+          if (tpaRate > 0) {
+            const noTpaCalc = processMathScenario(
+              net,
+              0,
+              fPrice,
+              vatRate,
+              0,
+              country.ii,
+              curRetention,
+              'service'
+            );
+            scenarios.push({
+              title: `Pagamento Direto / Transferência (0% TPA)`,
+              calc: noTpaCalc,
+              isCustom: false
+            });
+          }
+
+          // Scenario Corporate Standard
+          const altRetention = countryCode === 'AO' ? (curRetention === 6.5 ? 0 : 6.5) : (curRetention === 11.5 ? 25 : 11.5);
+          const altCalc = processMathScenario(
+            net,
+            0,
+            fPrice,
+            vatRate,
+            tpaRate,
+            country.ii,
+            altRetention,
+            'service'
+          );
           scenarios.push({
-            title: `Margem Padrão (${m}%)`,
-            calc: stdCalc,
+            title: `Cenário com Retenção Alternativa (${altRetention}%)`,
+            calc: altCalc,
             isCustom: false
           });
-        });
+        } else {
+          // Standard product / margin flow
+          if (marginPct !== '' || fPrice > 0) {
+            const customCalc = processMathScenario(
+              net,
+              mPct,
+              fPrice,
+              vatRate,
+              tpaRate,
+              country.ii,
+              curRetention,
+              itemType
+            );
+            scenarios.push({
+              title: `Cenário Personalizado (${itemType === 'service' ? 'Serviço' : 'Produto'})`,
+              calc: customCalc,
+              isCustom: true
+            });
+          }
+
+          country.margins.forEach((m) => {
+            const stdCalc = processMathScenario(net, m, 0, vatRate, tpaRate, country.ii, curRetention, itemType);
+            scenarios.push({
+              title: `Margem Padrão (${m}%)`,
+              calc: stdCalc,
+              isCustom: false
+            });
+          });
+        }
 
         const newRemaining = guestQueriesLeft - 1;
         setGuestQueriesLeft(newRemaining);
@@ -257,74 +380,156 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
     setIsCalculating(true);
 
     try {
-      const res = await fetch('/api/simulator/calculate-local', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          countryCode,
-          costNet: net,
-          vatRate,
-          tpaRate,
-          marginPct: parseFloat(marginPct) || 0,
-          fixedFinalPrice: parseFloat(fixedPrice) || 0,
-          productName,
-          itemType,
-          retentionRate: curRetention,
-          notes
-        })
-      });
+      let remaining = user.queriesRemaining;
+      try {
+        const res = await fetch('/api/simulator/calculate-local', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            countryCode,
+            costNet: net,
+            vatRate,
+            tpaRate,
+            marginPct: mPct,
+            fixedFinalPrice: fPrice,
+            productName,
+            itemType,
+            retentionRate: curRetention,
+            notes
+          })
+        });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (res.status === 402) {
+        if (res.ok) {
+          const data = await res.json();
+          remaining = data.queriesRemaining;
+        } else if (res.status === 402) {
+          const data = await res.json();
           setErrorMessage(data.error);
           onOpenPlans();
+          setIsCalculating(false);
+          return;
         } else {
-          setErrorMessage(data.error || 'Erro ao calcular simulação.');
+          // Non-blocking fallback
+          remaining = Math.max(0, user.queriesRemaining - 1);
         }
-        setIsCalculating(false);
-        return;
+      } catch (err) {
+        console.warn('Executando simulação em modo cliente offline...');
+        remaining = Math.max(0, user.queriesRemaining - 1);
       }
 
       // Generate visual scenarios
       const scenarios = [];
 
-      // Custom scenario first if filled
-      if (marginPct !== '' || (parseFloat(fixedPrice) || 0) > 0) {
-        const customCalc = processMathScenario(
+      if (itemType === 'service' && fPrice > 0) {
+        // Dedicated service scenario matrix
+        const mainServiceCalc = processMathScenario(
           net,
-          parseFloat(marginPct) || 0,
-          parseFloat(fixedPrice) || 0,
+          0,
+          fPrice,
           vatRate,
           tpaRate,
           country.ii,
           curRetention,
-          itemType
+          'service'
         );
         scenarios.push({
-          title: `Cenário Personalizado (${itemType === 'service' ? 'Serviço' : 'Produto'})`,
-          calc: customCalc,
+          title: `Cenário Pretendido: ${formatMoney(fPrice)} (Retenção ${curRetention}%)`,
+          calc: mainServiceCalc,
           isCustom: true
+        });
+
+        // Scenario without withholding tax (0%)
+        if (curRetention > 0) {
+          const noRetentionCalc = processMathScenario(
+            net,
+            0,
+            fPrice,
+            vatRate,
+            tpaRate,
+            country.ii,
+            0,
+            'service'
+          );
+          scenarios.push({
+            title: `Cenário Isenção de Retenção (0%)`,
+            calc: noRetentionCalc,
+            isCustom: false
+          });
+        }
+
+        // Scenario Direct / Cash (No POS/TPA fee 0%)
+        if (tpaRate > 0) {
+          const noTpaCalc = processMathScenario(
+            net,
+            0,
+            fPrice,
+            vatRate,
+            0,
+            country.ii,
+            curRetention,
+            'service'
+          );
+          scenarios.push({
+            title: `Pagamento Direto / Transferência (0% TPA)`,
+            calc: noTpaCalc,
+            isCustom: false
+          });
+        }
+
+        // Scenario Corporate Standard
+        const altRetention = countryCode === 'AO' ? (curRetention === 6.5 ? 0 : 6.5) : (curRetention === 11.5 ? 25 : 11.5);
+        const altCalc = processMathScenario(
+          net,
+          0,
+          fPrice,
+          vatRate,
+          tpaRate,
+          country.ii,
+          altRetention,
+          'service'
+        );
+        scenarios.push({
+          title: `Cenário com Retenção Alternativa (${altRetention}%)`,
+          calc: altCalc,
+          isCustom: false
+        });
+      } else {
+        // Custom scenario first if filled
+        if (marginPct !== '' || fPrice > 0) {
+          const customCalc = processMathScenario(
+            net,
+            mPct,
+            fPrice,
+            vatRate,
+            tpaRate,
+            country.ii,
+            curRetention,
+            itemType
+          );
+          scenarios.push({
+            title: `Cenário Personalizado (${itemType === 'service' ? 'Serviço' : 'Produto'})`,
+            calc: customCalc,
+            isCustom: true
+          });
+        }
+
+        // Standard scenarios
+        country.margins.forEach((m) => {
+          const stdCalc = processMathScenario(net, m, 0, vatRate, tpaRate, country.ii, curRetention, itemType);
+          scenarios.push({
+            title: `Margem Padrão (${m}%)`,
+            calc: stdCalc,
+            isCustom: false
+          });
         });
       }
 
-      // Standard scenarios
-      country.margins.forEach((m) => {
-        const stdCalc = processMathScenario(net, m, 0, vatRate, tpaRate, country.ii, curRetention, itemType);
-        scenarios.push({
-          title: `Margem Padrão (${m}%)`,
-          calc: stdCalc,
-          isCustom: false
-        });
-      });
-
       setCalculationResults(scenarios);
       setSuccessMessage('Simulação calculada com sucesso e guardada no seu histórico!');
-      onCalculationDone(data.queriesRemaining);
+      onCalculationDone(remaining);
     } catch (err) {
       console.error(err);
-      setErrorMessage('Falha na comunicação com o servidor.');
+      setErrorMessage('Falha ao processar simulação.');
     } finally {
       setIsCalculating(false);
     }
@@ -433,22 +638,37 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
           </div>
         )}
 
-        {/* Informative Note: Products & Services with Withholding Tax */}
-        <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-indigo-500/30 text-xs font-mono space-y-2">
-          <div className="flex items-center gap-2 text-indigo-300 font-bold">
-            <Building2 className="w-4 h-4 text-indigo-400" />
-            <span>NOTA IMPORTANTE: SIMULAÇÃO PARA PRODUTOS E PRESTAÇÃO DE SERVIÇOS</span>
+        {/* Informative Note: Products vs Services Distinction */}
+        {itemType === 'service' ? (
+          <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/30 text-xs font-mono space-y-2">
+            <div className="flex items-center gap-2 text-indigo-300 font-bold">
+              <Building2 className="w-4 h-4 text-indigo-400" />
+              <span>💼 MODO PRESTAÇÃO DE SERVIÇOS & CONSULTORIA</span>
+            </div>
+            <p className="text-slate-300 font-sans leading-relaxed text-[11px]">
+              <strong>Na prestação de serviços não tem preço de custo de compra de mercadorias.</strong> Defina diretamente o <strong>Valor do Serviço / Honorário Pretendido (PVP)</strong> que irá faturar ao cliente. O sistema calcula automaticamente a <strong>Retenção na Fonte</strong> (ex: 6.5% Angola, 11.5% Portugal), o <strong>IVA</strong>, a comissão bancária <strong>TPA</strong> e o <strong>Montante Líquido Real que entra na sua conta bancária</strong>. Custos operacionais diretos são 100% opcionais (0 Kz se não houver).
+            </p>
           </div>
-          <p className="text-slate-300 font-sans leading-relaxed text-[11px]">
-            Este simulador <strong>não serve só para produtos, também pode ser usado em prestação de serviços</strong>. No caso de serviços, utilize o campo de <strong>Retenção na Fonte (%)</strong> para deduzir a percentagem regulamentar do seu país (ex: <strong>6.5%</strong> em Angola segundo o Código do Imposto Industrial/IRT, ou <strong>11.5% / 25%</strong> em Portugal). A retenção é deduzida diretamente no montante líquido a receber, semelhante à taxa de TPA/POS.
-          </p>
-        </div>
+        ) : (
+          <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-indigo-500/30 text-xs font-mono space-y-2">
+            <div className="flex items-center gap-2 text-indigo-300 font-bold">
+              <Building2 className="w-4 h-4 text-indigo-400" />
+              <span>📦 MODO COMÉRCIO / VENDA DE PRODUTOS</span>
+            </div>
+            <p className="text-slate-300 font-sans leading-relaxed text-[11px]">
+              Para produtos, introduza o <strong>Preço de Custo de Compra (SEM IVA)</strong> e a margem de lucro desejada para calcular o Preço de Venda ao Público (PVP) recomendado, IVA liquidado e lucro líquido.
+            </p>
+          </div>
+        )}
 
         {/* Item Type Selector (Produto vs Prestação de Serviços) */}
         <div className="flex items-center gap-2 p-1.5 bg-[#0F172A] border border-slate-800 rounded-xl mb-5">
           <button
             type="button"
-            onClick={() => setItemType('product')}
+            onClick={() => {
+              setItemType('product');
+              setFieldErrors({});
+            }}
             className={`flex-1 py-2 rounded-lg text-xs font-mono font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
               itemType === 'product'
                 ? 'bg-indigo-600 text-white shadow'
@@ -459,7 +679,10 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setItemType('service')}
+            onClick={() => {
+              setItemType('service');
+              setFieldErrors({});
+            }}
             className={`flex-1 py-2 rounded-lg text-xs font-mono font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
               itemType === 'service'
                 ? 'bg-indigo-600 text-white shadow'
@@ -479,7 +702,10 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
             </label>
             <select
               value={countryCode}
-              onChange={(e) => setCountryCode(e.target.value)}
+              onChange={(e) => {
+                setCountryCode(e.target.value);
+                clearFieldError('countryCode');
+              }}
               className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
             >
               {Object.keys(COUNTRIES_DB).map((code) => (
@@ -516,10 +742,21 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
             <input
               type="number"
               value={tpaRate}
-              onChange={(e) => setTpaRate(parseFloat(e.target.value) || 0)}
+              onChange={(e) => {
+                setTpaRate(parseFloat(e.target.value) || 0);
+                clearFieldError('tpaRate');
+              }}
               step="0.1"
-              className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
+              className={`w-full bg-[#0F172A] border rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition ${
+                fieldErrors.tpaRate ? 'border-rose-500 bg-rose-950/20 text-rose-100 ring-2 ring-rose-500/20' : 'border-slate-800 text-slate-100'
+              }`}
             />
+            {fieldErrors.tpaRate && (
+              <p className="text-[11px] text-rose-400 font-mono flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>{fieldErrors.tpaRate}</span>
+              </p>
+            )}
           </div>
 
           {/* Retenção na Fonte (%) */}
@@ -532,124 +769,247 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
               <input
                 type="number"
                 value={retentionRate}
-                onChange={(e) => setRetentionRate(e.target.value)}
+                onChange={(e) => {
+                  setRetentionRate(e.target.value);
+                  clearFieldError('retentionRate');
+                }}
                 step="0.1"
                 min="0"
                 placeholder={itemType === 'service' ? 'Ex: 6.5' : '0'}
-                className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
+                className={`w-full bg-[#0F172A] border rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition ${
+                  fieldErrors.retentionRate ? 'border-rose-500 bg-rose-950/20 text-rose-100 ring-2 ring-rose-500/20' : 'border-slate-800 text-slate-100'
+                }`}
               />
               <span className="absolute right-2.5 top-2 text-xs text-slate-500 font-mono">%</span>
             </div>
+            {fieldErrors.retentionRate && (
+              <p className="text-[11px] text-rose-400 font-mono flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>{fieldErrors.retentionRate}</span>
+              </p>
+            )}
           </div>
         </div>
 
         {/* Quick Retention Presets for Services */}
         {itemType === 'service' && (
-          <div className="mb-5 flex flex-wrap items-center gap-2 text-[11px] font-mono">
-            <span className="text-slate-400 text-[10px] uppercase">Taxas Rápidas de Retenção:</span>
+          <div className="mb-5 flex flex-wrap items-center gap-2 text-[11px] font-mono bg-[#0F172A] p-3 rounded-xl border border-slate-800">
+            <span className="text-slate-400 text-[10px] uppercase font-bold">Taxas Rápidas de Retenção ({country.name}):</span>
             <button
               type="button"
-              onClick={() => setRetentionRate('6.5')}
-              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 transition cursor-pointer"
+              onClick={() => {
+                setRetentionRate('6.5');
+                clearFieldError('retentionRate');
+              }}
+              className="px-2.5 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 transition cursor-pointer font-bold"
             >
               Angola Serviços (6.5%)
             </button>
             <button
               type="button"
-              onClick={() => setRetentionRate('11.5')}
+              onClick={() => {
+                setRetentionRate('11.5');
+                clearFieldError('retentionRate');
+              }}
               className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 transition cursor-pointer"
             >
               Portugal Prof. Liberais (11.5%)
             </button>
             <button
               type="button"
-              onClick={() => setRetentionRate('25.0')}
+              onClick={() => {
+                setRetentionRate('25.0');
+                clearFieldError('retentionRate');
+              }}
               className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 transition cursor-pointer"
             >
               Retenção Geral (25%)
             </button>
             <button
               type="button"
-              onClick={() => setRetentionRate('0')}
+              onClick={() => {
+                setRetentionRate('0');
+                clearFieldError('retentionRate');
+              }}
               className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700 transition cursor-pointer"
             >
-              Isento (0%)
+              Isento de Retenção (0%)
             </button>
           </div>
         )}
 
-        {/* Cost Synchronization Box */}
-        <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4 mb-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-300 font-mono uppercase flex items-center justify-between">
-                <span>{itemType === 'service' ? 'Custo / Honorário Base (SEM IVA)' : t.lblCostNet}</span>
-                <span className="text-[10px] text-indigo-400 font-mono">{country.curr}</span>
-              </label>
+        {/* Pricing Inputs: Distinct for Services vs Products */}
+        {itemType === 'service' ? (
+          <div className="space-y-4 mb-5">
+            {/* Primary Service Price Box (Valor do Serviço Pretendido) */}
+            <div className={`p-4 rounded-xl border transition ${
+              fieldErrors.fixedPrice ? 'bg-rose-950/20 border-rose-500 ring-2 ring-rose-500/20' : 'bg-[#0F172A] border-indigo-500/40'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-indigo-300 font-mono uppercase flex items-center gap-1.5">
+                  <span>💰 1. Valor Total do Serviço / Honorário Pretendido (PVP Fatura)</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">(Sem Preço de Custo)</span>
+                </label>
+                <span className="text-xs font-mono font-bold text-indigo-400">{country.curr}</span>
+              </div>
               <input
                 type="number"
-                value={costNet}
-                onChange={(e) => handleNetInput(e.target.value)}
-                placeholder={itemType === 'service' ? 'Ex: 50000 (Custo Base Serviço)' : 'Ex: 10000'}
+                value={fixedPrice}
+                onChange={(e) => {
+                  setFixedPrice(e.target.value);
+                  clearFieldError('fixedPrice');
+                }}
+                placeholder="Ex: 100000 (Valor Total a Cobrar ao Cliente)"
                 min="0"
                 step="any"
-                className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono font-bold focus:border-indigo-500 outline-none transition"
+                className={`w-full bg-slate-900 border rounded-lg px-3.5 py-2.5 text-sm font-mono font-bold focus:border-indigo-500 outline-none transition ${
+                  fieldErrors.fixedPrice ? 'border-rose-500 text-rose-100' : 'border-slate-700 text-slate-100'
+                }`}
               />
+              {fieldErrors.fixedPrice && (
+                <p className="text-[11px] text-rose-400 font-mono flex items-center gap-1.5 mt-2">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{fieldErrors.fixedPrice}</span>
+                </p>
+              )}
+              <p className="text-[10px] text-slate-400 font-mono mt-2">
+                Introduza o valor total que pretende faturar pelo serviço prestado. Não é necessário indicar preço de custo.
+              </p>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-300 font-mono uppercase flex items-center justify-between">
-                <span>{itemType === 'service' ? 'Custo Base Bruto (COM IVA)' : t.lblCostGross}</span>
+            {/* Optional Operational Expenses for Services */}
+            <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[11px] font-bold text-slate-300 font-mono uppercase flex items-center gap-1.5">
+                  <span>2. Custos Operacionais Opcionais / Deslocação / Materiais (SEM IVA)</span>
+                  <span className="text-[10px] text-slate-400">(Facultativo - Padrão 0 {country.curr})</span>
+                </label>
                 <span className="text-[10px] text-indigo-400 font-mono">{country.curr}</span>
-              </label>
-              <input
-                type="number"
-                value={costGross}
-                onChange={(e) => handleGrossInput(e.target.value)}
-                placeholder="Ex: 57000"
-                min="0"
-                step="any"
-                className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono font-bold focus:border-indigo-500 outline-none transition"
-              />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="number"
+                  value={costNet}
+                  onChange={(e) => handleNetInput(e.target.value)}
+                  placeholder="0 (Sem custos diretos)"
+                  min="0"
+                  step="any"
+                  className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
+                />
+                <input
+                  type="number"
+                  value={costGross}
+                  onChange={(e) => handleGrossInput(e.target.value)}
+                  placeholder="0 (Com IVA)"
+                  min="0"
+                  step="any"
+                  className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
+                />
+              </div>
+              <p className="text-[10px] text-slate-500 font-mono mt-2">
+                Se tiver custos com subcontratados, deslocação ou materiais dedutíveis, insira aqui. Caso contrário, deixe 0.
+              </p>
             </div>
           </div>
-          <p className="text-[10px] text-slate-500 font-mono mt-2">
-            Sincronização automática de valor Sem IVA e Com IVA ({vatRate}%).
-          </p>
-        </div>
+        ) : (
+          /* Product Cost & Pricing Flow */
+          <div className="space-y-4 mb-5">
+            {/* Cost Synchronization Box */}
+            <div className={`border rounded-xl p-4 transition ${
+              fieldErrors.costNet ? 'bg-rose-950/20 border-rose-500 ring-2 ring-rose-500/20' : 'bg-[#0F172A] border-slate-800'
+            }`}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-300 font-mono uppercase flex items-center justify-between">
+                    <span>{t.lblCostNet} <strong className="text-rose-400">*</strong></span>
+                    <span className="text-[10px] text-indigo-400 font-mono">{country.curr}</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={costNet}
+                    onChange={(e) => handleNetInput(e.target.value)}
+                    placeholder="Ex: 10000 (Obrigatório)"
+                    min="0"
+                    step="any"
+                    className={`w-full bg-slate-900 border rounded-lg px-3 py-2 text-xs font-mono font-bold focus:border-indigo-500 outline-none transition ${
+                      fieldErrors.costNet ? 'border-rose-500 text-rose-100' : 'border-slate-700 text-slate-100'
+                    }`}
+                  />
+                  {fieldErrors.costNet && (
+                    <p className="text-[11px] text-rose-400 font-mono flex items-center gap-1 mt-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{fieldErrors.costNet}</span>
+                    </p>
+                  )}
+                </div>
 
-        {/* Margin vs Fixed Final Price */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-slate-400 font-mono uppercase tracking-wider">{t.lblMargin}</label>
-            <input
-              type="number"
-              value={marginPct}
-              onChange={(e) => {
-                setMarginPct(e.target.value);
-                setFixedPrice('');
-              }}
-              placeholder="Ex: 25"
-              step="any"
-              className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
-            />
-          </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-300 font-mono uppercase flex items-center justify-between">
+                    <span>{t.lblCostGross}</span>
+                    <span className="text-[10px] text-indigo-400 font-mono">{country.curr}</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={costGross}
+                    onChange={(e) => handleGrossInput(e.target.value)}
+                    placeholder="Ex: 11400"
+                    min="0"
+                    step="any"
+                    className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono font-bold focus:border-indigo-500 outline-none transition"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500 font-mono mt-2">
+                Sincronização automática de valor Sem IVA e Com IVA ({vatRate}%).
+              </p>
+            </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-slate-400 font-mono uppercase tracking-wider">{t.lblFixed}</label>
-            <input
-              type="number"
-              value={fixedPrice}
-              onChange={(e) => {
-                setFixedPrice(e.target.value);
-                setMarginPct('');
-              }}
-              placeholder="Ex: 15000"
-              step="any"
-              className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
-            />
+            {/* Margin vs Fixed Final Price */}
+            <div className={`p-4 rounded-xl border transition ${
+              fieldErrors.pricing ? 'bg-rose-950/20 border-rose-500 ring-2 ring-rose-500/20' : 'bg-[#0F172A] border-slate-800'
+            }`}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-400 font-mono uppercase tracking-wider">{t.lblMargin}</label>
+                  <input
+                    type="number"
+                    value={marginPct}
+                    onChange={(e) => {
+                      setMarginPct(e.target.value);
+                      setFixedPrice('');
+                      clearFieldError('pricing');
+                    }}
+                    placeholder="Ex: 25 (%)"
+                    step="any"
+                    className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-400 font-mono uppercase tracking-wider">{t.lblFixed}</label>
+                  <input
+                    type="number"
+                    value={fixedPrice}
+                    onChange={(e) => {
+                      setFixedPrice(e.target.value);
+                      setMarginPct('');
+                      clearFieldError('pricing');
+                    }}
+                    placeholder={`Ex: 15000 (${country.curr})`}
+                    step="any"
+                    className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
+                  />
+                </div>
+              </div>
+              {fieldErrors.pricing && (
+                <p className="text-[11px] text-rose-400 font-mono flex items-center gap-1 mt-2">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{fieldErrors.pricing}</span>
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Optional Metadata */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -670,7 +1030,7 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder={itemType === 'service' ? 'Ex: Contrato mensal com retenção na fonte 6.5%' : 'Ex: Margem calculada para campanha de Natal'}
+              placeholder={itemType === 'service' ? 'Ex: Faturação mensal com retenção 6.5%' : 'Ex: Margem calculada para campanha'}
               className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
             />
           </div>

@@ -1,6 +1,6 @@
 {
   "name": "NANUCLOUD",
-  "description": "Sistema completo de simulação financeira de produtos e serviços com retenção na fonte, comércio e importação aduaneira, gestão de planos, robô assistente multilíngue com aprendizagem e instalador multiplataforma.",
+  "description": "Plataforma fiscal global de simulação de preços, comércio, serviços e importação aduaneira com motor de IA Fiscal, integração de APIs com ERPs (PHC, Primavera, SAP, Sage), governança RBAC de permissões, modo celular básico POS, suporte a tickets, marketing multicanal e relatórios de auditoria.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

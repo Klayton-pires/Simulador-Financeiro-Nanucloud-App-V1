@@ -82,44 +82,89 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
     setIsCalculating(true);
 
     try {
-      const res = await fetch('/api/simulator/calculate-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          originCountry,
-          destCountry,
-          fob: cFob,
-          freight: parseFloat(freight) || 0,
-          insurance: parseFloat(insurance) || 0,
-          customsRate: parseFloat(customsRate) || 0,
-          iecRate: parseFloat(iecRate) || 0,
-          otherFees: parseFloat(otherFees) || 0,
-          vatRate,
-          marginPct: parseFloat(marginPct) || 0,
-          productName,
-          notes
-        })
-      });
+      let remaining = user.queriesRemaining;
+      let calcData = null;
 
-      const data = await res.json();
+      try {
+        const res = await fetch('/api/simulator/calculate-import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            originCountry,
+            destCountry,
+            fob: cFob,
+            freight: parseFloat(freight) || 0,
+            insurance: parseFloat(insurance) || 0,
+            customsRate: parseFloat(customsRate) || 0,
+            iecRate: parseFloat(iecRate) || 0,
+            otherFees: parseFloat(otherFees) || 0,
+            vatRate,
+            marginPct: parseFloat(marginPct) || 0,
+            productName,
+            notes
+          })
+        });
 
-      if (!res.ok) {
-        if (res.status === 403 || res.status === 402) {
+        if (res.ok) {
+          const data = await res.json();
+          calcData = data.calculation;
+          remaining = data.queriesRemaining;
+        } else if (res.status === 403 || res.status === 402) {
+          const data = await res.json();
           setErrorMessage(data.error);
           onOpenPlans();
-        } else {
-          setErrorMessage(data.error || 'Erro ao calcular importação.');
+          setIsCalculating(false);
+          return;
         }
-        setIsCalculating(false);
-        return;
+      } catch (apiErr) {
+        console.warn('Modo offline/estático ativado para cálculo de importação...');
       }
 
-      setResults(data.calculation);
+      if (!calcData) {
+        const cFreight = parseFloat(freight) || 0;
+        const cIns = parseFloat(insurance) || 0;
+        const cCustRate = parseFloat(customsRate) || 0;
+        const cIecRate = parseFloat(iecRate) || 0;
+        const cOther = parseFloat(otherFees) || 0;
+        const cMargin = parseFloat(marginPct) || 0;
+
+        const cif = cFob + cFreight + cIns;
+        const customsDuty = cif * (cCustRate / 100);
+        const iec = (cif + customsDuty) * (cIecRate / 100);
+        const statFee = cif * 0.005;
+        const vatBase = cif + customsDuty + iec + statFee;
+        const vat = vatBase * (vatRate / 100);
+        const totalCustoms = customsDuty + iec + statFee + vat + cOther;
+        const landedCost = cif + totalCustoms;
+        const recommendedPVP = landedCost * (1 + cMargin / 100);
+        const estimatedProfit = recommendedPVP - landedCost;
+
+        calcData = {
+          fob: cFob,
+          freight: cFreight,
+          insurance: cIns,
+          cif,
+          customsDuty,
+          iec,
+          statFee,
+          vat,
+          otherFees: cOther,
+          totalCustomsDuties: totalCustoms,
+          landedCost,
+          marginPct: cMargin,
+          recommendedPVP,
+          estimatedProfit,
+          currency: destFiscal.curr
+        };
+        remaining = Math.max(0, user.queriesRemaining - 1);
+      }
+
+      setResults(calcData);
       setSuccessMessage('Cálculo de importação e despacho aduaneiro concluído com sucesso!');
-      onCalculationDone(data.queriesRemaining);
+      onCalculationDone(remaining);
     } catch (err) {
       console.error(err);
-      setErrorMessage('Falha ao comunicar com o servidor.');
+      setErrorMessage('Falha ao calcular importação.');
     } finally {
       setIsCalculating(false);
     }

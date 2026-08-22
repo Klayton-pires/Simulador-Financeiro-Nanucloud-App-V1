@@ -23,8 +23,27 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
       notes
     } = req.body;
 
-    if (costNet === undefined || costNet <= 0) {
-      return res.status(400).json({ error: 'O Custo Base deve ser superior a zero.' });
+    const cCostNet = Number(costNet) || 0;
+    const cVatRate = Number(vatRate) || 0;
+    const cTpaRate = Number(tpaRate) || 0;
+    const cMargin = Number(marginPct) || 0;
+    const cFixedPrice = Number(fixedFinalPrice) || 0;
+    const cRetentionRate = Number(retentionRate) || 0;
+    const isService = itemType === 'service' || cRetentionRate > 0;
+
+    // Field Validation Alerts
+    if (isService) {
+      if (cFixedPrice <= 0 && cCostNet <= 0) {
+        return res.status(400).json({
+          error: 'Na prestação de serviços não é obrigatório preço de custo, mas deve indicar o Valor do Serviço / PVP Pretendido (ou Custo Operacional).'
+        });
+      }
+    } else {
+      if (cCostNet <= 0) {
+        return res.status(400).json({
+          error: 'Para comércio de produtos, o Preço de Custo Base (SEM IVA) é obrigatório e deve ser superior a zero.'
+        });
+      }
     }
 
     // Check query credits
@@ -34,14 +53,6 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
         code: 'CREDITS_EXHAUSTED'
       });
     }
-
-    const cCostNet = Number(costNet);
-    const cVatRate = Number(vatRate) || 0;
-    const cTpaRate = Number(tpaRate) || 0;
-    const cMargin = Number(marginPct) || 0;
-    const cFixedPrice = Number(fixedFinalPrice) || 0;
-    const cRetentionRate = Number(retentionRate) || 0;
-    const isService = itemType === 'service' || cRetentionRate > 0;
 
     let pvpBase = 0;
     let pvpFinal = 0;
@@ -291,20 +302,59 @@ router.post('/calculate-batch', requireAuth, (req: AuthRequest, res: Response) =
       });
     }
 
-    const { items, countryCode, vatRate, marginPct, listName } = req.body;
+    const { items, countryCode, vatRate, marginPct, listName, costColumnKey, nameColumnKey } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Nenhum item fornecido para processamento em lote.' });
     }
 
+    // Safety row limit analysis
+    const MAX_BATCH_ROWS = 2000;
+    if (items.length > MAX_BATCH_ROWS) {
+      return res.status(400).json({
+        error: `O ficheiro contém ${items.length} linhas, o que ultrapassa o limite máximo seguro de ${MAX_BATCH_ROWS} linhas por lote. Para garantir a estabilidade do sistema, divida a planilha em lotes de até 1.000 linhas ou utilize o modelo oficial.`,
+        code: 'ROW_LIMIT_EXCEEDED',
+        totalRows: items.length,
+        maxAllowed: MAX_BATCH_ROWS
+      });
+    }
+
     const cVatRate = Number(vatRate) || 0;
     const cMargin = Number(marginPct) || 0;
     const industrialTaxRate = countryCode === 'PT' ? 21 : 25;
+    const currency = countryCode === 'PT' ? 'EUR' : (countryCode === 'AO' ? 'Kz' : 'USD');
+
+    const cleanCostValue = (rawVal: any): number => {
+      if (typeof rawVal === 'number') return isNaN(rawVal) ? 0 : rawVal;
+      if (!rawVal) return 0;
+      let str = String(rawVal).trim();
+      // Remove currency symbols and non-numeric chars except dot/comma/minus
+      str = str.replace(/[^\d.,-]/g, '');
+      // Handle PT/AO comma notation (e.g. "1.500,50" or "1500,50")
+      if (str.includes(',') && str.includes('.')) {
+        if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
+          str = str.replace(/\./g, '').replace(',', '.');
+        } else {
+          str = str.replace(/,/g, '');
+        }
+      } else if (str.includes(',')) {
+        str = str.replace(',', '.');
+      }
+      const num = parseFloat(str);
+      return isNaN(num) ? 0 : Math.max(0, num);
+    };
 
     const processed = items.map((row: any, idx: number) => {
       const keys = Object.keys(row);
-      const costKey = keys.find(k => ['custo', 'preço', 'preco', 'compra', 'price', 'cost', 'valor'].includes(k.toLowerCase().trim())) || keys[1] || keys[0];
-      const costNet = parseFloat(row[costKey]) || 0;
+      
+      // Smart cost key selection if not provided
+      let effectiveCostKey = costColumnKey;
+      if (!effectiveCostKey || !keys.includes(effectiveCostKey)) {
+        const potentialKeys = ['custo', 'preço', 'preco', 'compra', 'p. custo', 'p.custo', 'price', 'cost', 'valor', 'unit cost', 'vlr custo'];
+        effectiveCostKey = keys.find(k => potentialKeys.includes(k.toLowerCase().trim())) || keys[1] || keys[0];
+      }
+
+      const costNet = cleanCostValue(row[effectiveCostKey]);
 
       const profit = costNet * (cMargin / 100);
       const pvpBase = costNet + profit;
@@ -319,14 +369,15 @@ router.post('/calculate-batch', requireAuth, (req: AuthRequest, res: Response) =
 
       return {
         ...row,
-        'Custo Base (S/ IVA)': costNet.toFixed(2),
-        'Margem (%)': `${cMargin}%`,
-        'Lucro Bruto': profit.toFixed(2),
-        'PVP Base (S/ IVA)': pvpBase.toFixed(2),
-        'IVA Venda': vatSale.toFixed(2),
-        'PVP Final (C/ IVA)': pvpFinal.toFixed(2),
-        'IVA a Pagar': netVatToPay.toFixed(2),
-        'Lucro Líquido': netProfit.toFixed(2)
+        '[NANUCLOUD] Custo Base (S/ IVA)': costNet.toFixed(2),
+        '[NANUCLOUD] Margem Lucro (%)': `${cMargin}%`,
+        '[NANUCLOUD] Lucro Bruto': profit.toFixed(2),
+        '[NANUCLOUD] PVP Base (S/ IVA)': pvpBase.toFixed(2),
+        '[NANUCLOUD] IVA Venda': vatSale.toFixed(2),
+        '[NANUCLOUD] PVP Final Recomendado (C/ IVA)': pvpFinal.toFixed(2),
+        '[NANUCLOUD] Taxa TPA': tpaCost.toFixed(2),
+        '[NANUCLOUD] IVA a Entregar': netVatToPay.toFixed(2),
+        '[NANUCLOUD] Lucro Líquido Real': netProfit.toFixed(2)
       };
     });
 
@@ -335,6 +386,10 @@ router.post('/calculate-batch', requireAuth, (req: AuthRequest, res: Response) =
       totalQueriesUsed: user.totalQueriesUsed + 1
     });
 
+    const totalCostBase = processed.reduce((acc: number, r: any) => acc + (parseFloat(r['[NANUCLOUD] Custo Base (S/ IVA)']) || 0), 0);
+    const totalPvpFinal = processed.reduce((acc: number, r: any) => acc + (parseFloat(r['[NANUCLOUD] PVP Final Recomendado (C/ IVA)']) || 0), 0);
+    const totalNetProfit = processed.reduce((acc: number, r: any) => acc + (parseFloat(r['[NANUCLOUD] Lucro Líquido Real']) || 0), 0);
+
     const historyItem: QueryHistoryItem = {
       id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       userId: user.id,
@@ -342,12 +397,12 @@ router.post('/calculate-batch', requireAuth, (req: AuthRequest, res: Response) =
       title: listName ? listName.trim() : `Lote Excel (${items.length} produtos)`,
       description: `${items.length} itens calculados com ${cMargin}% margem e ${cVatRate}% IVA`,
       countryCode: countryCode || 'AO',
-      costBase: processed.reduce((acc: number, r: any) => acc + (parseFloat(r['Custo Base (S/ IVA)']) || 0), 0),
+      costBase: totalCostBase,
       vatRate: cVatRate,
       marginApplied: cMargin,
-      finalPrice: processed.reduce((acc: number, r: any) => acc + (parseFloat(r['PVP Final (C/ IVA)']) || 0), 0),
-      netProfit: processed.reduce((acc: number, r: any) => acc + (parseFloat(r['Lucro Líquido']) || 0), 0),
-      currency: countryCode === 'PT' ? 'EUR' : (countryCode === 'AO' ? 'Kz' : 'USD'),
+      finalPrice: totalPvpFinal,
+      netProfit: totalNetProfit,
+      currency: currency,
       details: {
         totalItems: items.length,
         processedSample: processed.slice(0, 10),
