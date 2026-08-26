@@ -30,6 +30,8 @@ import { AdminAdvancedSettingsTab } from './components/admin/AdminAdvancedSettin
 import { DocsAndDeployTab } from './components/DocsAndDeployTab';
 import { LegalTermsModal } from './components/LegalTermsModal';
 import { SuperAdminSetupModal } from './components/SuperAdminSetupModal';
+import { CornerMenu } from './components/CornerMenu';
+import { MultiplatformHubTab } from './components/MultiplatformHubTab';
 
 // Themes and Greetings logic
 import { checkSpecialGreetings, SYSTEM_THEMES } from './data/themes';
@@ -40,6 +42,17 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [currentLang, setCurrentLang] = useState<SupportedLang>('pt');
   const [activeTab, setActiveTab] = useState<ActiveTab>('local');
+  const [isSidebarHidden, setIsSidebarHidden] = useState<boolean>(() => {
+    return localStorage.getItem('nanucloud_sidebar_hidden') === 'true';
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarHidden((prev) => {
+      const next = !prev;
+      localStorage.setItem('nanucloud_sidebar_hidden', String(next));
+      return next;
+    });
+  };
 
   // Modals & Chat
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
@@ -183,24 +196,45 @@ export default function App() {
       )}
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto w-full px-4 md:px-6 py-6 flex-1 flex flex-col lg:flex-row gap-6">
-        {/* Sidebar Nav */}
-        <Sidebar
-          activeTab={activeTab}
-          onTabChange={(tab) => {
-            if (tab === 'plans') {
-              setIsPlansOpen(true);
-            } else {
-              setActiveTab(tab);
-            }
-          }}
-          user={user}
-          currentLang={currentLang}
-          onOpenTerms={() => setIsTermsOpen(true)}
-        />
+      <main className={`max-w-7xl mx-auto w-full px-4 md:px-6 py-6 flex-1 flex flex-col ${isSidebarHidden ? '' : 'lg:flex-row'} gap-6 transition-all duration-300`}>
+        {/* Sidebar Nav (Collapsible / Hideable for Maximum Workspace) */}
+        {!isSidebarHidden && (
+          <Sidebar
+            activeTab={activeTab}
+            onTabChange={(tab) => {
+              if (tab === 'plans') {
+                setIsPlansOpen(true);
+              } else {
+                setActiveTab(tab);
+              }
+            }}
+            user={user}
+            currentLang={currentLang}
+            onOpenTerms={() => setIsTermsOpen(true)}
+            onToggleSidebar={toggleSidebar}
+          />
+        )}
 
         {/* Content View */}
         <div className="flex-1 min-w-0">
+          
+          {/* Header Banner when Sidebar is Hidden */}
+          {isSidebarHidden && (
+            <div className="mb-4 p-2.5 bg-[#1E293B]/80 border border-slate-800 rounded-xl flex items-center justify-between text-xs font-mono">
+              <div className="flex items-center gap-2 text-indigo-400 font-bold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>MODO ESPAÇO TOTAL ATIVO</span>
+                <span className="text-slate-500 text-[10px] font-normal hidden sm:inline">| Aceda a qualquer módulo pelo menu flutuante no canto inferior direito (Ctrl+M)</span>
+              </div>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] border border-slate-700 transition"
+              >
+                Restaurar Menu Lateral
+              </button>
+            </div>
+          )}
           
           {/* TAB: Vendas & Comércio (Local) */}
           {activeTab === 'local' && (
@@ -304,6 +338,25 @@ export default function App() {
                   role: 'client',
                   isActive: true,
                   queriesRemaining: 5,
+                  totalQueriesUsed: 0,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }
+              }
+            />
+          )}
+
+          {/* TAB: Multi-Plataformas & Central de Download */}
+          {activeTab === 'multiplatform_hub' && (
+            <MultiplatformHubTab
+              currentUser={
+                user || {
+                  id: 'guest',
+                  name: 'Visitante NANUCLOUD',
+                  email: 'visitante@nanucloud.com',
+                  role: 'client',
+                  isActive: true,
+                  queriesRemaining: 100,
                   totalQueriesUsed: 0,
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString()
@@ -551,6 +604,25 @@ export default function App() {
           localStorage.setItem('nanucloud_session_user', JSON.stringify(superAdminUser));
           setIsSuperAdminSetupOpen(false);
         }}
+      />
+
+      {/* Floating Corner Menu HUD & Quick Module Launcher */}
+      <CornerMenu
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          if (tab === 'plans') {
+            setIsPlansOpen(true);
+          } else {
+            setActiveTab(tab);
+          }
+        }}
+        isSidebarHidden={isSidebarHidden}
+        onToggleSidebar={toggleSidebar}
+        user={user}
+        currentLang={currentLang}
+        onLanguageChange={handleLangChange}
+        onOpenPlans={() => setIsPlansOpen(true)}
+        onOpenSupport={() => setIsChatOpen(true)}
       />
     </div>
   );

@@ -8,6 +8,7 @@ import simulatorRoutes from './server/routes/simulatorRoutes.js';
 import plansRoutes from './server/routes/plansRoutes.js';
 import adminRoutes from './server/routes/adminRoutes.js';
 import chatRoutes from './server/routes/chatRoutes.js';
+import aiTranslateRoutes from './server/routes/aiTranslateRoutes.js';
 import { db } from './server/db.js';
 
 async function startServer() {
@@ -68,6 +69,7 @@ async function startServer() {
   app.use('/api/plans', plansRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/chat', chatRoutes);
+  app.use('/api/ai', aiTranslateRoutes);
 
   // Vite middleware for development vs static for production
   if (process.env.NODE_ENV !== 'production') {

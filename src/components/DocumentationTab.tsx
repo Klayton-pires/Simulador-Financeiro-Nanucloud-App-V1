@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { MANUALS_DATA, generateManualPdf, generateConsolidatedManualsPdf, ManualDoc } from '../utils/manualsPdf';
 import { downloadOfficialExcelTemplate } from '../utils/excelTemplate';
+import { ScrollableRibbon } from './common/ScrollableRibbon';
 
 export const DocumentationTab: React.FC = () => {
   const [roleFilter, setRoleFilter] = useState<'all' | 'client' | 'commercial' | 'admin_level2' | 'admin_level1'>('all');
@@ -187,43 +188,45 @@ export default config;
           </div>
         )}
 
-        {/* User Role Group Filter */}
-        <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-mono text-slate-400 font-bold uppercase mr-1 flex items-center gap-1.5">
+        {/* User Role Group Filter with Scrollable Ribbon */}
+        <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
+          <span className="text-[11px] font-mono text-slate-400 font-bold uppercase mr-1 flex items-center gap-1.5 shrink-0">
             <Users className="w-3.5 h-3.5 text-indigo-400" /> Filtrar por Grupo:
           </span>
-          {[
-            { id: 'all', label: 'Todos os Manuais' },
-            { id: 'client', label: '1. Clientes / Utilizadores' },
-            { id: 'commercial', label: '2. Operadores Comerciais' },
-            { id: 'admin_level2', label: '3. Admin Operacional (N2)' },
-            { id: 'admin_level1', label: '4. Super Admin (N1) & Deploy' }
-          ].map((rf) => (
-            <button
-              key={rf.id}
-              onClick={() => setRoleFilter(rf.id as any)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all ${
-                roleFilter === rf.id
-                  ? 'bg-indigo-600 text-white font-bold shadow'
-                  : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800'
-              }`}
-            >
-              {rf.label}
-            </button>
-          ))}
+          <ScrollableRibbon id="docs-role-filter-ribbon" arrowSize="sm" scrollAmount={200} className="gap-1.5">
+            {[
+              { id: 'all', label: 'Todos os Manuais' },
+              { id: 'client', label: '1. Clientes / Utilizadores' },
+              { id: 'commercial', label: '2. Operadores Comerciais' },
+              { id: 'admin_level2', label: '3. Admin Operacional (N2)' },
+              { id: 'admin_level1', label: '4. Super Admin (N1) & Deploy' }
+            ].map((rf) => (
+              <button
+                key={rf.id}
+                onClick={() => setRoleFilter(rf.id as any)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all shrink-0 cursor-pointer ${
+                  roleFilter === rf.id
+                    ? 'bg-indigo-600 text-white font-bold shadow'
+                    : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                {rf.label}
+              </button>
+            ))}
+          </ScrollableRibbon>
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+      {/* Navigation Tabs with Left & Right Arrow Navigation */}
+      <ScrollableRibbon id="docs-manuals-tabs-ribbon" arrowSize="md" scrollAmount={320} className="gap-2 pb-1">
         {filteredManuals.map((m) => (
           <button
             key={m.id}
             onClick={() => setActiveSection(m.id)}
-            className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
               activeSection === m.id
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/40'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-750 hover:text-white'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-750 hover:text-white border border-slate-700/50'
             }`}
           >
             <FileText className="w-3.5 h-3.5 opacity-80" />
@@ -235,8 +238,8 @@ export default config;
 
         <button
           onClick={() => setActiveSection('wordpress')}
-          className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-            activeSection === 'wordpress' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
+          className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 ${
+            activeSection === 'wordpress' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:bg-slate-750 border border-slate-700/50'
           }`}
         >
           <Code className="w-3.5 h-3.5 text-indigo-400" />
@@ -245,8 +248,8 @@ export default config;
 
         <button
           onClick={() => setActiveSection('exe')}
-          className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-            activeSection === 'exe' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
+          className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 ${
+            activeSection === 'exe' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:bg-slate-750 border border-slate-700/50'
           }`}
         >
           <Monitor className="w-3.5 h-3.5 text-emerald-400" />
@@ -255,14 +258,14 @@ export default config;
 
         <button
           onClick={() => setActiveSection('apk')}
-          className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-            activeSection === 'apk' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
+          className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 ${
+            activeSection === 'apk' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:bg-slate-750 border border-slate-700/50'
           }`}
         >
           <Smartphone className="w-3.5 h-3.5 text-teal-400" />
           <span>Mobile (.APK / iOS)</span>
         </button>
-      </div>
+      </ScrollableRibbon>
 
       {/* Content Area */}
       <div className="bg-slate-850 border border-slate-700/80 rounded-3xl p-6 md:p-8 shadow-xl text-xs text-slate-300 space-y-6">

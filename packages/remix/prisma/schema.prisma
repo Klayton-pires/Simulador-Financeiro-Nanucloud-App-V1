@@ -1,0 +1,55 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model StaffUser {
+  id                String   @id @default(uuid())
+  name              String
+  email             String   @unique
+  department        String   @default("Consultoria Fiscal")
+  role              String   @default("user") // super_admin, admin_level1, admin_level2, manager, user
+  isActive          Boolean  @default(true)
+  queriesRemaining  Int      @default(10000)
+  totalQueriesUsed  Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Client {
+  id                String       @id @default(uuid())
+  name              String
+  companyName       String
+  email             String       @unique
+  phone             String?
+  nif               String
+  country           String       @default("AO")
+  clientCategory    String       @default("comercio")
+  activePlanName    String       @default("Plano Ouro Remix")
+  queriesRemaining  Int          @default(500)
+  totalQueriesUsed  Int          @default(0)
+  isImportUnlocked  Boolean      @default(true)
+  isBatchUnlocked   Boolean      @default(true)
+  isApiUnlocked     Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  simulations       Simulation[]
+}
+
+model Simulation {
+  id                 String   @id @default(uuid())
+  clientId           String?
+  client             Client?  @relation(fields: [clientId], references: [id])
+  productDescription String
+  costPrice          Float
+  customsDutyAmount  Float    @default(0)
+  ivaAmount          Float
+  profitMarginAmount Float
+  finalPvp           Float
+  currency           String   @default("AOA")
+  createdAt          DateTime @default(now())
+}

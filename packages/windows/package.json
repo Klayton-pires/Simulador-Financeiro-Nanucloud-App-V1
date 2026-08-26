@@ -1,0 +1,25 @@
+{
+  "name": "nanucloud-windows-desktop",
+  "version": "2026.8.0",
+  "description": "NANUCLOUD Fiscal Platform Desktop Executable for Windows 10/11",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.nanucloud.desktop",
+    "productName": "NANUCLOUD Fiscal Desktop",
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "icon.ico"
+    }
+  }
+}

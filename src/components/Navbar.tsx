@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { UserSafe } from '../types';
 import { SupportedLang, TRANSLATIONS } from '../i18n/translations';
-import { Sparkles, Shield, User as UserIcon, LogOut, FileText, CreditCard, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Shield, User as UserIcon, LogOut, FileText, CreditCard, ChevronDown, CheckCircle2, LayoutTemplate, SlidersHorizontal, Zap } from 'lucide-react';
 import { NanuCloudLogo } from './NanuCloudLogo';
+import { useLayoutMode } from '../data/layoutMode';
 
 interface NavbarProps {
   user: UserSafe | null;
@@ -28,14 +29,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [layoutMode, setLayoutMode] = useLayoutMode();
   const t = TRANSLATIONS[currentLang] || TRANSLATIONS.pt;
 
   return (
-    <header className="h-16 border-b border-slate-800 flex items-center justify-between px-4 md:px-6 bg-[#1E293B] sticky top-0 z-40">
-      <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <header className="h-16 border-b border-slate-800 flex items-center justify-between px-3 sm:px-4 md:px-6 bg-[#1E293B] sticky top-0 z-40">
+      <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <NanuCloudLogo className="h-9" isDarkTheme={true} />
+          <NanuCloudLogo className="h-8 sm:h-9" isDarkTheme={true} />
           <div className="hidden lg:flex items-center gap-2 border-l border-slate-800 pl-3">
             <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-tight">
               CONSOLE
@@ -47,18 +49,43 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Controls & User State */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Dynamic Layout Mode Switcher (Friendly vs Advanced) */}
+          <button
+            onClick={() => setLayoutMode(layoutMode === 'friendly' ? 'advanced' : 'friendly')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold transition border cursor-pointer ${
+              layoutMode === 'friendly'
+                ? 'bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border-indigo-500/30 shadow-sm shadow-indigo-500/10'
+                : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30 shadow-sm shadow-amber-500/10'
+            }`}
+            title={`Layout Atual: Modo ${layoutMode === 'friendly' ? 'Amigável (Friendly/Básico)' : 'Avançado (Pro/Técnico)'}. Clique para alternar.`}
+          >
+            {layoutMode === 'friendly' ? (
+              <>
+                <Zap className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                <span className="hidden sm:inline">Modo</span>
+                <span className="text-indigo-200">Amigável</span>
+              </>
+            ) : (
+              <>
+                <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Modo</span>
+                <span className="text-amber-200">Avançado</span>
+              </>
+            )}
+          </button>
+
           {/* Query Credits Badge */}
           {user ? (
             <button
               onClick={onOpenPlans}
-              className="flex items-center gap-1.5 bg-[#0F172A] hover:bg-slate-900 text-slate-200 border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-mono transition group"
+              className="flex items-center gap-1.5 bg-[#0F172A] hover:bg-slate-900 text-slate-200 border border-slate-800 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-mono transition group"
               title="Clique para recarregar ou mudar de plano"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
               <span className="font-bold text-amber-400">{user.queriesRemaining}</span>
-              <span className="hidden sm:inline text-slate-400 font-sans text-[11px]">créditos</span>
-              <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-mono px-1.5 py-0.5 rounded border border-indigo-500/30 ml-1">
+              <span className="hidden md:inline text-slate-400 font-sans text-[11px]">créditos</span>
+              <span className="text-[9px] sm:text-[10px] bg-indigo-500/20 text-indigo-300 font-mono px-1.5 py-0.5 rounded border border-indigo-500/30 ml-1">
                 +RECARGA
               </span>
             </button>

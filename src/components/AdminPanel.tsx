@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserSafe, Plan, Transaction, AuditLog, SystemSettings, SupportInquiry, BankAccount, ChatMessage } from '../types';
 import { Shield, ShieldAlert, CheckCircle2, XCircle, Users, Gem, Activity, Settings, Database, MessageSquare, Download, Edit3, Plus, Search, Check, Trash2, Key, RefreshCw, Building, Bot, Send, FileText, Sparkles, HardDrive } from 'lucide-react';
+import { ScrollableRibbon } from './common/ScrollableRibbon';
 import { AdminStatementsTab } from './admin/AdminStatementsTab';
 import { AdminFiscalAiTab } from './admin/AdminFiscalAiTab';
 import { AdminSecurityApiTab } from './admin/AdminSecurityApiTab';
@@ -418,178 +419,180 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
         </div>
       )}
 
-      {/* Navigation Sub-Tabs */}
-      <div className="bg-[#0F172A] border border-slate-800 p-1 rounded-xl flex items-center gap-1 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('kpis')}
-          className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-            activeTab === 'kpis' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-          }`}
-        >
-          <Activity className="w-3.5 h-3.5" />
-          <span>Métricas & KPIs</span>
-        </button>
+      {/* Navigation Sub-Tabs with Left & Right Arrow Navigation */}
+      <div className="bg-[#0F172A] border border-slate-800 p-1.5 rounded-xl">
+        <ScrollableRibbon id="admin-panel-subtabs-ribbon" arrowSize="md" scrollAmount={280} className="gap-1">
+          <button
+            onClick={() => setActiveTab('kpis')}
+            className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+              activeTab === 'kpis' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>Métricas & KPIs</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('payments')}
-          className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-            activeTab === 'payments' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-          }`}
-        >
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Validação Pagamentos</span>
-          {stats?.kpis?.pendingValidationsCount > 0 && (
-            <span className="bg-amber-400 text-slate-950 text-[10px] font-bold px-1.5 py-0.2 rounded">
-              {stats.kpis.pendingValidationsCount}
-            </span>
+          <button
+            onClick={() => setActiveTab('payments')}
+            className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+              activeTab === 'payments' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Validação Pagamentos</span>
+            {stats?.kpis?.pendingValidationsCount > 0 && (
+              <span className="bg-amber-400 text-slate-950 text-[10px] font-bold px-1.5 py-0.2 rounded">
+                {stats.kpis.pendingValidationsCount}
+              </span>
+            )}
+          </button>
+
+          {isSuperAdmin && (
+            <>
+              <button
+                onClick={() => setActiveTab('bot_learning')}
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+                  activeTab === 'bot_learning' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Robô Dúvidas & Aprendizagem</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('deploy_packages')}
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+                  activeTab === 'deploy_packages' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+                }`}
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Instalador Multiplataforma</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('statements')}
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+                  activeTab === 'statements' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Extratos & Bónus</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+                  activeTab === 'users' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-sky-400" />
+                <span>Utilizadores</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('fiscal_ai')}
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+                  activeTab === 'fiscal_ai' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>IA Fiscal & AGT</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('security_apis')}
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+                  activeTab === 'security_apis' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+                }`}
+              >
+                <Key className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Segurança & APIs</span>
+              </button>
+            </>
           )}
-        </button>
 
-        {isSuperAdmin && (
-          <>
-            <button
-              onClick={() => setActiveTab('bot_learning')}
-              className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-                activeTab === 'bot_learning' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Robô Dúvidas & Aprendizagem</span>
-            </button>
+          <button
+            onClick={() => setActiveTab('plans')}
+            className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+              activeTab === 'plans' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+            }`}
+          >
+            <Gem className="w-3.5 h-3.5 text-amber-400" />
+            <span>Preços dos Planos</span>
+          </button>
 
-            <button
-              onClick={() => setActiveTab('deploy_packages')}
-              className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-                activeTab === 'deploy_packages' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-              }`}
-            >
-              <Download className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Instalador Multiplataforma</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('statements')}
-              className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-                activeTab === 'statements' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Extratos & Bónus</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('users')}
-              className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-                activeTab === 'users' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5 text-sky-400" />
-              <span>Utilizadores</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('fiscal_ai')}
-              className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-                activeTab === 'fiscal_ai' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>IA Fiscal & AGT</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('security_apis')}
-              className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-                activeTab === 'security_apis' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-              }`}
-            >
-              <Key className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Segurança & APIs</span>
-            </button>
-          </>
-        )}
-
-        <button
-          onClick={() => setActiveTab('plans')}
-          className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-            activeTab === 'plans' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-          }`}
-        >
-          <Gem className="w-3.5 h-3.5 text-amber-400" />
-          <span>Preços dos Planos</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('bank_accounts')}
-          className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-            activeTab === 'bank_accounts' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-          }`}
-        >
-          <Building className="w-3.5 h-3.5 text-emerald-400" />
-          <span>IBANs & Bancos</span>
-          <span className="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.2 rounded font-bold">
-            {bankAccountsList.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('chat')}
-          className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-            activeTab === 'chat' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-          }`}
-        >
-          <Bot className="w-3.5 h-3.5 text-amber-400" />
-          <span>Chat & Robô Suporte</span>
-          {chatSessions.length > 0 && (
-            <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-bold">
-              {chatSessions.length}
+          <button
+            onClick={() => setActiveTab('bank_accounts')}
+            className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+              activeTab === 'bank_accounts' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+            }`}
+          >
+            <Building className="w-3.5 h-3.5 text-emerald-400" />
+            <span>IBANs & Bancos</span>
+            <span className="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.2 rounded font-bold">
+              {bankAccountsList.length}
             </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+              activeTab === 'chat' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+            }`}
+          >
+            <Bot className="w-3.5 h-3.5 text-amber-400" />
+            <span>Chat & Robô Suporte</span>
+            {chatSessions.length > 0 && (
+              <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-bold">
+                {chatSessions.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('support')}
+            className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+              activeTab === 'support' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Tickets</span>
+          </button>
+
+          {isSuperAdmin && (
+            <>
+              <button
+                onClick={() => setActiveTab('logs')}
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+                  activeTab === 'logs' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5 text-rose-400" />
+                <span>Logs & Auditoria</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+                  activeTab === 'settings' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+                }`}
+              >
+                <Settings className="w-3.5 h-3.5 text-slate-400" />
+                <span>Definições Empresa</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('backup')}
+                className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border shrink-0 cursor-pointer ${
+                  activeTab === 'backup' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
+                }`}
+              >
+                <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Backups</span>
+              </button>
+            </>
           )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('support')}
-          className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-            activeTab === 'support' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-          }`}
-        >
-          <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Tickets</span>
-        </button>
-
-        {isSuperAdmin && (
-          <>
-            <button
-              onClick={() => setActiveTab('logs')}
-              className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-                activeTab === 'logs' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-              }`}
-            >
-              <Activity className="w-3.5 h-3.5 text-rose-400" />
-              <span>Logs & Auditoria</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-                activeTab === 'settings' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-              }`}
-            >
-              <Settings className="w-3.5 h-3.5 text-slate-400" />
-              <span>Definições Empresa</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('backup')}
-              className={`px-3 py-2 rounded-lg text-xs font-mono font-medium transition flex items-center gap-2 whitespace-nowrap border ${
-                activeTab === 'backup' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-slate-800'
-              }`}
-            >
-              <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Backups</span>
-            </button>
-          </>
-        )}
+        </ScrollableRibbon>
       </div>
 
       {/* 1. TAB: KPIS & STATS */}

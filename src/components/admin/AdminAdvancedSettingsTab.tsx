@@ -432,7 +432,7 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
           { id: 'countries', label: '8. Visibilidade de Países', icon: Globe },
           { id: 'themes', label: '9. Temas da Aplicação', icon: Palette },
           { id: 'marketing', label: '10. Notificações & Marketing', icon: Megaphone },
-          { id: 'users_clients', label: '11. Gestão de Utilizadores', icon: Users },
+          { id: 'users_clients', label: '11. Utilizadores do Sistema (Staff)', icon: Shield },
           { id: 'history', label: '12. Histórico & Reversão', icon: History },
           { id: 'legal_terms', label: '13. Termos de Uso & Políticas', icon: Scale }
         ].map((tab) => {

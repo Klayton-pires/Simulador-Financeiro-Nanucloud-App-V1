@@ -1,0 +1,14 @@
+{
+  "name": "nanucloud-web-standalone",
+  "version": "2026.8.0",
+  "description": "NANUCLOUD Web Standalone PWA Bundle with Local Database",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "serve": "npx serve ."
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "cors": "^2.8.5"
+  }
+}

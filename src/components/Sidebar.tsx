@@ -26,7 +26,8 @@ import {
   FileCode,
   Briefcase,
   Handshake,
-  UserCheck
+  UserCheck,
+  Download
 } from 'lucide-react';
 
 export type ActiveTab =
@@ -39,6 +40,7 @@ export type ActiveTab =
   | 'api_integration'
   | 'fiscal_matrix'
   | 'fiscal_ai'
+  | 'multiplatform_hub'
   | 'clients_management'
   | 'users_management'
   | 'tickets'
@@ -57,6 +59,7 @@ interface SidebarProps {
   user: UserSafe | null;
   currentLang: SupportedLang;
   onOpenTerms?: () => void;
+  onToggleSidebar?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -124,8 +127,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const managementItems = isManager
     ? [
-        { id: 'clients_management', label: 'Gestão de Clientes', icon: Building },
-        { id: 'users_management', label: 'Gestão de Utilizadores (Staff)', icon: ShieldCheck },
+        { id: 'clients_management', label: 'Gestão de Clientes & CRM', icon: Building },
+        { id: 'users_management', label: 'Utilizadores & Staff (RBAC)', icon: ShieldCheck },
         { id: 'tickets', label: 'Tickets & Atendimento', icon: LifeBuoy },
         { id: 'marketing', label: 'Marketing, SMS & E-mail', icon: MessageSquare },
         { id: 'reports_metrics', label: 'Métricas & Auditoria', icon: BarChart3 },
@@ -203,6 +206,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           );
         })}
+
+        {/* Multi-Plataformas & Download Section */}
+        <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mt-4 mb-2 px-3 font-mono flex items-center justify-between">
+          <span>Ecossistema & Apps</span>
+          <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1 py-0.2 rounded">8 PLATAFORMAS</span>
+        </div>
+
+        <button
+          onClick={() => onTabChange('multiplatform_hub')}
+          className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-xs md:text-sm font-medium transition-colors border text-left ${
+            activeTab === 'multiplatform_hub'
+              ? 'bg-indigo-500/15 text-indigo-300 font-bold border-indigo-500/40 shadow-sm'
+              : 'hover:bg-[#1E293B] text-slate-300 border-slate-800/80 bg-slate-900/40'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <Download className={`w-4 h-4 shrink-0 ${activeTab === 'multiplatform_hub' ? 'text-indigo-400' : 'text-indigo-400'}`} />
+            <span className="truncate">Download Multi-Plataformas</span>
+          </div>
+          <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            TESTAR
+          </span>
+        </button>
 
         {/* Management & Governance Section */}
         {managementItems.length > 0 && (

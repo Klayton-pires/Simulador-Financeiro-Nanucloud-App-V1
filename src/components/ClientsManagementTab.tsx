@@ -243,21 +243,24 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Header */}
+      {/* Header with clear separation note */}
       <div className="bg-[#1E293B] border border-slate-700 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
             <Building className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg font-bold text-slate-100 font-mono">GESTÃO DE CLIENTES & EMPRESAS</h1>
-              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
-                {clients.length} Clientes Ativos
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
+                {clients.length} Clientes Comerciais
+              </span>
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono border border-slate-700">
+                Segregado dos Utilizadores Internos (Staff)
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Administração de contas de clientes, planos subscritos, saldo de pesquisas, NIF e emissão de dossiês profissionais
+              Administração de contas de clientes, empresas contratantes, subscrições de planos, saldo de consultas, NIF fiscal e emissão de dossiês.
             </p>
           </div>
         </div>

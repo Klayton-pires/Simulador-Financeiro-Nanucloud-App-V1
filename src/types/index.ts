@@ -88,6 +88,7 @@ export interface UserSafe {
   nif?: string;
   country: string;
   role: UserRole;
+  department?: string;
   permissionGroupId?: string;
   customPermissions?: string[];
   isActive: boolean;
@@ -103,6 +104,62 @@ export interface UserSafe {
   twoFactorPhone?: string;
   loginSmsEnabled?: boolean;
   birthDate?: string;
+  clientCategory?: 'comercio' | 'servicos' | 'importacao' | 'industria' | 'liberal' | 'outro';
+  assignedManagerId?: string;
+  assignedManagerName?: string;
+  commercialNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string | null;
+}
+
+// Entidade Dedicada para Clientes e Empresas Externas
+export interface ClientProfile {
+  id: string;
+  name: string; // Nome do titular / responsável
+  companyName: string; // Razão Social da Empresa
+  email: string;
+  phone: string;
+  nif: string; // Identificação Fiscal
+  address?: string;
+  country: string; // Código do País (Ex: AO, PT, BR, etc)
+  clientCategory: 'comercio' | 'servicos' | 'importacao' | 'industria' | 'liberal' | 'outro';
+  isActive: boolean;
+  
+  // Subscrição & Saldo
+  activePlanId: string;
+  activePlanName: string;
+  planExpiresAt: string | null;
+  queriesRemaining: number;
+  totalQueriesUsed: number;
+  
+  // Desbloqueio de Módulos Específicos
+  isImportUnlocked: boolean;
+  isBatchUnlocked: boolean;
+  isApiUnlocked: boolean;
+  
+  // Gestão Comercial
+  assignedManager?: string;
+  commercialNotes?: string;
+  
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string | null;
+}
+
+// Entidade Dedicada para Utilizadores Internos / Colaboradores (Staff)
+export interface StaffUserProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'super_admin' | 'admin_level1' | 'admin_level2' | 'manager' | 'user';
+  department: 'Direção Geral' | 'Consultoria Fiscal' | 'Comercial & Vendas' | 'Suporte Técnico' | 'Auditoria & TI';
+  permissionGroupId: string;
+  permissionGroupName?: string;
+  customPermissions?: string[];
+  isActive: boolean;
+  twoFactorEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;

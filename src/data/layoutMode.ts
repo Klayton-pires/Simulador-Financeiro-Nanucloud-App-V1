@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+
 export type LayoutMode = 'friendly' | 'advanced';
 
 const STORAGE_KEY = 'nanucloud_layout_mode';
@@ -11,7 +13,7 @@ export function getLayoutMode(): LayoutMode {
   } catch (e) {
     console.warn('Failed to read layout mode:', e);
   }
-  return 'friendly'; // Default to Friendly (Básico) for optimal ease of use
+  return 'friendly'; // Default to Friendly (Básico / Dinâmico) for best user experience
 }
 
 export function setLayoutMode(mode: LayoutMode): void {
@@ -21,4 +23,25 @@ export function setLayoutMode(mode: LayoutMode): void {
   } catch (e) {
     console.error('Failed to set layout mode:', e);
   }
+}
+
+export function useLayoutMode(): [LayoutMode, (mode: LayoutMode) => void] {
+  const [mode, setModeState] = useState<LayoutMode>(() => getLayoutMode());
+
+  useEffect(() => {
+    const handleModeChange = (e: any) => {
+      const newMode = e.detail || getLayoutMode();
+      setModeState(newMode);
+    };
+
+    window.addEventListener('nanucloud_layout_mode_changed', handleModeChange);
+    return () => window.removeEventListener('nanucloud_layout_mode_changed', handleModeChange);
+  }, []);
+
+  const changeMode = (newMode: LayoutMode) => {
+    setLayoutMode(newMode);
+    setModeState(newMode);
+  };
+
+  return [mode, changeMode];
 }
