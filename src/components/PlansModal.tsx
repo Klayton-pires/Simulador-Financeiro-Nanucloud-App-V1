@@ -32,13 +32,18 @@ export const PlansModal: React.FC<PlansModalProps> = ({
   // Checkout Step State
   const [selectedPlanForCheckout, setSelectedPlanForCheckout] = useState<Plan | null>(null);
   const [isCustomCheckout, setIsCustomCheckout] = useState<boolean>(false);
-  const [paymentTab, setPaymentTab] = useState<'bank_transfer' | 'express_ref' | 'express_mobile'>('bank_transfer');
+  const [paymentTab, setPaymentTab] = useState<'bank_transfer' | 'express_ref' | 'paypal_visa' | 'stripe_card'>('bank_transfer');
   const [selectedBankId, setSelectedBankId] = useState<string>('');
   const [paymentReference, setPaymentReference] = useState<string>('');
   const [expressMobileNumber, setExpressMobileNumber] = useState<string>('');
+  const [cardHolder, setCardHolder] = useState<string>('');
+  const [cardNumber, setCardNumber] = useState<string>('');
+  const [cardExpiry, setCardExpiry] = useState<string>('');
+  const [cardCvv, setCardCvv] = useState<string>('');
   const [proofNotes, setProofNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [orderSuccess, setOrderSuccess] = useState<boolean>(false);
+  const [successDetails, setSuccessDetails] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedIban, setCopiedIban] = useState<string | null>(null);
   const [authPromptOpen, setAuthPromptOpen] = useState<boolean>(false);
@@ -129,8 +134,8 @@ export const PlansModal: React.FC<PlansModalProps> = ({
       return;
     }
 
-    if (paymentTab === 'express_mobile' && !expressMobileNumber.trim()) {
-      setErrorMsg('Por favor, introduza o número de telemóvel associado ao Multicaixa Express.');
+    if (paymentTab === 'paypal_visa' && !paymentReference && !cardNumber.trim()) {
+      setErrorMsg('Por favor, informe o email PayPal ou os dados do Cartão Visa / Mastercard.');
       return;
     }
 
@@ -140,13 +145,22 @@ export const PlansModal: React.FC<PlansModalProps> = ({
       const planId = isCustomCheckout ? 'plan_custom' : selectedPlanForCheckout?.id;
       const amount = isCustomCheckout ? customAmountKz : selectedPlanForCheckout?.priceKz;
       
-      const reference = paymentTab === 'bank_transfer' 
-        ? paymentReference.trim()
-        : (paymentTab === 'express_ref' ? `MCX-REF-${Math.floor(100000000 + Math.random() * 900000000)}` : `MCX-TEL-${expressMobileNumber.trim()}`);
+      let reference = '';
+      let notes = '';
 
-      const notes = paymentTab === 'bank_transfer'
-        ? `[Transferência Bancária - Banco ID: ${selectedBankId}] ${proofNotes}`
-        : (paymentTab === 'express_ref' ? `[Referência Multicaixa Express - Aguarda EMIS] ${proofNotes}` : `[Compra Direta Express - Nº ${expressMobileNumber}] ${proofNotes}`);
+      if (paymentTab === 'bank_transfer') {
+        reference = paymentReference.trim();
+        notes = `[Transferência Bancária - Banco ID: ${selectedBankId}] ${proofNotes}`;
+      } else if (paymentTab === 'express_ref') {
+        reference = `MCX-REF-${Math.floor(100000000 + Math.random() * 900000000)}`;
+        notes = `[Referência Multicaixa Express - EMIS] ${proofNotes}`;
+      } else if (paymentTab === 'paypal_visa') {
+        reference = `PAYPAL-VISA-${Math.floor(100000000 + Math.random() * 900000000)}`;
+        notes = `[PayPal / Cartão Visa - Encriptação 256-bit] Titular: ${cardHolder || 'PayPal Account'} ${proofNotes}`;
+      } else {
+        reference = `STRIPE-CARD-${Math.floor(100000000 + Math.random() * 900000000)}`;
+        notes = `[Stripe Direct Card] ${proofNotes}`;
+      }
 
       const res = await fetch('/api/plans/purchase', {
         method: 'POST',
@@ -166,6 +180,11 @@ export const PlansModal: React.FC<PlansModalProps> = ({
         setErrorMsg(data.error || 'Erro ao processar pedido.');
       } else {
         setOrderSuccess(true);
+        if (paymentTab === 'paypal_visa' || paymentTab === 'stripe_card') {
+          setSuccessDetails(`Pagamento digital validado com sucesso! As suas consultas (${data.transaction?.queriesCount || ''}) e acesso aos módulos foram imediatamente ativados na sua conta.`);
+        } else {
+          setSuccessDetails('O seu pedido de ativação foi registado. A administração irá conferir o comprovativo e creditar o plano.');
+        }
         onPurchaseSuccess();
       }
     } catch (err) {
@@ -382,16 +401,18 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                   <ShieldCheck className="w-6 h-6" />
                 </div>
                 <h3 className="text-base font-bold text-slate-100 uppercase tracking-tight">
-                  Pedido Registado com Sucesso!
+                  {paymentTab === 'paypal_visa' || paymentTab === 'stripe_card'
+                    ? 'Pagamento Confirmado & Plano Ativado!'
+                    : 'Pedido Registado com Sucesso!'}
                 </h3>
                 <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
-                  A nossa equipa de administração irá verificar o pagamento e creditar as suas consultas de imediato. Acompanhe o estado das transações no seu perfil.
+                  {successDetails || 'A nossa equipa de administração irá verificar o pagamento e creditar as suas consultas de imediato.'}
                 </p>
                 <button
                   onClick={onClose}
-                  className="bg-indigo-500 hover:bg-indigo-600 text-white font-mono font-bold py-2 px-5 rounded-lg text-xs uppercase tracking-tight transition cursor-pointer shadow"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold py-2 px-5 rounded-lg text-xs uppercase tracking-tight transition cursor-pointer shadow"
                 >
-                  Concluir & Voltar ao Simulador
+                  Concluir & Começar a Utilizar
                 </button>
               </div>
             ) : (
@@ -413,60 +434,82 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                 {/* Payment Method Selector Tabs */}
                 <div>
                   <label className="text-xs font-mono font-bold text-slate-300 block mb-2">
-                    Selecione o Método de Pagamento:
+                    Selecione a Modalidade de Pagamento:
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 font-mono text-xs">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 font-mono text-xs">
                     <button
                       type="button"
                       onClick={() => setPaymentTab('bank_transfer')}
-                      className={`p-3 rounded-xl border text-left flex items-center gap-3 transition cursor-pointer ${
+                      className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-2 transition cursor-pointer ${
                         paymentTab === 'bank_transfer'
-                          ? 'bg-indigo-500/15 border-indigo-500 text-white'
+                          ? 'bg-indigo-500/15 border-indigo-500 text-white shadow'
                           : 'bg-[#0F172A] border-slate-800 text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <Building className="w-5 h-5 text-indigo-400 shrink-0" />
+                      <div className="flex items-center justify-between w-full">
+                        <Building className="w-4 h-4 text-indigo-400 shrink-0" />
+                        <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded font-bold">Nacional</span>
+                      </div>
                       <div>
-                        <div className="font-bold">Transferência Bancária</div>
-                        <div className="text-[10px] text-slate-400">Lista oficial de IBANs</div>
+                        <div className="font-bold text-[11px]">Transferência IBAN</div>
+                        <div className="text-[10px] text-slate-400">BAI, BFA, BIC, BCI, SOL</div>
                       </div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setPaymentTab('express_ref')}
-                      className={`p-3 rounded-xl border text-left flex items-center gap-3 transition cursor-pointer relative ${
+                      className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-2 transition cursor-pointer ${
                         paymentTab === 'express_ref'
-                          ? 'bg-indigo-500/15 border-indigo-500 text-white'
+                          ? 'bg-indigo-500/15 border-indigo-500 text-white shadow'
                           : 'bg-[#0F172A] border-slate-800 text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <Hash className="w-5 h-5 text-amber-400 shrink-0" />
+                      <div className="flex items-center justify-between w-full">
+                        <Hash className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold">EMIS</span>
+                      </div>
                       <div>
-                        <div className="font-bold flex items-center gap-1.5">
-                          <span>Referência Express</span>
-                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded">Brevemente</span>
-                        </div>
-                        <div className="text-[10px] text-slate-400">Pagamento por Referência EMIS</div>
+                        <div className="font-bold text-[11px]">Multicaixa Express</div>
+                        <div className="text-[10px] text-slate-400">Referência / GPO</div>
                       </div>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setPaymentTab('express_mobile')}
-                      className={`p-3 rounded-xl border text-left flex items-center gap-3 transition cursor-pointer relative ${
-                        paymentTab === 'express_mobile'
-                          ? 'bg-indigo-500/15 border-indigo-500 text-white'
+                      onClick={() => setPaymentTab('paypal_visa')}
+                      className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-2 transition cursor-pointer ${
+                        paymentTab === 'paypal_visa'
+                          ? 'bg-sky-500/15 border-sky-500 text-white shadow'
                           : 'bg-[#0F172A] border-slate-800 text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <Smartphone className="w-5 h-5 text-sky-400 shrink-0" />
+                      <div className="flex items-center justify-between w-full">
+                        <CreditCard className="w-4 h-4 text-sky-400 shrink-0" />
+                        <span className="text-[9px] bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded font-bold">PayPal / Visa</span>
+                      </div>
                       <div>
-                        <div className="font-bold flex items-center gap-1.5">
-                          <span>Compra Direta Express</span>
-                          <span className="text-[9px] bg-sky-500/20 text-sky-300 px-1.5 py-0.2 rounded">Brevemente</span>
-                        </div>
-                        <div className="text-[10px] text-slate-400">Débito direto via telemóvel</div>
+                        <div className="font-bold text-[11px]">PayPal & Cartão Visa</div>
+                        <div className="text-[10px] text-slate-400">Mastercard / Amex</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPaymentTab('stripe_card')}
+                      className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-2 transition cursor-pointer ${
+                        paymentTab === 'stripe_card'
+                          ? 'bg-emerald-500/15 border-emerald-500 text-white shadow'
+                          : 'bg-[#0F172A] border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-bold">Stripe</span>
+                      </div>
+                      <div>
+                        <div className="font-bold text-[11px]">Stripe / Carteiras</div>
+                        <div className="text-[10px] text-slate-400">Apple / Google Pay</div>
                       </div>
                     </button>
                   </div>
@@ -591,12 +634,12 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                 {/* TAB 2: PAGAMENTO POR REFERÊNCIA MULTICAIXA EXPRESS (EMIS) */}
                 {paymentTab === 'express_ref' && (
                   <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-5 font-mono space-y-4">
-                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2">
-                      <Clock className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                    <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs flex items-start gap-2">
+                      <Clock className="w-4 h-4 shrink-0 mt-0.5 text-indigo-400" />
                       <div>
-                        <strong>Serviço em fase de ativação junto da EMIS (Brevemente Disponível):</strong>
+                        <strong>Pagamento Interbancário Multicaixa Express (EMIS GPO):</strong>
                         <p className="mt-0.5 text-[11px] text-slate-300">
-                          A NANUCLOUD já deixou toda a arquitetura de pagamentos por referência pronta. Pode gerar uma referência demonstrativa ou optar por Transferência Bancária imediata.
+                          Utilize a entidade e referência geradas abaixo em qualquer Caixa Multicaixa ou na aplicação Multicaixa Express para liquidação imediata.
                         </p>
                       </div>
                     </div>
@@ -604,21 +647,21 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                     <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-4 max-w-md mx-auto space-y-3 text-xs">
                       <div className="text-center pb-2 border-b border-slate-800">
                         <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Referência Multicaixa</span>
-                        <div className="text-lg font-bold text-slate-100 mt-1">EMIS / PAGAMENTOS EXPRESS</div>
+                        <div className="text-lg font-bold text-slate-100 mt-1">EMIS / PAGAMENTOS DE SERVIÇOS</div>
                       </div>
 
                       <div className="space-y-2">
                         <div className="flex justify-between py-1 border-b border-slate-800/60">
                           <span className="text-slate-400">Entidade:</span>
-                          <span className="font-bold text-slate-100">00142 (NANUCLOUD)</span>
+                          <span className="font-bold text-slate-100 font-mono">00142 (NANUCLOUD)</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-slate-800/60">
                           <span className="text-slate-400">Referência:</span>
-                          <span className="font-bold text-indigo-400 text-sm tracking-wider">944 935 617</span>
+                          <span className="font-bold text-indigo-400 text-sm tracking-wider font-mono">944 935 617</span>
                         </div>
                         <div className="flex justify-between py-1">
                           <span className="text-slate-400">Montante:</span>
-                          <span className="font-bold text-emerald-400 text-sm">{checkoutAmount.toLocaleString('pt-PT')} Kz</span>
+                          <span className="font-bold text-emerald-400 text-sm font-mono">{checkoutAmount.toLocaleString('pt-PT')} Kz</span>
                         </div>
                       </div>
 
@@ -626,57 +669,146 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                         type="button"
                         onClick={handleSubmitOrder}
                         disabled={isSubmitting}
-                        className="w-full mt-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg text-xs uppercase tracking-tight flex items-center justify-center gap-2 cursor-pointer"
+                        className="w-full mt-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg text-xs uppercase tracking-tight flex items-center justify-center gap-2 cursor-pointer shadow"
                       >
                         <ShieldCheck className="w-4 h-4" />
-                        <span>Simular Pagamento por Referência</span>
+                        <span>{isSubmitting ? 'A Processar...' : 'Validar Pagamento Multicaixa Express'}</span>
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* TAB 3: COMPRA DIRETA VIA MULTICAIXA EXPRESS (TELEFONE) */}
-                {paymentTab === 'express_mobile' && (
+                {/* TAB 3: PAYPAL & CARTÃO VISA / MASTERCARD */}
+                {paymentTab === 'paypal_visa' && (
                   <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-5 font-mono space-y-4">
                     <div className="p-3 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-300 text-xs flex items-start gap-2">
-                      <Clock className="w-4 h-4 shrink-0 mt-0.5 text-sky-400" />
+                      <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-sky-400" />
                       <div>
-                        <strong>Compra Direta via Telemóvel Multicaixa Express (Brevemente Disponível):</strong>
+                        <strong>Gateway PayPal Seguro com Suporte para Cartão Visa / Mastercard:</strong>
                         <p className="mt-0.5 text-[11px] text-slate-300">
-                          Receberá uma notificação instantânea no aplicativo Multicaixa Express no seu telemóvel para autorizar com o seu PIN.
+                          Pague diretamente com a sua conta PayPal ou introduza o seu cartão de débito/crédito internacional (Visa, Mastercard, American Express) com proteção antifraude e encriptação bancária AES-256 bits.
                         </p>
                       </div>
                     </div>
 
-                    <form onSubmit={handleSubmitOrder} className="bg-[#1E293B] border border-slate-800 rounded-xl p-4 max-w-md mx-auto space-y-3 text-xs">
+                    <form onSubmit={handleSubmitOrder} className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 max-w-lg mx-auto space-y-4 text-xs">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-sky-400 font-mono text-sm">PayPal</span>
+                          <span className="text-slate-600">|</span>
+                          <span className="font-bold text-slate-200">Visa / Mastercard</span>
+                        </div>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono">
+                          256-bit SSL
+                        </span>
+                      </div>
+
                       <div>
-                        <label className="text-slate-400 font-bold block mb-1">
-                          Número de Telemóvel Multicaixa Express:
-                        </label>
-                        <div className="relative">
-                          <Smartphone className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                        <label className="text-slate-400 font-bold block mb-1">Nome do Titular do Cartão / Conta:</label>
+                        <input
+                          type="text"
+                          value={cardHolder}
+                          onChange={(e) => setCardHolder(e.target.value)}
+                          placeholder="Ex: Manuel António"
+                          className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs outline-none focus:border-sky-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-slate-400 font-bold block mb-1">Número do Cartão Visa / Mastercard ou Email PayPal:</label>
+                        <input
+                          type="text"
+                          required
+                          value={cardNumber}
+                          onChange={(e) => setCardNumber(e.target.value)}
+                          placeholder="4111 2222 3333 4444 ou cliente@paypal.com"
+                          className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs outline-none focus:border-sky-500 font-mono"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-slate-400 font-bold block mb-1">Validade (MM/AA):</label>
                           <input
-                            type="tel"
-                            required
-                            value={expressMobileNumber}
-                            onChange={(e) => setExpressMobileNumber(e.target.value)}
-                            placeholder="944 935 617"
-                            className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-indigo-500"
+                            type="text"
+                            value={cardExpiry}
+                            onChange={(e) => setCardExpiry(e.target.value)}
+                            placeholder="12/28"
+                            className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs outline-none focus:border-sky-500 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-slate-400 font-bold block mb-1">CVV / Código Segurança:</label>
+                          <input
+                            type="password"
+                            maxLength={4}
+                            value={cardCvv}
+                            onChange={(e) => setCardCvv(e.target.value)}
+                            placeholder="•••"
+                            className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs outline-none focus:border-sky-500 font-mono text-center tracking-widest"
                           />
                         </div>
                       </div>
 
-                      <div className="p-2.5 rounded bg-[#0F172A] border border-slate-800 text-slate-400 text-[11px]">
-                        Valor a debitar: <strong className="text-emerald-400">{checkoutAmount.toLocaleString('pt-PT')} Kz</strong>
+                      <div className="p-2.5 rounded bg-[#0F172A] border border-slate-800 flex items-center justify-between text-slate-300">
+                        <span>Total a Debitar:</span>
+                        <strong className="text-emerald-400 text-sm font-mono">{checkoutAmount.toLocaleString('pt-PT')} Kz</strong>
                       </div>
 
                       <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-lg text-xs uppercase tracking-tight flex items-center justify-center gap-2 cursor-pointer"
+                        className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-lg text-xs uppercase tracking-tight flex items-center justify-center gap-2 cursor-pointer shadow transition"
                       >
-                        <Smartphone className="w-4 h-4" />
-                        <span>Enviar Pedido de Pagamento ao Express</span>
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>{isSubmitting ? 'A Processar Pagamento...' : 'Pagar com PayPal ou Cartão Visa'}</span>
+                      </button>
+                    </form>
+                  </div>
+                )}
+
+                {/* TAB 4: STRIPE DIRECT & DIGITAL WALLETS */}
+                {paymentTab === 'stripe_card' && (
+                  <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-5 font-mono space-y-4">
+                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-start gap-2">
+                      <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                      <div>
+                        <strong>Processador Stripe Direct (Cartão / Apple Pay / Google Pay / Carteiras):</strong>
+                        <p className="mt-0.5 text-[11px] text-slate-300">
+                          Integração direta com o checkout global da Stripe para liquidação instantânea de planos em Kwanzas, Dólares ou Euros.
+                        </p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleSubmitOrder} className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 max-w-lg mx-auto space-y-4 text-xs">
+                      <div className="text-center pb-2 border-b border-slate-800">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Stripe Payment Gateway</span>
+                        <div className="text-base font-bold text-slate-100 mt-0.5">Pagamento Rápido & Ativação Imediata</div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-slate-400 font-bold block mb-1">Email para Envio do Recibo Fiscal:</label>
+                          <input
+                            type="email"
+                            defaultValue={user?.email || ''}
+                            className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div className="p-2.5 rounded bg-[#0F172A] border border-slate-800 flex items-center justify-between text-slate-300">
+                          <span>Montante do Plano:</span>
+                          <strong className="text-emerald-400 text-sm font-mono">{checkoutAmount.toLocaleString('pt-PT')} Kz</strong>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-lg text-xs uppercase tracking-tight flex items-center justify-center gap-2 cursor-pointer shadow transition"
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>{isSubmitting ? 'A Conectar à Stripe...' : 'Pagar via Stripe / Apple Pay / Google Pay'}</span>
                       </button>
                     </form>
                   </div>

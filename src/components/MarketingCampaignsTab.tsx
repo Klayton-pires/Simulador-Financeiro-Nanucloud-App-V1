@@ -10,7 +10,8 @@ import {
   Clock,
   Gift,
   Zap,
-  Filter
+  Filter,
+  FileText
 } from 'lucide-react';
 import { UserSafe, MarketingCampaign } from '../types';
 import { INITIAL_CLIENTS } from '../data/mockDatabase';

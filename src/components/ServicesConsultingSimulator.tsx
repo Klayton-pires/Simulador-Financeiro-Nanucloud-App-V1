@@ -1,0 +1,856 @@
+import React, { useState, useEffect } from 'react';
+import { UserSafe, ServiceBillingMode } from '../types';
+import { COUNTRIES_DB } from '../data/countries';
+import { SupportedLang, TRANSLATIONS } from '../i18n/translations';
+import {
+  Briefcase,
+  Clock,
+  Navigation,
+  DollarSign,
+  Users,
+  Utensils,
+  Car,
+  FileSpreadsheet,
+  Download,
+  CheckCircle2,
+  AlertCircle,
+  HelpCircle,
+  TrendingUp,
+  Receipt,
+  Building2,
+  Calendar,
+  Save,
+  RotateCcw
+} from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+
+interface ServicesConsultingSimulatorProps {
+  user: UserSafe | null;
+  currentLang: SupportedLang;
+  onOpenPlans: () => void;
+  onOpenAuth: () => void;
+  onCalculationDone: (newCredits: number) => void;
+}
+
+export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorProps> = ({
+  user,
+  currentLang,
+  onOpenPlans,
+  onOpenAuth,
+  onCalculationDone
+}) => {
+  const t = TRANSLATIONS[currentLang] || TRANSLATIONS.pt;
+
+  // Configuration and inputs
+  const [countryCode, setCountryCode] = useState<string>('AO');
+  const [serviceTitle, setServiceTitle] = useState<string>('Consultoria Fiscal e Auditoria de Balanço');
+  const [clientName, setClientName] = useState<string>('');
+  const [billingMode, setBillingMode] = useState<ServiceBillingMode>('hourly');
+
+  // Pricing inputs
+  const [fixedAmount, setFixedAmount] = useState<string>('500000');
+  
+  // Hourly Mode
+  const [hourlyRate, setHourlyRate] = useState<string>('25000');
+  const [totalHours, setTotalHours] = useState<string>('16');
+
+  // Distance / KM Mode
+  const [ratePerKm, setRatePerKm] = useState<string>('750');
+  const [distanceKm, setDistanceKm] = useState<string>('120');
+  const [isRoundTrip, setIsRoundTrip] = useState<boolean>(true);
+
+  // Optional Logistics paid by client
+  const [clientPaysTransport, setClientPaysTransport] = useState<boolean>(true);
+  const [transportCostPerPerson, setTransportCostPerPerson] = useState<string>('15000');
+  const [techniciansCount, setTechniciansCount] = useState<number>(2);
+
+  const [clientPaysMeals, setClientPaysMeals] = useState<boolean>(true);
+  const [mealAllowancePerPerson, setMealAllowancePerPerson] = useState<string>('8000');
+  const [daysDuration, setDaysDuration] = useState<number>(3);
+
+  // Fiscal Parameters
+  const [vatRate, setVatRate] = useState<number>(14);
+  const [retentionRate, setRetentionRate] = useState<number>(6.5);
+  const [marginPercent, setMarginPercent] = useState<string>('20');
+  const [tpaRate, setTpaRate] = useState<number>(1.0);
+  const [applyRetention, setApplyRetention] = useState<boolean>(true);
+
+  // UI state
+  const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
+  const [pdfGenerating, setPdfGenerating] = useState<boolean>(false);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  const country = COUNTRIES_DB[countryCode] || COUNTRIES_DB['AO'];
+
+  // Initialize fiscal defaults on country change
+  useEffect(() => {
+    if (country) {
+      setVatRate(country.vatOptions[0]?.r ?? 14);
+      setTpaRate(country.tpa || 1.0);
+      setRetentionRate(country.retentionServiceRate ?? (countryCode === 'AO' ? 6.5 : countryCode === 'PT' ? 11.5 : 5.0));
+    }
+  }, [countryCode]);
+
+  // Calculations
+  const calcBaseLabor = () => {
+    if (billingMode === 'fixed') {
+      return parseFloat(fixedAmount) || 0;
+    }
+    if (billingMode === 'hourly') {
+      const rate = parseFloat(hourlyRate) || 0;
+      const hours = parseFloat(totalHours) || 0;
+      return rate * hours;
+    }
+    if (billingMode === 'distance') {
+      const kmRate = parseFloat(ratePerKm) || 0;
+      const km = parseFloat(distanceKm) || 0;
+      const multiplier = isRoundTrip ? 2 : 1;
+      return kmRate * km * multiplier;
+    }
+    return 0;
+  };
+
+  const baseLabor = calcBaseLabor();
+
+  // Transport calculation
+  const totalTransport = clientPaysTransport
+    ? (parseFloat(transportCostPerPerson) || 0) * (techniciansCount || 1)
+    : 0;
+
+  // Meals calculation
+  const totalMeals = clientPaysMeals
+    ? (parseFloat(mealAllowancePerPerson) || 0) * (techniciansCount || 1) * (daysDuration || 1)
+    : 0;
+
+  // Total Logistics expenses
+  const totalLogistics = totalTransport + totalMeals;
+
+  // Subtotal before margin
+  const subtotalDirectCost = baseLabor + totalLogistics;
+
+  // Profit Margin / Markup
+  const marginPct = parseFloat(marginPercent) || 0;
+  const markupAmount = baseLabor * (marginPct / 100);
+
+  // Taxable Base (Subtotal of service + markup + reimbursable logistics if applicable)
+  const taxableBase = baseLabor + markupAmount + totalLogistics;
+
+  // VAT (IVA)
+  const vatAmount = taxableBase * (vatRate / 100);
+
+  // Gross Total Invoiced (Valor Bruto Faturado com IVA)
+  const grossInvoiceTotal = taxableBase + vatAmount;
+
+  // Withholding Tax (Retenção na Fonte) - normally calculated on taxable base excluding VAT
+  const effectiveRetentionRate = applyRetention ? retentionRate : 0;
+  const withholdingTaxAmount = taxableBase * (effectiveRetentionRate / 100);
+
+  // TPA fee (if client pays by card/Multicaixa)
+  const tpaFeeAmount = grossInvoiceTotal * (tpaRate / 100);
+
+  // Net Cash Received by Service Provider (Valor Líquido a Receber no Banco)
+  // Client pays (Gross Total - Withholding Tax). From this, TPA fee is subtracted by the bank.
+  const netReceivedFromClient = grossInvoiceTotal - withholdingTaxAmount;
+  const netBankReceived = netReceivedFromClient - tpaFeeAmount;
+
+  // Net Operational Profit for Provider (Lucro Líquido Real)
+  // Net Bank Received - Total Logistics Direct Costs - Base Direct Labor Cost + Markup
+  const netOperationalProfit = (baseLabor + markupAmount) - withholdingTaxAmount - tpaFeeAmount;
+
+  const formatCurrency = (val: number) => {
+    return `${val.toLocaleString('pt-AO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${country.curr}`;
+  };
+
+  // Export to PDF
+  const handleExportPDF = () => {
+    setPdfGenerating(true);
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Header Banner
+      doc.setFillColor(30, 41, 59); // slate-800
+      doc.rect(0, 0, pageWidth, 40, 'F');
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('NANUCLOUD FISCAL & GESTÃO', 14, 18);
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('PROPOSTA COMERCIAL & SIMULAÇÃO DE PRESTAÇÃO DE SERVIÇOS', 14, 26);
+      doc.text(`Data: ${new Date().toLocaleDateString('pt-PT')} | Ref: SERV-${Date.now().toString().slice(-6)}`, 14, 33);
+
+      // Client & Service Info Box
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('DADOS DA PROPOSTA', 14, 48);
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Serviço / Projeto: ${serviceTitle || 'Não especificado'}`, 14, 55);
+      doc.text(`Cliente: ${clientName || 'Consumidor Final / Não informado'}`, 14, 61);
+      doc.text(`País de Enquadramento: ${country.name} (${country.agency})`, 14, 67);
+      doc.text(
+        `Modalidade de Cobrança: ${
+          billingMode === 'fixed'
+            ? 'Valor Fixo Global'
+            : billingMode === 'hourly'
+            ? `Por Hora (${totalHours}h a ${formatCurrency(parseFloat(hourlyRate) || 0)}/h)`
+            : `Por Distância (${distanceKm} km ${isRoundTrip ? 'Ida e Volta' : 'Só Ida'} a ${formatCurrency(parseFloat(ratePerKm) || 0)}/km)`
+        }`,
+        14,
+        73
+      );
+
+      // Breakdown Table
+      const tableRows = [
+        ['Honorários Base do Serviço / Mão de Obra', formatCurrency(baseLabor)],
+        [`Margem de Consultoria / Sobrecusto (${marginPct}%)`, formatCurrency(markupAmount)],
+        [
+          `Transporte (${techniciansCount} técnicos${clientPaysTransport ? ' - Pago p/ Cliente' : ' - N/A'})`,
+          formatCurrency(totalTransport)
+        ],
+        [
+          `Alimentação / Diárias (${techniciansCount} téc. × ${daysDuration} dias)`,
+          formatCurrency(totalMeals)
+        ],
+        ['Subtotal Tributável (Incidência de IVA e Retenção)', formatCurrency(taxableBase)],
+        [`IVA Liquidado (${vatRate}%)`, formatCurrency(vatAmount)],
+        ['VALOR BRUTO TOTAL DA FATURAÇÃO', formatCurrency(grossInvoiceTotal)],
+        [
+          `Retenção na Fonte Suportada (${effectiveRetentionRate}% - Deduzida pelo Cliente)`,
+          `- ${formatCurrency(withholdingTaxAmount)}`
+        ],
+        [`Taxa TPA / Multicaixa (${tpaRate}%)`, `- ${formatCurrency(tpaFeeAmount)}`],
+        ['VALOR LÍQUIDO A RECEBER EM CONTA BANCÁRIA', formatCurrency(netBankReceived)]
+      ];
+
+      autoTable(doc, {
+        startY: 80,
+        head: [['Item / Discriminação Financeira', 'Valor']],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+        styles: { fontSize: 9, cellPadding: 4 },
+        columnStyles: {
+          0: { cellWidth: 120 },
+          1: { cellWidth: 60, halign: 'right', fontStyle: 'bold' }
+        }
+      });
+
+      // Notes & Legal Disclaimer
+      const finalY = (doc as any).lastAutoTable?.finalY || 180;
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text('NOTAS FISCAIS & ENQUADRAMENTO JURÍDICO:', 14, finalY + 10);
+      doc.text(country.importantNotes.services, 14, finalY + 16, { maxWidth: 180 });
+
+      doc.text(
+        'Documento gerado eletronicamente pela plataforma NANUCLOUD. Os valores retidos na fonte devem ser declarados e entregues à administração tributária competente.',
+        14,
+        finalY + 30,
+        { maxWidth: 180 }
+      );
+
+      doc.save(`Proposta_Servicos_${(serviceTitle || 'Servico').replace(/\s+/g, '_')}.pdf`);
+      setExportNotice('Proposta comercial em PDF exportada com sucesso!');
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
+  // Export to Excel (.xlsx)
+  const handleExportExcel = () => {
+    try {
+      const data = [
+        ['NANUCLOUD - SIMULAÇÃO DE PRESTAÇÃO DE SERVIÇOS & CONSULTORIA'],
+        ['Data', new Date().toLocaleDateString('pt-PT')],
+        ['Serviço', serviceTitle],
+        ['Cliente', clientName || 'Não especificado'],
+        ['País', country.name],
+        ['Moeda', country.curr],
+        [],
+        ['PARÂMETRO', 'VALOR / QUANTIDADE', 'TOTAL'],
+        ['Modalidade de Cobrança', billingMode === 'fixed' ? 'Fixo' : billingMode === 'hourly' ? 'Por Hora' : 'Por KM', ''],
+        ['Base dos Honorários', baseLabor, country.curr],
+        ['Margem de Consultoria (%)', `${marginPct}%`, markupAmount],
+        ['Transporte Pessoas', `${techniciansCount} técnicos`, totalTransport],
+        ['Alimentação / Diárias', `${techniciansCount} téc. x ${daysDuration} dias`, totalMeals],
+        ['Subtotal Tributável', '', taxableBase],
+        ['IVA (%)', `${vatRate}%`, vatAmount],
+        ['Total Bruto Faturado', '', grossInvoiceTotal],
+        ['Retenção na Fonte (%)', `${effectiveRetentionRate}%`, withholdingTaxAmount],
+        ['Taxa TPA (%)', `${tpaRate}%`, tpaFeeAmount],
+        ['Valor Líquido a Receber', '', netBankReceived],
+        ['Lucro Operacional Líquido', '', netOperationalProfit]
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Simulacao_Servicos');
+      XLSX.writeFile(wb, `Simulacao_Servicos_${Date.now()}.xlsx`);
+
+      setExportNotice('Ficheiro Excel (.xlsx) exportado com sucesso!');
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSaveToHistory = () => {
+    const historyItem = {
+      id: `sim_${Date.now()}`,
+      title: serviceTitle || 'Prestação de Serviços',
+      clientName: clientName || 'Consumidor',
+      countryCode,
+      currency: country.curr,
+      billingMode,
+      taxableBase,
+      vatAmount,
+      grossTotal: grossInvoiceTotal,
+      withholdingTax: withholdingTaxAmount,
+      netReceived: netBankReceived,
+      createdAt: new Date().toISOString()
+    };
+
+    const currentHistory = JSON.parse(localStorage.getItem('nanucloud_service_sim_history') || '[]');
+    localStorage.setItem('nanucloud_service_sim_history', JSON.stringify([historyItem, ...currentHistory]));
+
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-200">
+      
+      {/* Header */}
+      <div className="bg-[#1E293B] border border-slate-700 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+            <Briefcase className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-100 font-mono">PRESTAÇÃO DE SERVIÇOS & CONSULTORIA</h1>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono">
+                Módulo Especializado
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Cálculo por Valor Fixo, Horas de Trabalho ou Deslocação em KM com despesas de equipe, Retenção na Fonte e IVA
+            </p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleExportPDF}
+            disabled={pdfGenerating}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-mono font-bold transition-all shadow-md active:scale-95"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {pdfGenerating ? 'A GERAR PDF...' : 'PROPOSTA EM PDF'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold transition-all shadow-md active:scale-95"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            EXCEL (.XLSX)
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSaveToHistory}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-mono font-bold transition-all active:scale-95"
+          >
+            <Save className="w-3.5 h-3.5 text-amber-400" />
+            GUARDAR
+          </button>
+        </div>
+      </div>
+
+      {exportNotice && (
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs font-mono text-emerald-400 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          {exportNotice}
+        </div>
+      )}
+
+      {savedSuccess && (
+        <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-xs font-mono text-indigo-400 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          Simulação guardada com sucesso no histórico local!
+        </div>
+      )}
+
+      {/* Main Grid: Form Inputs (Left 7 cols) & Live Results (Right 5 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* Left Column: Simulation Inputs */}
+        <div className="lg:col-span-7 space-y-6">
+          
+          {/* Card 1: Identification & Country */}
+          <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-slate-200 font-mono flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-indigo-400" /> IDENTIFICAÇÃO DO SERVIÇO & JURISDIÇÃO FISCAL
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] font-mono text-slate-400 block mb-1">PAÍS DE TRIBUTAÇÃO:</label>
+                <select
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                >
+                  {Object.values(COUNTRIES_DB).map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name} ({c.curr}) - {c.agency}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-slate-400 block mb-1">NOME DO CLIENTE / EMPRESA:</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Sonangol E.P. / Cliente Particular"
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-[11px] font-mono text-slate-400 block mb-1">DESCRIÇÃO DO SERVIÇO / CONSULTORIA:</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Consultoria em TI, Auditoria Contábil, Manutenção Técnica"
+                  value={serviceTitle}
+                  onChange={(e) => setServiceTitle(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Billing Mode Selection */}
+          <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-slate-200 font-mono flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-emerald-400" /> MODALIDADE DE COBRANÇA DO SERVIÇO
+            </h3>
+
+            {/* Mode Selectors */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setBillingMode('fixed')}
+                className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center gap-1.5 ${
+                  billingMode === 'fixed'
+                    ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md'
+                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <DollarSign className="w-4 h-4" />
+                <span className="text-xs font-mono font-bold">Por Projeto Fixo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBillingMode('hourly')}
+                className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center gap-1.5 ${
+                  billingMode === 'hourly'
+                    ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md'
+                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                <span className="text-xs font-mono font-bold">Por Hora</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBillingMode('distance')}
+                className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center gap-1.5 ${
+                  billingMode === 'distance'
+                    ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md'
+                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <Navigation className="w-4 h-4" />
+                <span className="text-xs font-mono font-bold">Por KM / Distância</span>
+              </button>
+            </div>
+
+            {/* Sub-inputs according to mode */}
+            {billingMode === 'fixed' && (
+              <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80 space-y-2">
+                <label className="text-[11px] font-mono text-slate-300 block">VALOR FIXO TOTAL DO PROJETO ({country.curr}):</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={fixedAmount}
+                    onChange={(e) => setFixedAmount(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-3 pr-12 py-2 text-sm text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
+                  />
+                  <span className="absolute right-3 top-2.5 text-xs text-slate-500 font-mono">{country.curr}</span>
+                </div>
+              </div>
+            )}
+
+            {billingMode === 'hourly' && (
+              <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[11px] font-mono text-slate-300 block mb-1">TARIFA POR HORA ({country.curr}/h):</label>
+                  <input
+                    type="number"
+                    value={hourlyRate}
+                    onChange={(e) => setHourlyRate(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-mono text-slate-300 block mb-1">TOTAL DE HORAS PREVISTAS:</label>
+                  <input
+                    type="number"
+                    value={totalHours}
+                    onChange={(e) => setTotalHours(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div className="sm:col-span-2 text-right">
+                  <span className="text-[11px] font-mono text-slate-400">
+                    Subtotal Horas: <strong className="text-indigo-300">{formatCurrency(baseLabor)}</strong>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {billingMode === 'distance' && (
+              <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-mono text-slate-300 block mb-1">PREÇO POR KM ({country.curr}/km):</label>
+                    <input
+                      type="number"
+                      value={ratePerKm}
+                      onChange={(e) => setRatePerKm(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-mono text-slate-300 block mb-1">DISTÂNCIA ENTRE PRESTADOR E CLIENTE (KM):</label>
+                    <input
+                      type="number"
+                      value={distanceKm}
+                      onChange={(e) => setDistanceKm(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-mono text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={isRoundTrip}
+                      onChange={(e) => setIsRoundTrip(e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
+                    />
+                    Cobrar Deslocação de Ida e Volta (×2)
+                  </label>
+                  <span className="text-[11px] font-mono text-indigo-300">
+                    Subtotal Distância ({isRoundTrip ? (parseFloat(distanceKm) || 0) * 2 : distanceKm} km): <strong>{formatCurrency(baseLabor)}</strong>
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 3: Logistics & Team Expenses (Client Paid) */}
+          <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-slate-200 font-mono flex items-center gap-2">
+              <Car className="w-4 h-4 text-amber-400" /> CUSTOS LOGÍSTICOS OPCIONAIS A CARGO DO CLIENTE
+            </h3>
+
+            {/* Transport Checkbox & Inputs */}
+            <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-mono font-bold text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={clientPaysTransport}
+                  onChange={(e) => setClientPaysTransport(e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
+                />
+                CLIENTE PAGA O TRANSPORTE DA EQUIPE / TÉCNICOS
+              </label>
+
+              {clientPaysTransport && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  <div>
+                    <label className="text-[10px] font-mono text-slate-400 block mb-1">CUSTO TRANSPORTE POR PESSOA ({country.curr}):</label>
+                    <input
+                      type="number"
+                      value={transportCostPerPerson}
+                      onChange={(e) => setTransportCostPerPerson(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-slate-400 block mb-1">Nº DE TÉCNICOS DESIGNADOS:</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={techniciansCount}
+                      onChange={(e) => setTechniciansCount(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div className="sm:col-span-2 text-right">
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Total Transporte: <strong className="text-amber-300">{formatCurrency(totalTransport)}</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Meals Checkbox & Inputs */}
+            <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-mono font-bold text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={clientPaysMeals}
+                  onChange={(e) => setClientPaysMeals(e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
+                />
+                CLIENTE PAGA A ALIMENTAÇÃO / DIÁRIAS DA EQUIPE
+              </label>
+
+              {clientPaysMeals && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  <div>
+                    <label className="text-[10px] font-mono text-slate-400 block mb-1">DIÁRIA POR PESSOA ({country.curr}):</label>
+                    <input
+                      type="number"
+                      value={mealAllowancePerPerson}
+                      onChange={(e) => setMealAllowancePerPerson(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-slate-400 block mb-1">Nº DE DIAS DE TRABALHO:</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={daysDuration}
+                      onChange={(e) => setDaysDuration(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-slate-400 block mb-1">TÉCNICOS A ALIMENTAR:</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={techniciansCount}
+                      disabled
+                      className="w-full bg-slate-900/50 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-400 font-mono"
+                    />
+                  </div>
+                  <div className="sm:col-span-3 text-right">
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Total Diárias ({techniciansCount} téc. × {daysDuration} dias): <strong className="text-amber-300">{formatCurrency(totalMeals)}</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 4: Margins & Fiscal Matrix Parameters */}
+          <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-slate-200 font-mono flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-cyan-400" /> MARGEM DE LUCRO & ENQUADRAMENTO FISCAL
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="text-[11px] font-mono text-slate-400 block mb-1">MARGEM DE LUCRO (%):</label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={marginPercent}
+                    onChange={(e) => setMarginPercent(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold"
+                  />
+                  <span className="text-slate-500 font-mono text-xs">%</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-slate-400 block mb-1">TAXA DE IVA (%):</label>
+                <select
+                  value={vatRate}
+                  onChange={(e) => setVatRate(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                >
+                  {country.vatOptions.map((opt, i) => (
+                    <option key={i} value={opt.r}>
+                      {opt.n} ({opt.r}%)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-slate-400 block mb-1">RETENÇÃO NA FONTE (%):</label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={retentionRate}
+                    onChange={(e) => setRetentionRate(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold"
+                  />
+                  <span className="text-slate-500 font-mono text-xs">%</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800 flex-wrap gap-2">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-mono text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={applyRetention}
+                  onChange={(e) => setApplyRetention(e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
+                />
+                Aplicar Dedução de Retenção na Fonte (Cliente Corporativo)
+              </label>
+
+              <span className="text-[11px] font-mono text-slate-400">
+                Taxa TPA Multicaixa: <strong className="text-slate-200">{tpaRate}%</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Live Fiscal & Financial Breakdown */}
+        <div className="lg:col-span-5 space-y-6">
+          
+          {/* Main Financial Summary Card */}
+          <div className="bg-[#1E293B] border border-indigo-500/30 rounded-2xl p-6 shadow-2xl space-y-5 sticky top-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-sm font-bold text-slate-100 font-mono">FICHA DE PRESTAÇÃO DE SERVIÇOS</h3>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono">
+                {country.curr}
+              </span>
+            </div>
+
+            {/* Line Items */}
+            <div className="space-y-2.5 text-xs font-mono">
+              <div className="flex justify-between items-center text-slate-300">
+                <span>Honorários Base do Trabalho:</span>
+                <span className="font-bold">{formatCurrency(baseLabor)}</span>
+              </div>
+
+              <div className="flex justify-between items-center text-slate-400">
+                <span>Margem de Consultoria ({marginPct}%):</span>
+                <span className="text-indigo-300 font-bold">+{formatCurrency(markupAmount)}</span>
+              </div>
+
+              {(clientPaysTransport || clientPaysMeals) && (
+                <div className="flex justify-between items-center text-slate-400">
+                  <span>Logística (Transporte + Refeições):</span>
+                  <span className="text-amber-300 font-bold">+{formatCurrency(totalLogistics)}</span>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-slate-200 font-bold">
+                <span>Base Tributável de Incidência:</span>
+                <span className="text-slate-100">{formatCurrency(taxableBase)}</span>
+              </div>
+
+              <div className="flex justify-between items-center text-slate-400">
+                <span>IVA Liquidado ({vatRate}%):</span>
+                <span className="text-slate-300">+{formatCurrency(vatAmount)}</span>
+              </div>
+
+              {/* Total Invoiced */}
+              <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex justify-between items-center">
+                <div>
+                  <span className="text-[11px] text-slate-400 block font-mono">TOTAL BRUTO FATURADO AO CLIENTE:</span>
+                  <span className="text-base font-bold text-indigo-300 font-mono">{formatCurrency(grossInvoiceTotal)}</span>
+                </div>
+              </div>
+
+              {/* Deductions: Retention & TPA */}
+              <div className="p-3 bg-rose-500/5 rounded-xl border border-rose-500/20 space-y-1.5">
+                <div className="flex justify-between items-center text-rose-300">
+                  <span>Retenção na Fonte ({effectiveRetentionRate}%):</span>
+                  <span className="font-bold">-{formatCurrency(withholdingTaxAmount)}</span>
+                </div>
+                <div className="flex justify-between items-center text-rose-400/80 text-[11px]">
+                  <span>Taxa TPA / Multicaixa ({tpaRate}%):</span>
+                  <span>-{formatCurrency(tpaFeeAmount)}</span>
+                </div>
+              </div>
+
+              {/* Net Cash Received */}
+              <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/30 space-y-1">
+                <span className="text-[10px] text-emerald-400 block font-mono font-bold uppercase tracking-wider">
+                  VALOR LÍQUIDO A RECEBER EM CONTA
+                </span>
+                <div className="text-xl font-bold text-emerald-300 font-mono">
+                  {formatCurrency(netBankReceived)}
+                </div>
+                <p className="text-[10px] text-emerald-400/70 font-mono">
+                  Montante creditado em banco após retenção obrigatória do cliente e tarifa POS.
+                </p>
+              </div>
+
+              {/* Real Operational Profit */}
+              <div className="p-3 bg-cyan-500/10 rounded-xl border border-cyan-500/20 flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] text-cyan-400 block font-mono font-bold uppercase">
+                    LUCRO OPERACIONAL ESTIMADO
+                  </span>
+                  <span className="text-sm font-bold text-cyan-300 font-mono">{formatCurrency(netOperationalProfit)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Official Legal Notes */}
+            <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 text-[11px] text-slate-400 space-y-1">
+              <div className="flex items-center gap-1.5 text-indigo-400 font-bold font-mono text-[10px] uppercase">
+                <HelpCircle className="w-3.5 h-3.5" />
+                Regime Fiscal de Serviços ({country.agency})
+              </div>
+              <p className="leading-relaxed">
+                {country.importantNotes.services}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

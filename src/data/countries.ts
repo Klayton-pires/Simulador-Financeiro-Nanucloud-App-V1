@@ -15,6 +15,8 @@ export interface CountryFiscalExtended extends CountryFiscal {
   };
 }
 
+export type CountryFiscalConfig = CountryFiscalExtended;
+
 export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
   AO: {
     code: 'AO',
@@ -30,13 +32,13 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Isento (0%) - Art. 12º CIVA', r: 0 }
     ],
     ii: 25,
-    tpa: 1.0,
+    tpa: 0,
     retentionServiceRate: 6.5,
     statisticalTax: 0.5,
     margins: [10, 20, 30],
     defaultCustomsRate: 10,
     importantNotes: {
-      products: 'Em Angola, a taxa geral de IVA é de 14%. Produtos da cesta básica e insumos agropecuários beneficiam de alíquota reduzida de 5% (Lei 17/23). Margens e taxas de TPA (Multicaixa 1%) incidem no momento da venda.',
+      products: 'Em Angola, a taxa geral de IVA é de 14%. Produtos da cesta básica e insumos agropecuários beneficiam de alíquota reduzida de 5% (Lei 17/23). Margens e taxas de TPA (Multicaixa por padrão 0% ou negociado) incidem no momento da venda.',
       services: 'Serviços prestados por sujeitos passivos a entidades obrigadas à retenção na fonte estão sujeitos à alíquota de 6.5% do Imposto sobre o Rendimento/Serviços (CIRS/AGT).',
       importation: 'Despacho Aduaneiro AGT: Os direitos aduaneiros (Pauta Aduaneira) variam de 2% a 50%, acrescidos de 0.5% de Taxa Estatística e 14% de IVA Aduaneiro sobre o Valor CIF aduaneiro.'
     },
@@ -60,7 +62,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Isento (0%) - Art. 9º CIVA', r: 0 }
     ],
     ii: 21,
-    tpa: 0.9,
+    tpa: 0,
     retentionServiceRate: 11.5, // ou 25% consoante categoria profissional
     statisticalTax: 0.0,
     margins: [15, 25, 35],
@@ -90,7 +92,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Isento (0%)', r: 0 }
     ],
     ii: 15,
-    tpa: 2.0,
+    tpa: 0,
     retentionServiceRate: 4.65, // PIS/COFINS/CSLL retidos + ISS
     statisticalTax: 0.5,
     margins: [15, 25, 40],
@@ -118,7 +120,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Isento (0%)', r: 0 }
     ],
     ii: 32,
-    tpa: 1.5,
+    tpa: 0,
     retentionServiceRate: 20.0,
     statisticalTax: 1.0,
     margins: [10, 20, 30],
@@ -147,7 +149,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Isento (0%)', r: 0 }
     ],
     ii: 22,
-    tpa: 1.2,
+    tpa: 0,
     retentionServiceRate: 10.0,
     statisticalTax: 0.5,
     margins: [10, 20, 30],
@@ -177,7 +179,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Exempt (0%)', r: 0 }
     ],
     ii: 25,
-    tpa: 0.6,
+    tpa: 0,
     retentionServiceRate: 10.0,
     statisticalTax: 0.0,
     margins: [10, 20, 30],
@@ -206,7 +208,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Zero State Tax (0%) - Ex: Delaware/Oregon', r: 0 }
     ],
     ii: 21,
-    tpa: 2.5,
+    tpa: 0,
     retentionServiceRate: 30.0, // Non-resident alien W-8BEN WHT
     statisticalTax: 0.35, // Merchandise Processing Fee (MPF)
     margins: [15, 30, 50],
@@ -235,7 +237,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Isento (0%)', r: 0 }
     ],
     ii: 15,
-    tpa: 0.9,
+    tpa: 0,
     retentionServiceRate: 15.0,
     statisticalTax: 0.0,
     margins: [10, 20, 30],
@@ -263,7 +265,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Free Zone / Isento (0%)', r: 0 }
     ],
     ii: 9,
-    tpa: 1.5,
+    tpa: 0,
     retentionServiceRate: 0.0,
     statisticalTax: 0.0,
     margins: [10, 20, 35],
@@ -294,7 +296,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Exempt (0%)', r: 0 }
     ],
     ii: 25,
-    tpa: 1.8,
+    tpa: 0,
     retentionServiceRate: 10.0, // TDS (Tax Deducted at Source)
     statisticalTax: 0.0,
     margins: [10, 20, 30],
@@ -323,7 +325,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Exempt (0%)', r: 0 }
     ],
     ii: 23.2,
-    tpa: 1.5,
+    tpa: 0,
     retentionServiceRate: 10.21, // Inclui imposto de reconstrução
     statisticalTax: 0.0,
     margins: [10, 20, 30],
@@ -351,7 +353,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Zero Rate (0%)', r: 0 }
     ],
     ii: 27,
-    tpa: 1.5,
+    tpa: 0,
     retentionServiceRate: 15.0,
     statisticalTax: 0.0,
     margins: [10, 20, 30],
@@ -381,7 +383,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Isento (0%)', r: 0 }
     ],
     ii: 25,
-    tpa: 1.8,
+    tpa: 0,
     retentionServiceRate: 20.0,
     statisticalTax: 0.0,
     margins: [10, 20, 35],
@@ -411,7 +413,7 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
       { n: 'Isento (0%)', r: 0 }
     ],
     ii: 20,
-    tpa: 1.5,
+    tpa: 0,
     retentionServiceRate: 10.0,
     statisticalTax: 0.5,
     margins: [10, 20, 30],
@@ -428,3 +430,47 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
     }
   }
 };
+
+/**
+ * Super Admin Country Visibility Helpers
+ */
+export const getHiddenCountryCodes = (): string[] => {
+  try {
+    const saved = localStorage.getItem('nanucloud_hidden_countries');
+    return saved ? JSON.parse(saved) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+export const setHiddenCountryCodes = (codes: string[]): void => {
+  localStorage.setItem('nanucloud_hidden_countries', JSON.stringify(codes));
+  window.dispatchEvent(new Event('nanucloud_countries_updated'));
+};
+
+export const isCountryHidden = (code: string): boolean => {
+  const hidden = getHiddenCountryCodes();
+  return hidden.includes(code);
+};
+
+export const getAvailableCountryList = (isSuperAdmin: boolean = false): CountryFiscalExtended[] => {
+  const all = Object.values(COUNTRIES_DB);
+  if (isSuperAdmin) return all;
+  const hidden = getHiddenCountryCodes();
+  return all.filter((c) => !hidden.includes(c.code));
+};
+
+export const getCountryFlag = (countryCode: string): string => {
+  if (!countryCode || countryCode.length !== 2) return '🌐';
+  try {
+    const codePoints = countryCode
+      .toUpperCase()
+      .split('')
+      .map((char) => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+  } catch {
+    return '🌐';
+  }
+};
+
+

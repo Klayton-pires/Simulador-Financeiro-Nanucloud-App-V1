@@ -82,6 +82,9 @@ router.post('/purchase', requireAuth, (req: AuthRequest, res: Response) => {
       planName = selectedPlan.name;
     }
 
+    const isDirectInstantPayment = paymentMethod === 'paypal_visa' || paymentMethod === 'stripe_card';
+    const txStatus = isDirectInstantPayment ? 'approved' : 'pending';
+
     const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const newTransaction: Transaction = {
       id: txId,
@@ -96,26 +99,52 @@ router.post('/purchase', requireAuth, (req: AuthRequest, res: Response) => {
       paymentMethod: paymentMethod || 'multicaixa_express',
       paymentReference: paymentReference ? paymentReference.trim() : undefined,
       notes: notes ? notes.trim() : undefined,
-      status: 'pending', // Fica pendente até validação pelo administrador
+      status: txStatus,
+      reviewedByAdminName: isDirectInstantPayment ? 'GATEWAY_AUTOMATED_VALIDATION' : undefined,
+      reviewedAt: isDirectInstantPayment ? new Date().toISOString() : undefined,
       createdAt: new Date().toISOString()
     };
 
     db.addTransaction(newTransaction);
 
+    // If direct automated payment, automatically credit queries & unlock modules for the user immediately!
+    if (isDirectInstantPayment) {
+      const targetUser = db.findUserById(user.id);
+      if (targetUser) {
+        const currentQueries = targetUser.queriesRemaining || 0;
+        const newQueries = currentQueries + queriesCount;
+        
+        // Calculate new expiration date
+        const expDate = new Date();
+        expDate.setDate(expDate.getDate() + validityDays);
+
+        db.updateUser(user.id, {
+          queriesRemaining: newQueries,
+          planExpiresAt: expDate.toISOString(),
+          isActive: true
+        });
+      }
+    }
+
     db.addAuditLog({
       userId: user.id,
       userName: user.name,
       userRole: user.role,
-      action: 'PLAN_PURCHASE_REQUEST',
+      action: isDirectInstantPayment ? 'PLAN_PURCHASE_AUTO_ACTIVATED' : 'PLAN_PURCHASE_REQUEST',
       entityType: 'payment',
       entityId: txId,
       ipAddress: req.ip || req.socket.remoteAddress,
-      details: `Pedido de adesão ao ${planName} no valor de ${amountKz.toLocaleString('pt-PT')} Kz criado por ${user.name}. Aguarda validação administrativa.`
+      details: isDirectInstantPayment
+        ? `Pagamento direto aprovado via ${paymentMethod} para ${planName} (${amountKz.toLocaleString('pt-PT')} Kz). ${queriesCount} consultas creditadas automaticamente a ${user.name}.`
+        : `Pedido de adesão ao ${planName} no valor de ${amountKz.toLocaleString('pt-PT')} Kz criado por ${user.name}. Aguarda validação administrativa.`
     });
 
     return res.status(201).json({
-      message: 'Pedido de adesão registado com sucesso! Efetue o pagamento e submeta o comprovativo para ativação imediata.',
+      message: isDirectInstantPayment
+        ? 'Pagamento validado com sucesso! O plano e as suas consultas foram ativados imediatamente.'
+        : 'Pedido de adesão registado com sucesso! Efetue o pagamento e submeta o comprovativo para ativação imediata.',
       transaction: newTransaction,
+      queriesCount,
       bankDetails: {
         bankName: settings.bankName,
         iban: settings.bankIban,

@@ -5,8 +5,10 @@ export interface PermissionGroup {
   name: string;
   description: string;
   permissions: string[]; // List of permission keys
-  createdAt: string;
-  updatedAt: string;
+  isSystemDefault?: boolean;
+  assignedUserIds?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type PermissionKey =
@@ -30,13 +32,50 @@ export type PermissionKey =
   | 'backup_system'
   | 'docs_deploy'
   | 'metrics_view'
-  | 'system_settings_edit';
+  | 'system_settings_edit'
+  | 'can_simulate_sales'
+  | 'can_simulate_services'
+  | 'can_simulate_import'
+  | 'can_export_excel'
+  | 'can_access_api'
+  | 'can_manage_clients'
+  | 'can_manage_tickets'
+  | 'can_manage_marketing'
+  | 'can_view_metrics'
+  | 'can_edit_fiscal_matrix'
+  | 'can_manage_db_engines'
+  | 'can_view_docs_deploy';
+
+export type SystemPermissionKey = PermissionKey;
 
 export interface PermissionDef {
   key: PermissionKey;
   label: string;
-  category: 'Simulação e Cálculos' | 'Clientes e Atendimento' | 'Fiscal e Auditoria' | 'Integrações e APIs' | 'Marketing e Comunicação' | 'Administração e Sistema';
+  category: 'Simulação e Cálculos' | 'Clientes e Atendimento' | 'Fiscal e Auditoria' | 'Integrações e APIs' | 'Marketing e Comunicação' | 'Administração e Sistema' | 'simulacao' | 'administracao' | 'avancado' | 'fiscal' | 'marketing' | 'suporte';
   description: string;
+}
+
+export type ServiceBillingMode = 'fixed' | 'hourly' | 'distance';
+
+export interface ServiceCalculationParams {
+  billingMode: ServiceBillingMode;
+  basePrice: number; // Used for fixed project base price
+  hourlyRate?: number;
+  totalHours?: number;
+  ratePerKm?: number;
+  distanceKm?: number;
+  clientPaysTransport?: boolean;
+  transportCostPerPerson?: number;
+  techniciansCount?: number;
+  clientPaysMeals?: boolean;
+  mealAllowancePerPerson?: number;
+  daysDuration?: number;
+  vatRate: number;
+  retentionRate: number;
+  tpaRate: number;
+  marginPercent: number;
+  serviceDescription?: string;
+  clientName?: string;
 }
 
 export interface UserSafe {
@@ -266,15 +305,17 @@ export interface ApiIntegrationConfig {
 export interface MarketingCampaign {
   id: string;
   title: string;
-  type: 'sms' | 'email';
-  category: 'promocao' | 'alerta_saldo' | 'atualizacao_fiscal' | 'comemorativa_feriado' | 'personalizada';
-  targetAudience: 'todos' | 'clientes_ativos' | 'clientes_expirados' | 'sem_saldo';
+  type: 'sms' | 'email' | 'both';
+  category?: 'promocao' | 'alerta_saldo' | 'atualizacao_fiscal' | 'comemorativa_feriado' | 'personalizada' | string;
+  targetAudience: string;
   subject?: string;
-  messageTemplate: string; // Supports variables: {nome}, {empresa}, {saldo}, {plano}
-  sentCount: number;
+  messageTemplate?: string; // Supports variables: {nome}, {empresa}, {saldo}, {plano}
+  message?: string;
+  sentCount?: number;
+  recipientCount?: number;
   status: 'draft' | 'scheduled' | 'sent';
   sentAt?: string;
-  createdAt: string;
+  createdAt?: string;
 }
 
 export interface ConsultingAuditEntry {
@@ -426,4 +467,104 @@ export interface ChatMessage {
   attachmentType?: string;
   timestamp: string;
   isRead?: boolean;
+}
+
+export type AuditLog = ConsultingAuditEntry;
+
+export interface FiscalProposal {
+  id: string;
+  countryCode: string;
+  countryName: string;
+  taxType: string;
+  currentRate: number | string;
+  proposedRate: number | string;
+  rationale: string;
+  sourceUrl: string;
+  effectiveDate: string;
+  status: 'pending' | 'applied' | 'rejected';
+  appliedByManagerId?: string;
+  appliedByManagerName?: string;
+  appliedAt?: string;
+  createdAt: string;
+}
+
+export interface ApiKeyItem {
+  id: string;
+  name: string;
+  key: string;
+  clientName: string;
+  clientEmail: string;
+  role: string;
+  rateLimitPerMinute: number;
+  totalCalls: number;
+  isActive: boolean;
+  createdAt: string;
+  lastUsedAt?: string;
+}
+
+export interface EmisReferencePaymentConfig {
+  entityCode: string; // Entidade EMIS (e.g. 00123)
+  subEntityCode?: string; // Sub-entidade
+  terminalId?: string;
+  apiKey?: string;
+  webhookSecret?: string;
+  autoActivate: boolean;
+  minAmountKz?: number;
+}
+
+export interface PaypalPaymentConfig {
+  clientId: string;
+  clientSecret?: string;
+  receiverEmail: string;
+  mode: 'sandbox' | 'live';
+  currency: string;
+  autoActivate: boolean;
+}
+
+export interface FreeTrialCreditsConfig {
+  freeQueriesOnRegister: number; // For new registered users
+  freeQueriesForVisitors: number; // For anonymous visitors on the page
+  allowUnlimitedSimulationInTestMode: boolean;
+}
+
+export interface ConfigSnapshot {
+  id: string;
+  section: string;
+  sectionName: string;
+  authorEmail: string;
+  authorName: string;
+  authorRole: string;
+  timestamp: string;
+  summary: string;
+  payload: any;
+}
+
+export interface AppThemeConfig {
+  id: string;
+  name: string;
+  description: string;
+  primaryColor: string;
+  bgDark: string;
+  cardDark: string;
+  accentColor: string;
+  textColor: string;
+}
+
+export interface MarketingNotification {
+  id: string;
+  type: 'text' | 'image' | 'video';
+  title: string;
+  message: string;
+  mediaUrl?: string;
+  actionUrl?: string;
+  actionText?: string;
+  badge?: string;
+  category: 'comunicacao' | 'publicidade' | 'aviso' | 'promocao' | 'outro';
+  recommendedDimensions: string;
+  maxSizeMb?: number;
+  targetAudience: 'all' | 'clients' | 'visitors' | 'admins';
+  isActive: boolean;
+  startDate?: string;
+  endDate?: string;
+  createdAt: string;
 }

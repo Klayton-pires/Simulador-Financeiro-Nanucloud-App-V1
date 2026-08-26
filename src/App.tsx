@@ -16,16 +16,20 @@ import { SupportChatWidget } from './components/SupportChatWidget';
 
 // New Advanced Features & Modules
 import { BasicPhoneMobileMode } from './components/BasicPhoneMobileMode';
+import { ServicesConsultingSimulator } from './components/ServicesConsultingSimulator';
+import { IntermediaryBrokerSimulator } from './components/IntermediaryBrokerSimulator';
 import { ApiIntegrationsTab } from './components/ApiIntegrationsTab';
 import { ManualFiscalMatrixTab } from './components/ManualFiscalMatrixTab';
 import { FiscalAiNotificationsTab } from './components/FiscalAiNotificationsTab';
 import { ClientsManagementTab } from './components/ClientsManagementTab';
+import { UsersManagementTab } from './components/UsersManagementTab';
 import { TicketsManagementTab } from './components/TicketsManagementTab';
 import { MarketingCampaignsTab } from './components/MarketingCampaignsTab';
 import { ReportsAndMetricsTab } from './components/ReportsAndMetricsTab';
 import { AdminAdvancedSettingsTab } from './components/admin/AdminAdvancedSettingsTab';
 import { DocsAndDeployTab } from './components/DocsAndDeployTab';
 import { LegalTermsModal } from './components/LegalTermsModal';
+import { SuperAdminSetupModal } from './components/SuperAdminSetupModal';
 
 // Themes and Greetings logic
 import { checkSpecialGreetings, SYSTEM_THEMES } from './data/themes';
@@ -43,6 +47,9 @@ export default function App() {
   const [isPlansOpen, setIsPlansOpen] = useState<boolean>(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isTermsOpen, setIsTermsOpen] = useState<boolean>(false);
+  const [isSuperAdminSetupOpen, setIsSuperAdminSetupOpen] = useState<boolean>(() => {
+    return !localStorage.getItem('nanucloud_super_admin_configured');
+  });
 
   // Greeting Banner
   const [specialGreeting, setSpecialGreeting] = useState<{
@@ -206,6 +213,28 @@ export default function App() {
             />
           )}
 
+          {/* TAB: Prestação de Serviços & Consultoria */}
+          {activeTab === 'services_consulting' && (
+            <ServicesConsultingSimulator
+              user={user}
+              currentLang={currentLang}
+              onOpenPlans={() => setIsPlansOpen(true)}
+              onOpenAuth={() => handleOpenAuth('login')}
+              onCalculationDone={handleCalculationDone}
+            />
+          )}
+
+          {/* TAB: Intermediários & Corretagem */}
+          {activeTab === 'intermediary' && (
+            <IntermediaryBrokerSimulator
+              user={user}
+              currentLang={currentLang}
+              onOpenPlans={() => setIsPlansOpen(true)}
+              onOpenAuth={() => handleOpenAuth('login')}
+              onCalculationDone={handleCalculationDone}
+            />
+          )}
+
           {/* TAB: Modo Celular Básico / POS */}
           {activeTab === 'basic_mobile' && (
             <BasicPhoneMobileMode
@@ -286,6 +315,25 @@ export default function App() {
           {/* TAB: Gestão de Clientes */}
           {activeTab === 'clients_management' && (
             <ClientsManagementTab
+              currentUser={
+                user || {
+                  id: 'admin_demo',
+                  name: 'Super Administrador NANUCLOUD',
+                  email: 'admin@nanucloud.com',
+                  role: 'super_admin',
+                  isActive: true,
+                  queriesRemaining: 999999,
+                  totalQueriesUsed: 0,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }
+              }
+            />
+          )}
+
+          {/* TAB: Gestão de Utilizadores (Staff) */}
+          {activeTab === 'users_management' && (
+            <UsersManagementTab
               currentUser={
                 user || {
                   id: 'admin_demo',
@@ -485,6 +533,7 @@ export default function App() {
       <LegalTermsModal
         isOpen={isTermsOpen}
         onClose={() => setIsTermsOpen(false)}
+        currentUser={user}
       />
 
       {/* Floating 24/7 Live Support Chat & Bot */}
@@ -492,6 +541,16 @@ export default function App() {
         user={user}
         isOpen={isChatOpen}
         onToggle={() => setIsChatOpen(!isChatOpen)}
+      />
+
+      {/* Initial Super Admin Setup Wizard on First Application Login */}
+      <SuperAdminSetupModal
+        isOpen={isSuperAdminSetupOpen}
+        onComplete={(superAdminUser) => {
+          setUser(superAdminUser);
+          localStorage.setItem('nanucloud_session_user', JSON.stringify(superAdminUser));
+          setIsSuperAdminSetupOpen(false);
+        }}
       />
     </div>
   );

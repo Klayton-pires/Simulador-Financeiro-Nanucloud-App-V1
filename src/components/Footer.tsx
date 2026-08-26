@@ -11,8 +11,8 @@ export const Footer: React.FC<FooterProps> = ({ settings }) => {
   const companyName = settings?.companyName || 'NANUCLOUD';
   const address = settings?.companyAddress || 'Angola, Luanda, Viana, Capalanca';
   const email = settings?.companyEmail1 || settings?.supportEmail || 'suporte.simulador@nanucloud.com';
-  const phone1 = settings?.companyPhone1 || '+244 929 462 681';
-  const phone2 = settings?.companyPhone2 || '+244 954 269 353';
+  const phone1 = settings?.companyPhone1 || '+244 955 581 862';
+  const phone2 = settings?.companyPhone2 || '+244 955 580 653';
   const whatsapp1 = settings?.whatsappSupport1 || '244944935617';
   const whatsapp2 = settings?.whatsappSupport2 || '244944935618';
   const copyright = settings?.footerCopyrightText || '2026 NANUCLOUD | ALL RIGHTS RESERVED';

@@ -19,7 +19,15 @@ import {
   Layers,
   Key,
   Users,
-  AlertTriangle
+  AlertTriangle,
+  CreditCard,
+  Coins,
+  Sparkles,
+  Globe,
+  Radio,
+  Flag,
+  Lock,
+  CheckCircle2
 } from 'lucide-react';
 import {
   UserSafe,
@@ -27,7 +35,11 @@ import {
   DatabaseEngineConfig,
   AdsenseSlotConfig,
   PermissionGroup,
-  SystemPermissionKey
+  SystemPermissionKey,
+  EmisReferencePaymentConfig,
+  PaypalPaymentConfig,
+  FreeTrialCreditsConfig,
+  ConfigSnapshot
 } from '../../types';
 import {
   INITIAL_BANK_ACCOUNTS,
@@ -39,15 +51,44 @@ import {
   DEFAULT_PERMISSION_GROUPS,
   hasUserPermission
 } from '../../data/permissions';
+import {
+  COUNTRIES_DB,
+  getHiddenCountryCodes,
+  setHiddenCountryCodes,
+  getCountryFlag
+} from '../../data/countries';
+import { ThemeSettingsSection } from './ThemeSettingsSection';
+import { MarketingBroadcastSection } from './MarketingBroadcastSection';
+import { UserClientManagementSection } from './UserClientManagementSection';
+import { ConfigHistoryRevertSection, INITIAL_CONFIG_SNAPSHOTS } from './ConfigHistoryRevertSection';
+import { LegalTermsAdminSection } from './LegalTermsAdminSection';
+import { Palette, Megaphone, History, Scale } from 'lucide-react';
 
 interface AdminAdvancedSettingsTabProps {
   currentUser: UserSafe;
 }
 
 export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> = ({ currentUser }) => {
-  const isSuperAdmin = currentUser.role === 'super_admin' || currentUser.role === 'admin_level1';
+  const isSuperAdmin = currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'admin_level1';
 
-  const [activeSection, setActiveSection] = useState<'banks' | 'databases' | 'adsense' | 'contacts' | 'rbac'>('banks');
+  const [activeSection, setActiveSection] = useState<
+    | 'banks'
+    | 'databases'
+    | 'adsense'
+    | 'contacts'
+    | 'rbac'
+    | 'payments'
+    | 'credits'
+    | 'countries'
+    | 'themes'
+    | 'marketing'
+    | 'users_clients'
+    | 'history'
+    | 'legal_terms'
+  >('banks');
+
+  // Hidden Countries State
+  const [hiddenCountries, setHiddenCountriesList] = useState<string[]>(() => getHiddenCountryCodes());
 
   // 1. Bank Accounts State (Até 6 contas com visibilidade condicional)
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>(() => {
@@ -77,8 +118,8 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
     return saved
       ? JSON.parse(saved)
       : {
-          phones: ['+244 923 000 111', '+244 944 222 333'],
-          whatsapps: ['+244 923 000 111', '+244 931 777 888'],
+          phones: ['+244 955 581 862', '+244 955 580 653'],
+          whatsapps: ['+244 944 935 617', '+244 944 935 618'],
           supportEmail: 'suporte@nanucloud.com'
         };
   });
@@ -87,6 +128,48 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
   const [permissionGroups, setPermissionGroups] = useState<PermissionGroup[]>(() => {
     const saved = localStorage.getItem('nanucloud_rbac_groups');
     return saved ? JSON.parse(saved) : DEFAULT_PERMISSION_GROUPS;
+  });
+
+  // 6. Electronic Payments: EMIS Reference & PayPal State
+  const [emisConfig, setEmisConfig] = useState<EmisReferencePaymentConfig>(() => {
+    const saved = localStorage.getItem('nanucloud_emis_config');
+    return saved
+      ? JSON.parse(saved)
+      : {
+          entityCode: '00542',
+          subEntityCode: '001',
+          terminalId: 'TRM-98421',
+          apiKey: 'emis_live_sec_994827103847',
+          webhookSecret: 'whsec_nanu_emis_8832',
+          autoActivate: true,
+          minAmountKz: 5000
+        };
+  });
+
+  const [paypalConfig, setPaypalConfig] = useState<PaypalPaymentConfig>(() => {
+    const saved = localStorage.getItem('nanucloud_paypal_config');
+    return saved
+      ? JSON.parse(saved)
+      : {
+          clientId: 'AZ_paypal_client_id_live_992817482',
+          clientSecret: 'EL_paypal_secret_live_001928472',
+          receiverEmail: 'financeiro@nanucloud.com',
+          mode: 'live',
+          currency: 'USD',
+          autoActivate: true
+        };
+  });
+
+  // 7. Free Trial Credits & On-Page Visitors Config
+  const [creditsConfig, setCreditsConfig] = useState<FreeTrialCreditsConfig>(() => {
+    const saved = localStorage.getItem('nanucloud_credits_config');
+    return saved
+      ? JSON.parse(saved)
+      : {
+          freeQueriesOnRegister: 10,
+          freeQueriesForVisitors: 3,
+          allowUnlimitedSimulationInTestMode: false
+        };
   });
 
   const [selectedGroup, setSelectedGroup] = useState<PermissionGroup | null>(
@@ -104,6 +187,67 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
     setTimeout(() => setSavedBanner(null), 3000);
   };
 
+  // Snapshot recording for Super Admin audit & 1-click rollback
+  const recordConfigSnapshot = (section: string, payload: any) => {
+    try {
+      const existingStr = localStorage.getItem('nanucloud_config_history');
+      const existing: ConfigSnapshot[] = existingStr ? JSON.parse(existingStr) : INITIAL_CONFIG_SNAPSHOTS;
+      const newSnap: ConfigSnapshot = {
+        id: `snap_${Date.now()}`,
+        section,
+        sectionName: section,
+        authorEmail: currentUser.email,
+        authorName: currentUser.name,
+        authorRole: currentUser.role,
+        timestamp: new Date().toISOString(),
+        summary: `Atualização e salvamento da área "${section}" por ${currentUser.name}.`,
+        payload
+      };
+      const updated = [newSnap, ...existing.slice(0, 49)];
+      localStorage.setItem('nanucloud_config_history', JSON.stringify(updated));
+    } catch (e) {
+      console.error('Error saving snapshot:', e);
+    }
+  };
+
+  const handleRevertSnapshot = (snapshot: ConfigSnapshot) => {
+    if (!snapshot || !snapshot.payload) return;
+    const p = snapshot.payload;
+    if (snapshot.section.includes('Bancárias') || snapshot.section === 'banks') {
+      if (Array.isArray(p)) {
+        setBankAccounts(p);
+        localStorage.setItem('nanucloud_bank_accounts', JSON.stringify(p));
+      }
+    } else if (snapshot.section.includes('Banco') || snapshot.section === 'databases') {
+      if (Array.isArray(p)) {
+        setDbEngines(p);
+        localStorage.setItem('nanucloud_db_engines', JSON.stringify(p));
+      }
+    } else if (snapshot.section.includes('AdSense') || snapshot.section === 'adsense') {
+      if (Array.isArray(p)) {
+        setAdsenseSlots(p);
+        localStorage.setItem('nanucloud_adsense_slots', JSON.stringify(p));
+      }
+    } else if (snapshot.section.includes('Contactos') || snapshot.section === 'contacts') {
+      setContacts(p);
+      localStorage.setItem('nanucloud_admin_contacts', JSON.stringify(p));
+    } else if (snapshot.section.includes('RBAC') || snapshot.section === 'rbac') {
+      if (Array.isArray(p)) {
+        setPermissionGroups(p);
+        localStorage.setItem('nanucloud_rbac_groups', JSON.stringify(p));
+      }
+    } else if (snapshot.section.includes('Créditos') || snapshot.section === 'credits') {
+      setCreditsConfig(p);
+      localStorage.setItem('nanucloud_credits_config', JSON.stringify(p));
+    } else if (snapshot.section.includes('Países') || snapshot.section === 'countries') {
+      if (Array.isArray(p)) {
+        setHiddenCountriesList(p);
+        setHiddenCountryCodes(p);
+      }
+    }
+    showSaveNotice(`Configurações de "${snapshot.sectionName}" restauradas com sucesso!`);
+  };
+
   // Bank Account Handlers
   const handleBankChange = (id: string, field: keyof BankAccount, value: any) => {
     const updated = bankAccounts.map((b) => (b.id === id ? { ...b, [field]: value } : b));
@@ -112,6 +256,7 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
 
   const handleSaveBanks = () => {
     localStorage.setItem('nanucloud_bank_accounts', JSON.stringify(bankAccounts));
+    recordConfigSnapshot('Coordenadas Bancárias (6)', bankAccounts);
     showSaveNotice('Coordenadas bancárias salvas com sucesso!');
   };
 
@@ -139,6 +284,7 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
 
   const handleSaveDbEngines = () => {
     localStorage.setItem('nanucloud_db_engines', JSON.stringify(dbEngines));
+    recordConfigSnapshot('Motores de Banco (MySQL/MSSQL)', dbEngines);
     showSaveNotice('Motores de banco de dados gravados!');
   };
 
@@ -150,13 +296,57 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
 
   const handleSaveAdsense = () => {
     localStorage.setItem('nanucloud_adsense_slots', JSON.stringify(adsenseSlots));
+    recordConfigSnapshot('Google AdSense (3 Posições)', adsenseSlots);
     showSaveNotice('Configurações do Google AdSense salvas!');
   };
 
   // Contacts Handlers
   const handleSaveContacts = () => {
     localStorage.setItem('nanucloud_admin_contacts', JSON.stringify(contacts));
+    recordConfigSnapshot('Contactos & WhatsApp', contacts);
     showSaveNotice('Contactos de telemóvel e WhatsApp salvos!');
+  };
+
+  // Electronic Payments Handlers (EMIS & PayPal)
+  const handleSavePayments = () => {
+    localStorage.setItem('nanucloud_emis_config', JSON.stringify(emisConfig));
+    localStorage.setItem('nanucloud_paypal_config', JSON.stringify(paypalConfig));
+    recordConfigSnapshot('Pagamentos EMIS & PayPal', { emisConfig, paypalConfig });
+    showSaveNotice('Configurações de Pagamento EMIS & PayPal salvas com sucesso!');
+  };
+
+  // Free Credits Handlers
+  const handleSaveCredits = () => {
+    localStorage.setItem('nanucloud_credits_config', JSON.stringify(creditsConfig));
+    window.dispatchEvent(new Event('nanucloud_credits_updated'));
+    recordConfigSnapshot('Créditos Gratuitos & Pesquisas', creditsConfig);
+    showSaveNotice('Configurações de créditos gratuitos atualizadas!');
+  };
+
+  // Country Visibility Handlers (Super Admin Only)
+  const handleToggleCountryVisibility = (code: string) => {
+    if (!isSuperAdmin) return;
+    const isHidden = hiddenCountries.includes(code);
+    const updated = isHidden
+      ? hiddenCountries.filter((c) => c !== code)
+      : [...hiddenCountries, code];
+
+    setHiddenCountriesList(updated);
+    setHiddenCountryCodes(updated);
+    recordConfigSnapshot('Visibilidade de Países', updated);
+    showSaveNotice(
+      isHidden
+        ? `País (${code}) agora está VISÍVEL para todos os utilizadores.`
+        : `País (${code}) foi OCULTADO dos utilizadores para testes técnicos.`
+    );
+  };
+
+  const handleUnhideAllCountries = () => {
+    if (!isSuperAdmin) return;
+    setHiddenCountriesList([]);
+    setHiddenCountryCodes([]);
+    recordConfigSnapshot('Visibilidade de Países', []);
+    showSaveNotice('Todos os países estão agora visíveis no sistema!');
   };
 
   // RBAC Permission Handlers
@@ -236,7 +426,15 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
           { id: 'databases', label: '2. Motores de Banco (MySQL/MSSQL)', icon: Database },
           { id: 'adsense', label: '3. Google AdSense (3 Posições)', icon: Tv },
           { id: 'contacts', label: '4. Contactos & WhatsApp', icon: Phone },
-          { id: 'rbac', label: '5. Grupos de Permissões (RBAC)', icon: Shield }
+          { id: 'rbac', label: '5. Grupos de Permissões (RBAC)', icon: Shield },
+          { id: 'payments', label: '6. Pagamentos EMIS & PayPal', icon: CreditCard },
+          { id: 'credits', label: '7. Créditos Gratuitos & Pesquisas', icon: Coins },
+          { id: 'countries', label: '8. Visibilidade de Países', icon: Globe },
+          { id: 'themes', label: '9. Temas da Aplicação', icon: Palette },
+          { id: 'marketing', label: '10. Notificações & Marketing', icon: Megaphone },
+          { id: 'users_clients', label: '11. Gestão de Utilizadores', icon: Users },
+          { id: 'history', label: '12. Histórico & Reversão', icon: History },
+          { id: 'legal_terms', label: '13. Termos de Uso & Políticas', icon: Scale }
         ].map((tab) => {
           const Icon = tab.icon;
           return (
@@ -770,6 +968,457 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
             </div>
           </div>
         </div>
+      )}
+
+      {/* SECTION 6: PAGAMENTOS ELETRÓNICOS (EMIS REFERÊNCIA & PAYPAL) */}
+      {activeSection === 'payments' && (
+        <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-100 font-mono flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-emerald-400" /> PAGAMENTO POR REFERÊNCIA EMIS (MULTICAIXA) & PAYPAL
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Configure os canais de recebimento automático por Multicaixa Express / Referência Bancária e PayPal Internacional
+              </p>
+            </div>
+
+            <button
+              onClick={handleSavePayments}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-5 rounded-xl text-xs font-mono uppercase tracking-wider flex items-center gap-2 shadow-md transition-all self-start"
+            >
+              <Save className="w-4 h-4" /> Guardar Gateways
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Box 1: EMIS Referência Multicaixa */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center font-bold font-mono text-xs">
+                    EMIS
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-100 font-mono">PAGAMENTO POR REFERÊNCIA EMIS (ANGOLA)</h4>
+                    <span className="text-[10px] text-slate-400">Multicaixa Express / ATM / Homebanking</span>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-mono">
+                  <input
+                    type="checkbox"
+                    checked={emisConfig.autoActivate}
+                    onChange={(e) => setEmisConfig({ ...emisConfig, autoActivate: e.target.checked })}
+                    className="rounded text-emerald-500 focus:ring-0"
+                  />
+                  <span className="text-slate-300 font-bold">Auto-Ativação</span>
+                </label>
+              </div>
+
+              <div className="space-y-3 text-xs font-mono">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">CÓDIGO DE ENTIDADE EMIS (EX: 00542):</label>
+                  <input
+                    type="text"
+                    value={emisConfig.entityCode}
+                    onChange={(e) => setEmisConfig({ ...emisConfig, entityCode: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-bold focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">SUB-ENTIDADE (OPCIONAL):</label>
+                    <input
+                      type="text"
+                      value={emisConfig.subEntityCode || ''}
+                      onChange={(e) => setEmisConfig({ ...emisConfig, subEntityCode: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">TERMINAL ID / CANAL:</label>
+                    <input
+                      type="text"
+                      value={emisConfig.terminalId || ''}
+                      onChange={(e) => setEmisConfig({ ...emisConfig, terminalId: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">API KEY DE INTEGRAÇÃO EMIS (SECRETO):</label>
+                  <input
+                    type="password"
+                    value={emisConfig.apiKey || ''}
+                    onChange={(e) => setEmisConfig({ ...emisConfig, apiKey: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">WEBHOOK SECRET / NOTIFICAÇÃO DE LIQUIDAÇÃO:</label>
+                  <input
+                    type="password"
+                    value={emisConfig.webhookSecret || ''}
+                    onChange={(e) => setEmisConfig({ ...emisConfig, webhookSecret: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-300">
+                  Ao selecionar "Auto-Ativação", qualquer fatura ou recarga paga via Multicaixa libertará as consultas fiscais na conta do utilizador em tempo real sem intervenção manual.
+                </div>
+              </div>
+            </div>
+
+            {/* Box 2: PayPal Gateway */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold font-mono text-xs">
+                    PP
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-100 font-mono">PAYPAL INTERNACIONAL (CARTÕES & SALDO)</h4>
+                    <span className="text-[10px] text-slate-400">Checkout Global em USD / EUR</span>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-mono">
+                  <input
+                    type="checkbox"
+                    checked={paypalConfig.autoActivate}
+                    onChange={(e) => setPaypalConfig({ ...paypalConfig, autoActivate: e.target.checked })}
+                    className="rounded text-blue-500 focus:ring-0"
+                  />
+                  <span className="text-slate-300 font-bold">Auto-Ativação</span>
+                </label>
+              </div>
+
+              <div className="space-y-3 text-xs font-mono">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">PAYPAL CLIENT ID:</label>
+                  <input
+                    type="text"
+                    value={paypalConfig.clientId}
+                    onChange={(e) => setPaypalConfig({ ...paypalConfig, clientId: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-bold focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">PAYPAL SECRET KEY:</label>
+                  <input
+                    type="password"
+                    value={paypalConfig.clientSecret || ''}
+                    onChange={(e) => setPaypalConfig({ ...paypalConfig, clientSecret: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">E-MAIL DA CONTA RECEPTORA PAYPAL:</label>
+                  <input
+                    type="email"
+                    value={paypalConfig.receiverEmail}
+                    onChange={(e) => setPaypalConfig({ ...paypalConfig, receiverEmail: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">MODO DE OPERAÇÃO:</label>
+                    <select
+                      value={paypalConfig.mode}
+                      onChange={(e) => setPaypalConfig({ ...paypalConfig, mode: e.target.value as any })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    >
+                      <option value="sandbox">Sandbox (Ambiente de Testes)</option>
+                      <option value="live">Live (Produção Real)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">MOEDA DE RECEBIMENTO:</label>
+                    <select
+                      value={paypalConfig.currency}
+                      onChange={(e) => setPaypalConfig({ ...paypalConfig, currency: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    >
+                      <option value="USD">USD ($ - Dólar Americano)</option>
+                      <option value="EUR">EUR (€ - Euro)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[11px] text-blue-300">
+                  Clientes em Portugal, Brasil, China e resto do mundo podem pagar planos e consultas instantaneamente via PayPal ou cartões Visa/Mastercard internacionais.
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 7: GESTÃO DE CRÉDITOS GRATUITOS NA PÁGINA & MODO TESTE */}
+      {activeSection === 'credits' && (
+        <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-100 font-mono flex items-center gap-2">
+                <Coins className="w-4 h-4 text-amber-400" /> GESTÃO DE CRÉDITOS GRATUITOS & SIMULAÇÕES DE DEMONSTRAÇÃO
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Defina quantas consultas gratuitas cada utilizador ou visitante da página recebe sem pagar
+              </p>
+            </div>
+
+            <button
+              onClick={handleSaveCredits}
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2 px-5 rounded-xl text-xs font-mono uppercase tracking-wider flex items-center gap-2 shadow-md transition-all self-start"
+            >
+              <Save className="w-4 h-4" /> Guardar Créditos
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            
+            {/* Card 1: New Registers */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
+                <Users className="w-5 h-5" />
+              </div>
+              <h4 className="text-xs font-bold text-slate-200 font-mono">BÓNUS DE NOVO REGISTO</h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Quantidade de consultas fiscais gratuitas creditadas automaticamente para todo novo utilizador ao criar conta:
+              </p>
+              <div className="pt-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="500"
+                  value={creditsConfig.freeQueriesOnRegister}
+                  onChange={(e) => setCreditsConfig({ ...creditsConfig, freeQueriesOnRegister: parseInt(e.target.value) || 0 })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm font-mono font-bold text-indigo-300 focus:border-indigo-500"
+                />
+                <span className="text-[10px] text-slate-500 font-mono mt-1 block">Consultas gratuitas por conta nova</span>
+              </div>
+            </div>
+
+            {/* Card 2: Anonymous Page Visitors */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                <Globe className="w-5 h-5" />
+              </div>
+              <h4 className="text-xs font-bold text-slate-200 font-mono">VISITANTES NA PÁGINA (SEM LOGIN)</h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Consultas demonstrativas permitidas diretamente na página antes de solicitar registo:
+              </p>
+              <div className="pt-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={creditsConfig.freeQueriesForVisitors}
+                  onChange={(e) => setCreditsConfig({ ...creditsConfig, freeQueriesForVisitors: parseInt(e.target.value) || 0 })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm font-mono font-bold text-emerald-300 focus:border-emerald-500"
+                />
+                <span className="text-[10px] text-slate-500 font-mono mt-1 block">Consultas livres de degustação</span>
+              </div>
+            </div>
+
+            {/* Card 3: Test Mode Unlimited */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <h4 className="text-xs font-bold text-slate-200 font-mono">MODO TESTE / DEMO ILIMITADO</h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Permite simulações livres e ilimitadas para fins de demonstração ou testes de homologação:
+              </p>
+              <div className="pt-2">
+                <label className="flex items-center gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={creditsConfig.allowUnlimitedSimulationInTestMode}
+                    onChange={(e) => setCreditsConfig({ ...creditsConfig, allowUnlimitedSimulationInTestMode: e.target.checked })}
+                    className="w-4 h-4 rounded text-purple-500 focus:ring-0"
+                  />
+                  <span className="text-xs font-mono font-bold text-slate-200">Ativar Simulações Ilimitadas</span>
+                </label>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 8: GESTÃO DE VISIBILIDADE DE PAÍSES (SUPER ADMINISTRADORES) */}
+      {activeSection === 'countries' && (
+        <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-100 font-mono flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-indigo-400" /> VISIBILIDADE DE PAÍSES & HOMOLOGAÇÃO FISCAL
+                </h3>
+                <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded font-mono font-bold">
+                  Super Administrador
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Oculte países nos simuladores de comércio, serviços, importação e intermediários para impedir o uso por clientes antes de testados e prontos.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 self-start">
+              {hiddenCountries.length > 0 && (
+                <button
+                  onClick={handleUnhideAllCountries}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 px-4 rounded-xl text-xs font-mono transition cursor-pointer"
+                >
+                  Tornar Todos Visíveis
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Super Admin Notice Banner */}
+          <div className="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-xs font-mono space-y-2">
+            <div className="flex items-center gap-2 text-indigo-300 font-bold">
+              <Shield className="w-4 h-4 text-indigo-400" />
+              <span>Controlo de Acesso e Homologação de Pautas Aduaneiras & Tributárias</span>
+            </div>
+            <p className="text-slate-300 font-sans text-[11px] leading-relaxed">
+              Países marcados como <strong>"Ocultado"</strong> desaparecem instantaneamente dos menus de seleção para utilizadores comuns e visitantes da plataforma. Como <strong>Super Administrador</strong>, continuará com acesso total a todos os países para realizar testes de pautas, taxas aduaneiras e cenários de homologação.
+            </p>
+          </div>
+
+          {/* Countries Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.keys(COUNTRIES_DB).map((code) => {
+              const country = COUNTRIES_DB[code];
+              const isHidden = hiddenCountries.includes(code);
+
+              return (
+                <div
+                  key={code}
+                  className={`p-4 rounded-2xl border transition-all ${
+                    isHidden
+                      ? 'bg-slate-950/80 border-rose-500/40 opacity-75'
+                      : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-2xl">{getCountryFlag(code)}</span>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-100 font-mono flex items-center gap-1.5">
+                          <span>{country.name}</span>
+                          <span className="text-[10px] text-slate-400">({country.curr})</span>
+                        </h4>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          Fisco: {country.agency} | IVA: {country.vatOptions[0]?.r ?? 14}% | II: {country.ii}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                    <span
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
+                        isHidden
+                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                      }`}
+                    >
+                      {isHidden ? (
+                        <>
+                          <EyeOff className="w-3 h-3" />
+                          <span>Ocultado (Em Testes)</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Visível para Todos</span>
+                        </>
+                      )}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCountryVisibility(code)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        isHidden
+                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
+                          : 'bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/50'
+                      }`}
+                    >
+                      {isHidden ? (
+                        <>
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Tornar Visível</span>
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5" />
+                          <span>Ocultar País</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 9: TEMAS DA APLICAÇÃO */}
+      {activeSection === 'themes' && (
+        <ThemeSettingsSection
+          onSaveSnapshot={recordConfigSnapshot}
+          showSaveNotice={showSaveNotice}
+        />
+      )}
+
+      {/* SECTION 10: NOTIFICAÇÕES & MARKETING */}
+      {activeSection === 'marketing' && (
+        <MarketingBroadcastSection
+          onSaveSnapshot={recordConfigSnapshot}
+          showSaveNotice={showSaveNotice}
+        />
+      )}
+
+      {/* SECTION 11: GESTÃO DE UTILIZADORES & CLIENTES */}
+      {activeSection === 'users_clients' && (
+        <UserClientManagementSection
+          currentUser={currentUser}
+          onSaveSnapshot={recordConfigSnapshot}
+          showSaveNotice={showSaveNotice}
+        />
+      )}
+
+      {/* SECTION 12: HISTÓRICO & REVERSÃO */}
+      {activeSection === 'history' && (
+        <ConfigHistoryRevertSection
+          currentUser={currentUser}
+          onRevertSnapshot={handleRevertSnapshot}
+          showSaveNotice={showSaveNotice}
+        />
+      )}
+
+      {/* SECTION 13: GESTÃO DE TERMOS DE USO & POLÍTICAS LEGAIS */}
+      {activeSection === 'legal_terms' && (
+        <LegalTermsAdminSection
+          onSaveSnapshot={recordConfigSnapshot}
+          showSaveNotice={showSaveNotice}
+        />
       )}
 
     </div>

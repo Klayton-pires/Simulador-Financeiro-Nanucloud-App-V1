@@ -5,6 +5,7 @@ import { COUNTRIES_DB } from '../data/countries';
 import { SupportedLang, TRANSLATIONS } from '../i18n/translations';
 import {
   FileSpreadsheet,
+  FileText,
   Upload,
   Download,
   CheckCircle,
@@ -23,6 +24,7 @@ import {
   Info
 } from 'lucide-react';
 import { downloadOfficialExcelTemplate } from '../utils/excelTemplate';
+import { exportSimulationDossierPDF } from '../utils/exportDocumentUtils';
 
 interface ExcelBatchSimulatorProps {
   user: UserSafe | null;
@@ -233,10 +235,80 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
 
   const handleExportExcel = () => {
     if (!processedData || processedData.length === 0) return;
-    const worksheet = XLSX.utils.json_to_sheet(processedData);
+
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Preços & Margens NANUCLOUD');
+
+    // 1. Folha de Resumo Executivo e Identificação (Sem Fórmulas)
+    const dossierRows: (string | number)[][] = [
+      ['NANUCLOUD ENTERPRISE - DOSSIÊ DE SIMULAÇÃO EM LOTE EXCEL'],
+      [`Data de Emissão: ${new Date().toLocaleDateString('pt-PT')} ${new Date().toLocaleTimeString('pt-PT')}`],
+      [`Jurisdição Fiscal: ${country.name} (${country.agency})`],
+      [`Moeda: ${country.curr}`],
+      [''],
+      ['1. IDENTIFICAÇÃO DO UTILIZADOR & CONTA'],
+      ['Utilizador / Responsável:', user?.name || 'Utilizador NANUCLOUD'],
+      ['Empresa / Organização:', user?.company || 'NANUCLOUD Workspace'],
+      ['NIF / Documento Fiscal:', user?.nif || 'Não Registado'],
+      ['Email de Contacto:', user?.email || 'N/A'],
+      ['Plano de Subscrição:', user?.activePlanName || 'Plano Profissional'],
+      [''],
+      ['2. PARÂMETROS GLOBAIS DO LOTE'],
+      ['Total de Artigos Processados:', processedData.length],
+      ['Margem Global Aplicada:', `${marginPct}%`],
+      ['Taxa de IVA Aplicada:', `${vatRate}%`],
+      ['Ficheiro de Origem:', uploadedFileName || 'Lote_Importado.xlsx'],
+      [''],
+      ['3. TOTAIS FINANCEIROS CONSOLIDADOS (VALORES APURADOS)'],
+      ['Total Custo Base (Sem IVA):', totalCostCalculated, country.curr],
+      ['Total Facturação Prevista (PVP com IVA):', totalPvpFinalCalculated, country.curr],
+      ['Total Lucro Líquido Real Estimado:', totalNetProfitCalculated, country.curr],
+      [''],
+      ['4. NOTA DE AUDITORIA FISCAL'],
+      ['Aviso:', 'Todos os preços e montantes são valores finais calculados com base nas normas fiscais aplicáveis. Nenhuma fórmula de cálculo interna está exposta nesta folha.']
+    ];
+
+    const wsSummary = XLSX.utils.aoa_to_sheet(dossierRows);
+    wsSummary['!cols'] = [{ wch: 38 }, { wch: 35 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(workbook, wsSummary, 'Resumo_Executivo');
+
+    // 2. Folha com os Dados Processados (Valores Finais Limpos)
+    const worksheetData = XLSX.utils.json_to_sheet(processedData);
+    XLSX.utils.book_append_sheet(workbook, worksheetData, 'Artigos_Calculados');
+
     XLSX.writeFile(workbook, `NANUCLOUD_Lote_Calculado_${countryCode}_${Date.now()}.xlsx`);
+  };
+
+  const handleExportPDF = () => {
+    if (!processedData || processedData.length === 0) return;
+
+    exportSimulationDossierPDF({
+      title: `Dossiê Executivo de Processamento em Lote (${processedData.length} Produtos)`,
+      moduleName: 'Processamento em Lote Excel (.xlsx)',
+      user: user,
+      country: country,
+      inputFields: [
+        { label: 'Ficheiro de Origem', value: uploadedFileName || 'Lote.xlsx', description: 'Planilha carregada' },
+        { label: 'Total de Itens Processados', value: `${processedData.length} artigos`, description: 'Volume total de linhas' },
+        { label: 'Margem Comercial Aplicada', value: `${marginPct}%`, description: 'Margem de lucro sobre o custo' },
+        { label: 'Taxa de IVA Aplicada', value: `${vatRate}%`, description: 'Imposto sobre o Valor Acrescentado' },
+        { label: 'Coluna de Custo Base Mapeada', value: selectedCostColumn || 'Auto', description: 'Campo de referência' }
+      ],
+      calculatedFields: [
+        { label: 'Volume Total Custo Base', amount: totalCostCalculated, rateOrMargin: 'Custo', fiscalDestiny: 'Fornecedores' },
+        { label: 'Facturação Total Prevista (PVP com IVA)', amount: totalPvpFinalCalculated, rateOrMargin: `${vatRate}% IVA`, isFinalHighlight: true, fiscalDestiny: 'Clientes / Venda' },
+        { label: 'Lucro Líquido Real Consolidado', amount: totalNetProfitCalculated, rateOrMargin: `${marginPct}%`, isFinalHighlight: true, fiscalDestiny: 'Empresa / Caixa' }
+      ],
+      summaryCards: [
+        { label: 'Artigos Processados', value: `${processedData.length}`, subtext: 'Total de linhas' },
+        { label: 'Total Custo Base', value: `${totalCostCalculated.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} ${country.curr}`, subtext: 'Sem IVA' },
+        { label: 'PVP Total com IVA', value: `${totalPvpFinalCalculated.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} ${country.curr}`, subtext: 'Facturação Global' },
+        { label: 'Lucro Líquido Real', value: `${totalNetProfitCalculated.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} ${country.curr}`, subtext: 'Após Impostos' }
+      ],
+      legalNotes: [
+        `Preços finais e tributos computados em estrita conformidade com a legislação fiscal de ${country.name} (${country.agency}).`,
+        `O ficheiro Excel complementar contém o detalhamento linha a linha de todos os ${processedData.length} artigos com valores finais apurados sem fórmulas expostas.`
+      ]
+    });
   };
 
   // Resumo executivo dos dados processados
@@ -574,13 +646,24 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
               </p>
             </div>
 
-            <button
-              onClick={handleExportExcel}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md shadow-emerald-950/40 cursor-pointer shrink-0"
-            >
-              <Download className="w-4 h-4" />
-              <span>{t.btnExport}</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleExportPDF}
+                className="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md cursor-pointer"
+                title="Exportar Dossiê do Lote em PDF"
+              >
+                <FileText className="w-4 h-4 text-rose-400" />
+                <span>Dossiê PDF</span>
+              </button>
+
+              <button
+                onClick={handleExportExcel}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md shadow-emerald-950/40 cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>{t.btnExport} (.xlsx)</span>
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-700">

@@ -9,6 +9,7 @@ import {
   History,
   BookOpen,
   ShieldAlert,
+  ShieldCheck,
   Lock,
   Terminal,
   Smartphone,
@@ -16,16 +17,22 @@ import {
   Table,
   Sparkles,
   Users,
+  Building,
   LifeBuoy,
   MessageSquare,
   BarChart3,
   Settings,
   Scale,
-  FileCode
+  FileCode,
+  Briefcase,
+  Handshake,
+  UserCheck
 } from 'lucide-react';
 
 export type ActiveTab =
   | 'local'
+  | 'services_consulting'
+  | 'intermediary'
   | 'basic_mobile'
   | 'import'
   | 'excel'
@@ -33,6 +40,7 @@ export type ActiveTab =
   | 'fiscal_matrix'
   | 'fiscal_ai'
   | 'clients_management'
+  | 'users_management'
   | 'tickets'
   | 'marketing'
   | 'reports_metrics'
@@ -65,6 +73,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const simItems = [
     { id: 'local', label: 'Vendas & Comércio (PVP)', icon: Store, unlocked: true },
+    {
+      id: 'services_consulting',
+      label: 'Prestação de Serviços & Consultoria',
+      icon: Briefcase,
+      unlocked: true,
+      badge: 'NOVO'
+    },
+    {
+      id: 'intermediary',
+      label: 'Intermediários & Corretagem',
+      icon: Handshake,
+      unlocked: true,
+      badge: 'PRO'
+    },
     {
       id: 'basic_mobile',
       label: 'Modo Celular Básico / POS',
@@ -102,7 +124,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const managementItems = isManager
     ? [
-        { id: 'clients_management', label: 'Gestão de Clientes', icon: Users },
+        { id: 'clients_management', label: 'Gestão de Clientes', icon: Building },
+        { id: 'users_management', label: 'Gestão de Utilizadores (Staff)', icon: ShieldCheck },
         { id: 'tickets', label: 'Tickets & Atendimento', icon: LifeBuoy },
         { id: 'marketing', label: 'Marketing, SMS & E-mail', icon: MessageSquare },
         { id: 'reports_metrics', label: 'Métricas & Auditoria', icon: BarChart3 },

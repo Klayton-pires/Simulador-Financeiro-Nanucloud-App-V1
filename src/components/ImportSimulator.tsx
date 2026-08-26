@@ -2,7 +2,24 @@ import React, { useState } from 'react';
 import { UserSafe } from '../types';
 import { COUNTRIES_DB } from '../data/countries';
 import { SupportedLang, TRANSLATIONS } from '../i18n/translations';
-import { Ship, Lock, Sparkles, Anchor, DollarSign, CheckCircle, AlertCircle, TrendingUp, ShieldCheck } from 'lucide-react';
+import {
+  Ship,
+  Lock,
+  Sparkles,
+  Anchor,
+  DollarSign,
+  CheckCircle,
+  AlertCircle,
+  TrendingUp,
+  ShieldCheck,
+  Download,
+  FileText,
+  FileSpreadsheet
+} from 'lucide-react';
+import {
+  exportSimulationDossierPDF,
+  exportSimulationDossierExcel
+} from '../utils/exportDocumentUtils';
 
 interface ImportSimulatorProps {
   user: UserSafe | null;
@@ -168,6 +185,74 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
     } finally {
       setIsCalculating(false);
     }
+  };
+
+  const handleExportPDF = () => {
+    if (!results) return;
+
+    exportSimulationDossierPDF({
+      title: `Dossiê de Importação & Despacho - ${productName || 'Mercadoria Internacional'}`,
+      moduleName: 'Comércio Internacional & Importação',
+      user: user,
+      country: destFiscal,
+      inputFields: [
+        { label: 'País de Origem', value: originCountry, description: 'Procedência da carga' },
+        { label: 'País de Destino / Alfândega', value: `${destFiscal.name} (${destFiscal.agency})`, description: 'Desembaraço aduaneiro' },
+        { label: 'Valor da Carga (FOB)', value: formatMoney(results.fob || 0), description: 'Preço no porto de embarque' },
+        { label: 'Frete Internacional', value: formatMoney(results.freight || 0), description: 'Transporte marítimo/aéreo' },
+        { label: 'Seguro da Carga', value: formatMoney(results.insurance || 0), description: 'Apólice de seguro CIF' },
+        { label: 'Direitos Aduaneiros (Tarifa)', value: `${customsRate || 0}%`, description: 'Pauta Aduaneira' },
+        { label: 'Imposto Especial de Consumo (IEC)', value: `${iecRate || 0}%`, description: 'Incidência de consumo' }
+      ],
+      calculatedFields: [
+        { label: 'Valor Aduaneiro Internacional (CIF)', amount: results.cif || 0, rateOrMargin: 'CIF', fiscalDestiny: 'Origem + Frete + Seguro' },
+        { label: 'Direitos Aduaneiros Liquidados', amount: results.customsDuty || 0, rateOrMargin: `${customsRate}%`, isDeduction: false, fiscalDestiny: 'Alfândega / AGT' },
+        { label: 'Imposto Especial de Consumo (IEC)', amount: results.iec || results.iecTax || 0, rateOrMargin: `${iecRate}%`, isDeduction: false, fiscalDestiny: 'Tributos Aduaneiros' },
+        { label: 'CUSTO BASE NACIONALIZADO (Sem IVA)', amount: results.nationalizedCostNet || results.landedCost || 0, rateOrMargin: 'Nacionalizado', isFinalHighlight: true, fiscalDestiny: 'Custo de Entrada em Armazém' },
+        { label: 'IVA Aduaneiro e de Venda', amount: results.vatSale || results.vat || 0, rateOrMargin: `${vatRate}%`, fiscalDestiny: destFiscal.agency },
+        { label: 'PREÇO FINAL RECOMENDADO (PVP com IVA)', amount: results.pvpFinal || results.recommendedPVP || 0, rateOrMargin: 'PVP Mercado', isFinalHighlight: true, fiscalDestiny: 'Consumidor Final' },
+        { label: 'LUCRO LÍQUIDO APÓS IMPOSTOS', amount: results.netProfit || results.estimatedProfit || 0, rateOrMargin: 'Líquido', isFinalHighlight: true, fiscalDestiny: 'Empresa / Caixa' }
+      ],
+      summaryCards: [
+        { label: 'Custo Nacionalizado', value: formatMoney(results.nationalizedCostNet || results.landedCost || 0), subtext: 'Sem IVA' },
+        { label: 'PVP Final Recomendado', value: formatMoney(results.pvpFinal || results.recommendedPVP || 0), subtext: 'Com IVA incluído' },
+        { label: 'Lucro Líquido Real', value: formatMoney(results.netProfit || results.estimatedProfit || 0), subtext: 'Após desembaraço' }
+      ],
+      legalNotes: [
+        `Desembaraço aduaneiro em conformidade com as Normas Internacionais de Comércio e Pauta Aduaneira (${destFiscal.agency}).`,
+        `Este documento não substitui o Documento Único (DU) emitido pelo Despachante Oficial, destinando-se a orçamentação e auditoria prévia.`
+      ],
+      notes: notes
+    });
+  };
+
+  const handleExportExcel = () => {
+    if (!results) return;
+
+    exportSimulationDossierExcel({
+      title: `Importacao_${(productName || 'Carga').replace(/\s+/g, '_')}`,
+      moduleName: 'Comércio Internacional & Importação',
+      user: user,
+      country: destFiscal,
+      inputFields: [
+        { label: 'Mercadoria', value: productName || 'Carga Importada', description: 'Item' },
+        { label: 'Origem', value: originCountry, description: 'País de Origem' },
+        { label: 'Destino', value: destFiscal.name, description: 'País de Destino' },
+        { label: 'Valor FOB', value: results.fob || 0, description: 'FOB' },
+        { label: 'Frete', value: results.freight || 0, description: 'Frete' },
+        { label: 'Seguro', value: results.insurance || 0, description: 'Seguro' },
+        { label: 'Direitos (%)', value: `${customsRate || 0}%`, description: 'Tarifa' }
+      ],
+      calculatedFields: [
+        { label: 'Valor CIF', amount: results.cif || 0, rateOrMargin: 'CIF', fiscalDestiny: 'Base Aduaneira' },
+        { label: 'Direitos Aduaneiros', amount: results.customsDuty || 0, rateOrMargin: `${customsRate}%`, fiscalDestiny: 'Alfândega' },
+        { label: 'IEC Aduaneiro', amount: results.iec || results.iecTax || 0, rateOrMargin: `${iecRate}%`, fiscalDestiny: 'Imposto Especial' },
+        { label: 'Custo Nacionalizado (Sem IVA)', amount: results.nationalizedCostNet || results.landedCost || 0, rateOrMargin: 'Custo', fiscalDestiny: 'Armazém' },
+        { label: 'PVP Final com IVA', amount: results.pvpFinal || results.recommendedPVP || 0, rateOrMargin: 'PVP', fiscalDestiny: 'Mercado' },
+        { label: 'Lucro Líquido Real', amount: results.netProfit || results.estimatedProfit || 0, rateOrMargin: 'Líquido', fiscalDestiny: 'Lucro Real' }
+      ],
+      notes: notes
+    });
   };
 
   // If locked, render lock banner
@@ -433,10 +518,32 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
           {/* Summary Card */}
           <div className="bg-slate-850 border border-sky-500/40 rounded-3xl p-6 shadow-xl">
-            <h3 className="text-base font-extrabold text-slate-100 mb-4 flex items-center gap-2">
-              <Anchor className="w-5 h-5 text-sky-400" />
-              Resumo do Custo Base Nacionalizado
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <h3 className="text-base font-extrabold text-slate-100 flex items-center gap-2">
+                <Anchor className="w-5 h-5 text-sky-400" />
+                Resumo do Custo Base Nacionalizado
+              </h3>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportPDF}
+                  className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Exportar Dossiê de Importação em PDF"
+                >
+                  <FileText className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Dossiê PDF</span>
+                </button>
+
+                <button
+                  onClick={handleExportExcel}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Exportar Dossiê de Importação em Excel (Sem Fórmulas)"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Exportar Excel</span>
+                </button>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
               <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800">

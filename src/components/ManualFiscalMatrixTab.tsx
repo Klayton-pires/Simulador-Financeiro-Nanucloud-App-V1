@@ -167,14 +167,14 @@ export const ManualFiscalMatrixTab: React.FC<ManualFiscalMatrixTabProps> = ({ cu
                         <div className="flex items-center gap-1">
                           <input
                             type="number"
-                            value={item.wht}
-                            onChange={(e) => handleCellChange(code, 'wht', Number(e.target.value))}
+                            value={item.retentionServiceRate || 0}
+                            onChange={(e) => handleCellChange(code, 'retentionServiceRate', Number(e.target.value))}
                             className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500 font-bold text-right"
                           />
                           <span className="text-slate-500">%</span>
                         </div>
                       ) : (
-                        <span className="font-bold text-slate-200">{item.wht}%</span>
+                        <span className="font-bold text-slate-200">{item.retentionServiceRate || 0}%</span>
                       )}
                     </td>
                     <td className="p-4">
@@ -183,14 +183,14 @@ export const ManualFiscalMatrixTab: React.FC<ManualFiscalMatrixTabProps> = ({ cu
                           <input
                             type="number"
                             step="0.1"
-                            value={item.statFee || 0}
-                            onChange={(e) => handleCellChange(code, 'statFee', Number(e.target.value))}
+                            value={item.statisticalTax || 0}
+                            onChange={(e) => handleCellChange(code, 'statisticalTax', Number(e.target.value))}
                             className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500 font-bold text-right"
                           />
                           <span className="text-slate-500">%</span>
                         </div>
                       ) : (
-                        <span className="font-bold text-slate-200">{item.statFee || 0}%</span>
+                        <span className="font-bold text-slate-200">{item.statisticalTax || 0}%</span>
                       )}
                     </td>
                     <td className="p-4">

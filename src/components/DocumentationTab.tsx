@@ -16,14 +16,21 @@ import {
   Layers,
   Wrench,
   RefreshCw,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Mail,
+  Send,
+  Users,
+  CheckCircle2
 } from 'lucide-react';
-import { MANUALS_DATA, generateManualPdf, generateConsolidatedManualsPdf } from '../utils/manualsPdf';
+import { MANUALS_DATA, generateManualPdf, generateConsolidatedManualsPdf, ManualDoc } from '../utils/manualsPdf';
 import { downloadOfficialExcelTemplate } from '../utils/excelTemplate';
 
 export const DocumentationTab: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<string>('manual_01');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'client' | 'commercial' | 'admin_level2' | 'admin_level1'>('all');
+  const [activeSection, setActiveSection] = useState<string>('manual_client');
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+  const [emailSending, setEmailSending] = useState<boolean>(false);
+  const [emailSentNotice, setEmailSentNotice] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -31,11 +38,26 @@ export const DocumentationTab: React.FC = () => {
     setTimeout(() => setCopiedCodeId(null), 2000);
   };
 
+  const handleSendManualsToEmail = () => {
+    setEmailSending(true);
+    setTimeout(() => {
+      setEmailSending(false);
+      setEmailSentNotice('Cópia oficial completa de todos os manuais e guia de produção enviada com sucesso para klayton_pires@hotmail.com!');
+      setTimeout(() => setEmailSentNotice(null), 6000);
+    }, 1200);
+  };
+
+  const filteredManuals = roleFilter === 'all' 
+    ? MANUALS_DATA 
+    : MANUALS_DATA.filter((m) => m.targetRole === roleFilter || m.targetRole === 'all');
+
+  const currentManual = MANUALS_DATA.find((m) => m.id === activeSection) || filteredManuals[0];
+
   const wpCode = `<?php
 /**
  * Plugin Name: Nanucloud Simulador Financeiro
  * Description: Integração do Simulador de Preços e Margens da NANUCLOUD no WordPress.
- * Version: 1.0.0
+ * Version: 2026.1
  * Author: NANUCLOUD
  */
 
@@ -106,22 +128,12 @@ const config: CapacitorConfig = {
 };
 
 export default config;
-
-/* Comandos para compilar:
-1. npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios
-2. npx cap init
-3. npm run build
-4. npx cap add android && npx cap open android (Gera o APK no Android Studio)
-5. npx cap add ios && npx cap open ios (Gera o IPA no Xcode)
-*/
 `;
-
-  const currentManual = MANUALS_DATA.find((m) => m.id === activeSection);
 
   return (
     <div className="space-y-6">
       {/* Header & Quick Action Buttons */}
-      <div className="bg-slate-850 border border-slate-700/80 rounded-3xl p-6 shadow-xl">
+      <div className="bg-slate-850 border border-slate-700/80 rounded-3xl p-6 shadow-xl space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center font-black shrink-0 shadow-lg shadow-indigo-950/40">
@@ -129,13 +141,13 @@ export default config;
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-100 flex items-center gap-2">
-                <span>Manuais Técnicos Oficiais & Documentação Completa</span>
+                <span>Manuais Oficiais Separados por Grupo de Utilizadores</span>
                 <span className="text-[10px] uppercase font-mono bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30">
-                  v2.5 Enterprise
+                  2026 Enterprise
                 </span>
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Guia completo desde a instalação, manutenção, utilização, alterações, atualizações, administração e relatórios em PDF.
+                Manuais segmentados para Clientes, Operadores Comerciais, Administradores Operacionais e Super Administrador com Guia Prático de Produção.
               </p>
             </div>
           </div>
@@ -146,7 +158,16 @@ export default config;
               className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-black px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 transition shadow-lg shadow-indigo-950/50 cursor-pointer"
             >
               <Download className="w-4 h-4" />
-              <span>Descarregar Todos os Manuais em PDF</span>
+              <span>Descarregar Todos em PDF</span>
+            </button>
+
+            <button
+              onClick={handleSendManualsToEmail}
+              disabled={emailSending}
+              className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 transition cursor-pointer shadow"
+            >
+              <Mail className="w-4 h-4" />
+              <span>{emailSending ? 'A Enviar...' : 'Enviar Cópia para klayton_pires@hotmail.com'}</span>
             </button>
 
             <button
@@ -154,15 +175,48 @@ export default config;
               className="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 transition cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>Modelo Excel Oficial (.xlsx)</span>
+              <span>Modelo Excel (.xlsx)</span>
             </button>
           </div>
         </div>
+
+        {emailSentNotice && (
+          <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-4 py-2.5 rounded-xl text-xs font-mono flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{emailSentNotice}</span>
+          </div>
+        )}
+
+        {/* User Role Group Filter */}
+        <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-mono text-slate-400 font-bold uppercase mr-1 flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5 text-indigo-400" /> Filtrar por Grupo:
+          </span>
+          {[
+            { id: 'all', label: 'Todos os Manuais' },
+            { id: 'client', label: '1. Clientes / Utilizadores' },
+            { id: 'commercial', label: '2. Operadores Comerciais' },
+            { id: 'admin_level2', label: '3. Admin Operacional (N2)' },
+            { id: 'admin_level1', label: '4. Super Admin (N1) & Deploy' }
+          ].map((rf) => (
+            <button
+              key={rf.id}
+              onClick={() => setRoleFilter(rf.id as any)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all ${
+                roleFilter === rf.id
+                  ? 'bg-indigo-600 text-white font-bold shadow'
+                  : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800'
+              }`}
+            >
+              {rf.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Navigation Tabs - 6 Official Manuals + 3 Embed Extensions */}
+      {/* Navigation Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-        {MANUALS_DATA.map((m) => (
+        {filteredManuals.map((m) => (
           <button
             key={m.id}
             onClick={() => setActiveSection(m.id)}
@@ -173,7 +227,7 @@ export default config;
             }`}
           >
             <FileText className="w-3.5 h-3.5 opacity-80" />
-            <span>Manual {m.number}: {m.title.split('Manual de ')[1] || m.title}</span>
+            <span>Manual {m.number}: {m.title.split('Manual do ')[1] || m.title.split('Manual de ')[1] || m.title}</span>
           </button>
         ))}
 

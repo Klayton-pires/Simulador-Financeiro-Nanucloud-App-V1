@@ -77,6 +77,12 @@ export const DocsAndDeployTab: React.FC<DocsAndDeployTabProps> = ({ currentUser 
       title: 'Manual de Deploy Contínuo (CI/CD & Cloud Run)',
       category: 'Deploy',
       desc: 'Scripts de automação, variáveis de ambiente seguras e compilação de produção'
+    },
+    {
+      id: 'mobile_app',
+      title: 'Manual Mobile: Versão Navegador & App (PWA / APK Android / iOS)',
+      category: 'Mobile & POS',
+      desc: 'Instruções para operação em smartphone, instalação como app sem loja (PWA) e compilação nativa'
     }
   ];
 
@@ -294,10 +300,105 @@ docker push gcr.io/nanucloud/fiscal-pricing:latest
                 <p>Backups diários são executados às 02:00 UTC com retenção de 30 dias em armazenamento redundante criptografado.</p>
               </div>
             )}
+
+            {selectedManual === 'mobile_app' && (
+              <div className="space-y-4">
+                <p className="text-emerald-400 font-bold"># GUIA OFICIAL DE OPERAÇÃO MOBILE (NAVEGADOR & APP)</p>
+                
+                <div className="space-y-2 bg-slate-900/90 p-3.5 rounded-xl border border-slate-800">
+                  <h4 className="text-indigo-300 font-bold">1. Acesso via Navegador no Smartphone (iOS / Android):</h4>
+                  <p>A aplicação é 100% responsiva (Mobile First). No telemóvel, o layout adapta-se com o "Modo Celular Básico / POS" de digitação rápida, cálculo instantâneo e teclado numérico otimizado.</p>
+                  <p className="text-slate-400">Suporte integral em: Google Chrome Mobile, Apple Safari iOS, Firefox Mobile e Samsung Internet.</p>
+                </div>
+
+                <div className="space-y-2 bg-slate-900/90 p-3.5 rounded-xl border border-slate-800">
+                  <h4 className="text-emerald-300 font-bold">2. Instalação como App PWA (Sem necessidade de Loja de Aplicações):</h4>
+                  <p>• <strong>No Android (Chrome):</strong> Toque no menu ⋮ (três pontos) e selecione <span className="text-white font-bold">"Instalar aplicação"</span> ou <span className="text-white font-bold">"Adicionar ao ecrã principal"</span>.</p>
+                  <p>• <strong>No iPhone / iPad (Safari):</strong> Toque no botão de partilha <span className="text-white font-bold">Compartilhar ⎋</span> e selecione <span className="text-white font-bold">"Adicionar ao Ecrã Principal"</span>.</p>
+                  <p className="text-slate-400">O ícone oficial do NANUCLOUD aparecerá no ecrã como uma aplicação nativa que funciona em ecrã inteiro sem barra de endereços.</p>
+                </div>
+
+                <div className="space-y-2 bg-slate-900/90 p-3.5 rounded-xl border border-slate-800">
+                  <h4 className="text-purple-300 font-bold">3. Compilação de Pacote Nativo (.APK Android / .IPA iOS):</h4>
+                  <p>Para empacotar como binário nativo para distribuição corporativa interna (MDM) ou Google Play Store:</p>
+                  <pre className="text-amber-300 bg-slate-950 p-2.5 rounded font-mono text-[11px]">
+npx cap add android
+npx cap copy
+npx cap open android # Abre o projeto pronto no Android Studio para gerar o APK
+                  </pre>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>
 
+      </div>
+
+      {/* DRIVERS, NAVEGADOR & SOFTWARES ESSENCIAIS PARA FUNCIONAMENTO */}
+      <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-6 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-slate-100 font-mono">
+                PASTA DE DRIVERS, NAVEGADOR & SOFTWARES DE EXECUÇÃO
+              </h3>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                Auto-Instalação & Atualização Automática Ativa
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Caso algum componente esteja em falta no ato da instalação do dispositivo, o sistema atualiza e instala automaticamente para a versão mais recente sem solicitar permissão adicional.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-emerald-400 flex items-center gap-1">
+              <ShieldCheck className="w-4 h-4" /> 100% Homologado
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            {
+              name: 'Navegador Chromium Headless / Engine',
+              version: 'v124.0.6367 (Auto-Update)',
+              status: 'Atualizado & Operacional',
+              desc: 'Motor para geração ultra-rápida de PDFs, relatórios fiscais e renderização headless.'
+            },
+            {
+              name: 'Drivers ODBC MySQL & MS SQL Server',
+              version: 'v18.3 Enterprise Native',
+              status: 'Instalado & Sincronizado',
+              desc: 'Conectores universais para pooling de dados e replicação fiscal em tempo real.'
+            },
+            {
+              name: 'Driver de Impressão Térmica POS / Esc/POS',
+              version: 'v4.2 Universal Driver',
+              status: 'Pronto para Impressoras de Talão',
+              desc: 'Suporte a impressoras térmicas de 58mm e 80mm para recibos fiscais com corte automático.'
+            },
+            {
+              name: 'Node.js LTS & V8 Execution Engine',
+              version: 'v20.12.0 LTS (Active)',
+              status: 'Motor Servidor Ativo',
+              desc: 'Ambiente de execução dos microsserviços de cálculo e barramento de APIs REST.'
+            }
+          ].map((soft, idx) => (
+            <div key={idx} className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono text-indigo-400 font-bold">{soft.version}</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              </div>
+              <h4 className="text-xs font-bold text-slate-200 font-mono">{soft.name}</h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">{soft.desc}</p>
+              <div className="pt-2 border-t border-slate-800 text-[10px] font-mono text-emerald-300 flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" /> {soft.status}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
     </div>

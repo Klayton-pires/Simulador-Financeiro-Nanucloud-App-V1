@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Users,
   UserPlus,
   Search,
   Filter,
-  CheckCircle,
+  CheckCircle2,
   XCircle,
-  Edit,
+  Edit2,
   Shield,
   CreditCard,
   Phone,
@@ -17,12 +17,20 @@ import {
   Award,
   Save,
   X,
-  AlertCircle
+  AlertCircle,
+  FileText,
+  Download,
+  FileSpreadsheet,
+  Coins,
+  RefreshCw
 } from 'lucide-react';
-import { UserSafe, UserRole, PermissionGroup } from '../types';
+import { UserSafe, UserRole } from '../types';
 import { INITIAL_CLIENTS } from '../data/mockDatabase';
-import { DEFAULT_PERMISSION_GROUPS } from '../data/permissions';
 import { COUNTRIES_DB } from '../data/countries';
+import {
+  exportSimulationDossierPDF,
+  exportSimulationDossierExcel
+} from '../utils/exportDocumentUtils';
 
 interface ClientsManagementTabProps {
   currentUser: UserSafe;
@@ -36,9 +44,10 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
   });
 
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterRole, setFilterRole] = useState<string>('all');
+  const [filterPlan, setFilterPlan] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [editingClient, setEditingClient] = useState<UserSafe | null>(null);
+  const [dossierModalClient, setDossierModalClient] = useState<UserSafe | null>(null);
 
   // New Client Form State
   const [newClient, setNewClient] = useState({
@@ -59,8 +68,6 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
     isApiUnlocked: false
   });
 
-  const isSuperAdmin = currentUser.role === 'super_admin' || currentUser.role === 'admin_level1';
-
   const handleSaveClients = (updated: UserSafe[]) => {
     setClients(updated);
     localStorage.setItem('nanucloud_clients_db', JSON.stringify(updated));
@@ -75,16 +82,16 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
 
     const created: UserSafe = {
       id: `cli_${Date.now()}`,
-      name: newClient.name,
-      email: newClient.email,
-      phone: newClient.phone,
-      company: newClient.company,
+      name: newClient.name.trim(),
+      email: newClient.email.trim(),
+      phone: newClient.phone.trim(),
+      company: newClient.company.trim(),
       country: newClient.country,
-      nif: newClient.nif,
-      role: newClient.role,
-      permissionGroupId: newClient.permissionGroupId,
+      nif: newClient.nif.trim(),
+      role: 'client',
+      permissionGroupId: 'grp_client',
       isActive: true,
-      queriesRemaining: newClient.queries,
+      queriesRemaining: Number(newClient.queries) || 100,
       totalQueriesUsed: 0,
       activePlanId: newClient.planId,
       activePlanName: newClient.planName,
@@ -100,7 +107,7 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
     const updated = [created, ...clients];
     handleSaveClients(updated);
     setIsCreateModalOpen(false);
-    // Reset form
+
     setNewClient({
       name: '',
       email: '',
@@ -129,60 +136,135 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
     setEditingClient(null);
   };
 
+  const handleQuickCreditRecharge = (client: UserSafe, amount: number) => {
+    const updated = clients.map((c) => {
+      if (c.id === client.id) {
+        return {
+          ...c,
+          queriesRemaining: c.queriesRemaining + amount,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return c;
+    });
+    handleSaveClients(updated);
+  };
+
+  // Exportar Dossiê do Cliente em PDF (Valores Estáticos sem Fórmulas)
+  const handleExportClientPDF = (client: UserSafe) => {
+    const country = COUNTRIES_DB[client.country] || COUNTRIES_DB['AO'];
+
+    exportSimulationDossierPDF({
+      title: `Dossiê de Conta e Licença do Cliente - ${client.name}`,
+      moduleName: 'Gestão de Clientes & Subscrições',
+      user: currentUser,
+      clientInfo: {
+        name: client.name,
+        nif: client.nif || 'Não Registado',
+        company: client.company || client.name,
+        email: client.email,
+        phone: client.phone || 'Sem Telefone',
+        country: client.country
+      },
+      country: country,
+      inputFields: [
+        { label: 'Entidade / Cliente', value: client.name, description: 'Razão social ou titular da licença' },
+        { label: 'Identificação Fiscal (NIF)', value: client.nif || 'Consumidor Final', description: 'Número de Identificação Fiscal' },
+        { label: 'Plano Contratado', value: client.activePlanName || 'Plano Standard', description: 'Licença de software e motor fiscal' },
+        { label: 'Data de Expiração da Licença', value: client.planExpiresAt ? new Date(client.planExpiresAt).toLocaleDateString('pt-PT') : 'Vitalício', description: 'Prazo de validade do serviço' },
+        { label: 'Saldo de Consultas / Pesquisas', value: `${client.queriesRemaining} consultas ativas`, description: 'Volume disponível para simulações' }
+      ],
+      calculatedFields: [
+        { label: 'Saldo Disponível de Consultas', amount: client.queriesRemaining, rateOrMargin: 'Ativo', fiscalDestiny: 'Conta do Cliente' },
+        { label: 'Total de Consultas Efetuadas', amount: client.totalQueriesUsed, rateOrMargin: 'Histórico', fiscalDestiny: 'Registo de Auditoria' },
+        { label: 'Acesso a Módulo de Importação', amount: client.isImportUnlocked ? 'Desbloqueado' : 'Bloqueado', rateOrMargin: client.isImportUnlocked ? 'ATIVO' : 'OFF', fiscalDestiny: 'Pauta Aduaneira' },
+        { label: 'Acesso a Lotes Excel (.xlsx)', amount: client.isBatchUnlocked ? 'Desbloqueado' : 'Bloqueado', rateOrMargin: client.isBatchUnlocked ? 'ATIVO' : 'OFF', fiscalDestiny: 'Processamento em Massa' },
+        { label: 'Acesso a API REST ERP', amount: client.isApiUnlocked ? 'Desbloqueado' : 'Bloqueado', rateOrMargin: client.isApiUnlocked ? 'ATIVO' : 'OFF', fiscalDestiny: 'Integração Externa' }
+      ],
+      summaryCards: [
+        { label: 'Consultas Restantes', value: `${client.queriesRemaining}`, subtext: 'Disponíveis para uso imediato' },
+        { label: 'Consultas Consumidas', value: `${client.totalQueriesUsed}`, subtext: 'Simulações executadas' },
+        { label: 'Estado da Conta', value: client.isActive ? 'CONTA REGULAR' : 'SUSPENSA', subtext: client.activePlanName || 'Plano Padrão' }
+      ],
+      legalNotes: [
+        `Dossiê emitido em conformidade com as condições gerais de licenciamento NANUCLOUD Enterprise.`,
+        `Todos os cálculos associados a esta conta seguem as normas fiscais vigentes da jurisdição (${country.agency}).`,
+        `Este documento não contém fórmulas dinâmicas; os valores apresentados são dados apurados e verificados para fins de auditoria.`
+      ]
+    });
+  };
+
+  // Exportar Dossiê do Cliente em Excel (SEM FÓRMULAS)
+  const handleExportClientExcel = (client: UserSafe) => {
+    const country = COUNTRIES_DB[client.country] || COUNTRIES_DB['AO'];
+
+    exportSimulationDossierExcel({
+      title: `Dossie_Cliente_${client.name.replace(/\s+/g, '_')}`,
+      moduleName: 'Gestão de Clientes',
+      user: currentUser,
+      clientInfo: {
+        name: client.name,
+        nif: client.nif || 'Não Registado',
+        company: client.company || client.name,
+        email: client.email,
+        phone: client.phone,
+        country: client.country
+      },
+      country: country,
+      inputFields: [
+        { label: 'Nome do Cliente / Empresa', value: client.name, description: 'Razão social' },
+        { label: 'NIF do Cliente', value: client.nif || 'Não Registado', description: 'Número fiscal' },
+        { label: 'Email', value: client.email, description: 'Correio eletrónico principal' },
+        { label: 'Telefone', value: client.phone || 'N/A', description: 'Contacto direto' },
+        { label: 'Plano Ativo', value: client.activePlanName || 'Plano Standard', description: 'Subscrição atual' }
+      ],
+      calculatedFields: [
+        { label: 'Saldo de Consultas Restantes', amount: client.queriesRemaining, rateOrMargin: 'Saldo Atual', fiscalDestiny: 'Conta Cliente' },
+        { label: 'Total de Consultas Utilizadas', amount: client.totalQueriesUsed, rateOrMargin: 'Histórico', fiscalDestiny: 'Auditoria' },
+        { label: 'Módulo de Importação Aduaneira', amount: client.isImportUnlocked ? 1 : 0, rateOrMargin: client.isImportUnlocked ? 'ATIVO' : 'INATIVO', fiscalDestiny: 'Acesso' },
+        { label: 'Módulo de Processamento Excel', amount: client.isBatchUnlocked ? 1 : 0, rateOrMargin: client.isBatchUnlocked ? 'ATIVO' : 'INATIVO', fiscalDestiny: 'Acesso' },
+        { label: 'Módulo API REST', amount: client.isApiUnlocked ? 1 : 0, rateOrMargin: client.isApiUnlocked ? 'ATIVO' : 'INATIVO', fiscalDestiny: 'Acesso' }
+      ]
+    });
+  };
+
   const filteredClients = clients.filter((c) => {
     const matchesSearch =
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (c.phone && c.phone.includes(searchQuery)) ||
-      (c.company && c.company.toLowerCase().includes(searchQuery.toLowerCase()));
+      (c.company && c.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (c.nif && c.nif.includes(searchQuery));
 
-    const matchesRole = filterRole === 'all' || c.role === filterRole;
+    const matchesPlan = filterPlan === 'all' || (c.activePlanId && c.activePlanId.includes(filterPlan));
 
-    return matchesSearch && matchesRole;
+    return matchesSearch && matchesPlan;
   });
-
-  const getRoleBadge = (role: UserRole) => {
-    switch (role) {
-      case 'super_admin':
-      case 'admin_level1':
-        return <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono text-[10px] font-bold">Super Admin</span>;
-      case 'admin':
-      case 'admin_level2':
-        return <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px] font-bold">Administrador</span>;
-      case 'manager':
-        return <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[10px] font-bold">Gestor</span>;
-      case 'user':
-        return <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono text-[10px]">Utilizador</span>;
-      default:
-        return <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px]">Cliente</span>;
-    }
-  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      
       {/* Header */}
       <div className="bg-[#1E293B] border border-slate-700 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-            <Users className="w-6 h-6" />
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <Building className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-slate-100 font-mono">GESTÃO DE CLIENTES & UTILIZADORES</h1>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono">
-                {clients.length} Registados
+              <h1 className="text-lg font-bold text-slate-100 font-mono">GESTÃO DE CLIENTES & EMPRESAS</h1>
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                {clients.length} Clientes Ativos
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Consulta de contas, histórico de consultas, alteração de planos e cadastro seguro sem exposição de palavras-passe
+              Administração de contas de clientes, planos subscritos, saldo de pesquisas, NIF e emissão de dossiês profissionais
             </p>
           </div>
         </div>
 
         <button
           onClick={() => setIsCreateModalOpen(true)}
-          className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2.5 px-5 rounded-xl text-xs font-mono uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg"
+          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs font-mono uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg cursor-pointer shrink-0"
         >
           <UserPlus className="w-4 h-4" /> Cadastrar Novo Cliente
         </button>
@@ -194,26 +276,25 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
           <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Pesquisar por nome, email, telefone ou empresa..."
+            placeholder="Pesquisar por cliente, NIF, email ou empresa..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
+            className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-500"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Filter className="w-4 h-4 text-slate-400" />
           <select
-            value={filterRole}
-            onChange={(e) => setFilterRole(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono text-slate-200 py-2 px-3 focus:outline-none focus:border-indigo-500"
+            value={filterPlan}
+            onChange={(e) => setFilterPlan(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono text-slate-200 py-2 px-3 focus:outline-none focus:border-emerald-500"
           >
-            <option value="all">Todos os Níveis de Acesso</option>
-            <option value="super_admin">Super Administrador</option>
-            <option value="admin">Administrador</option>
-            <option value="manager">Gestor</option>
-            <option value="user">Utilizador</option>
-            <option value="client">Cliente</option>
+            <option value="all">Todos os Planos</option>
+            <option value="prata">Plano Prata</option>
+            <option value="ouro">Plano Ouro</option>
+            <option value="platina">Plano Platina</option>
+            <option value="diamante">Plano Diamante</option>
           </select>
         </div>
       </div>
@@ -224,13 +305,12 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
           <table className="w-full text-left text-xs font-mono">
             <thead className="bg-slate-900/80 border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
               <tr>
-                <th className="p-4">Cliente / Entidade</th>
-                <th className="p-4">Contactos</th>
-                <th className="p-4">Nível / Cargo</th>
-                <th className="p-4">Plano Atual</th>
+                <th className="p-4">Cliente / Razão Social</th>
+                <th className="p-4">Contactos & NIF</th>
+                <th className="p-4">Plano & Validade</th>
                 <th className="p-4 text-center">Saldo Consultas</th>
                 <th className="p-4 text-center">Módulos Desbloqueados</th>
-                <th className="p-4 text-right">Ações</th>
+                <th className="p-4 text-right">Dossiê & Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 text-slate-300">
@@ -239,9 +319,7 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
                   <td className="p-4">
                     <div className="font-bold text-slate-100 flex items-center gap-2">
                       {client.name}
-                      {client.country && (
-                        <span className="text-[10px] text-slate-400">({client.country})</span>
-                      )}
+                      <span className="text-[10px] text-emerald-400 font-normal">({client.country})</span>
                     </div>
                     {client.company && (
                       <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
@@ -249,53 +327,102 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
                       </div>
                     )}
                   </td>
-                  <td className="p-4 space-y-0.5">
-                    <div className="text-[11px] text-slate-300 flex items-center gap-1">
-                      <Mail className="w-3 h-3 text-indigo-400" /> {client.email}
+
+                  <td className="p-4">
+                    <div className="text-slate-300 flex items-center gap-1">
+                      <Mail className="w-3 h-3 text-slate-500" /> {client.email}
                     </div>
-                    {client.phone && (
-                      <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-emerald-400" /> {client.phone}
-                      </div>
-                    )}
+                    <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                      <Phone className="w-3 h-3 text-slate-500" /> {client.phone || 'Sem Telefone'} • NIF: {client.nif || 'Consumidor'}
+                    </div>
                   </td>
+
                   <td className="p-4">
-                    {getRoleBadge(client.role)}
-                  </td>
-                  <td className="p-4">
-                    <span className="text-slate-200 font-bold block">{client.activePlanName || 'Plano Básico'}</span>
-                    {client.planExpiresAt && (
-                      <span className="text-[10px] text-slate-400 block">
-                        Expira: {new Date(client.planExpiresAt).toLocaleDateString('pt-PT')}
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-center">
-                    <span className="px-2.5 py-1 rounded-full bg-slate-900 border border-slate-700 text-emerald-400 font-bold">
-                      {client.queriesRemaining > 99999 ? '∞ Ilimitado' : client.queriesRemaining.toLocaleString('pt-PT')}
+                    <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-bold block w-max">
+                      {client.activePlanName || 'Plano Base'}
                     </span>
+                    <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-slate-500" />
+                      {client.planExpiresAt ? new Date(client.planExpiresAt).toLocaleDateString('pt-PT') : 'Vitalício'}
+                    </div>
                   </td>
+
                   <td className="p-4 text-center">
-                    <div className="flex justify-center gap-1.5">
-                      <span title="Importação Aduaneira" className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${client.isImportUnlocked ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-900 text-slate-600'}`}>
-                        Import
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900 border border-slate-700">
+                      <Coins className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="font-bold text-slate-100 text-sm">{client.queriesRemaining}</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => handleQuickCreditRecharge(client, 100)}
+                        className="text-[9px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded transition cursor-pointer"
+                        title="Adicionar +100 Consultas"
+                      >
+                        +100
+                      </button>
+                      <button
+                        onClick={() => handleQuickCreditRecharge(client, 500)}
+                        className="text-[9px] bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/40 px-1.5 py-0.5 rounded transition cursor-pointer"
+                        title="Adicionar +500 Consultas"
+                      >
+                        +500
+                      </button>
+                    </div>
+                  </td>
+
+                  <td className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                      <span
+                        className={`text-[9px] px-2 py-0.5 rounded ${
+                          client.isImportUnlocked ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-800 text-slate-600'
+                        }`}
+                      >
+                        Importação
                       </span>
-                      <span title="Lotes Excel" className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${client.isBatchUnlocked ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-900 text-slate-600'}`}>
-                        Excel
+                      <span
+                        className={`text-[9px] px-2 py-0.5 rounded ${
+                          client.isBatchUnlocked ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-600'
+                        }`}
+                      >
+                        Lotes Excel
                       </span>
-                      <span title="API REST" className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${client.isApiUnlocked ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-900 text-slate-600'}`}>
+                      <span
+                        className={`text-[9px] px-2 py-0.5 rounded ${
+                          client.isApiUnlocked ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-600'
+                        }`}
+                      >
                         API
                       </span>
                     </div>
                   </td>
+
                   <td className="p-4 text-right">
-                    <button
-                      onClick={() => setEditingClient(client)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors"
-                      title="Editar Plano e Configurações"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {/* Botões de Exportar Dossiê do Cliente */}
+                      <button
+                        onClick={() => handleExportClientPDF(client)}
+                        className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg transition"
+                        title="Exportar Dossiê do Cliente (PDF Profissional)"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => handleExportClientExcel(client)}
+                        className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg transition"
+                        title="Exportar Dossiê do Cliente (Excel sem fórmulas)"
+                      >
+                        <FileSpreadsheet className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => setEditingClient(client)}
+                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition"
+                        title="Editar Conta do Cliente"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -304,166 +431,164 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
         </div>
       </div>
 
-      {/* Modal: Cadastrar Novo Cliente */}
+      {/* Modal Criar Cliente */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#1E293B] border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-slate-200">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
-              <div className="flex items-center gap-3">
-                <UserPlus className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-sm font-bold text-slate-100 font-mono">CADASTRAR NOVO CLIENTE / UTILIZADOR</h3>
-              </div>
-              <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#1E293B] border border-slate-700 rounded-2xl w-full max-w-xl p-6 space-y-5 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <h3 className="text-base font-bold text-slate-100 font-mono flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-emerald-400" />
+                Cadastrar Novo Cliente
+              </h3>
+              <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-slate-200">
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateClient} className="p-6 overflow-y-auto space-y-4 text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="font-mono font-bold text-slate-300 block mb-1">NOME COMPLETO *</label>
+            <form onSubmit={handleCreateClient} className="space-y-4 text-xs font-mono">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-slate-400">Nome do Titular / Razão Social *</label>
                   <input
                     type="text"
-                    required
                     value={newClient.name}
                     onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                    placeholder="Ex: Carlos Silva"
+                    required
+                    placeholder="Ex: Manuel António Domingos"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
                   />
                 </div>
 
-                <div>
-                  <label className="font-mono font-bold text-slate-300 block mb-1">EMAIL INSTITUCIONAL *</label>
+                <div className="space-y-1">
+                  <label className="text-slate-400">Email do Cliente *</label>
                   <input
                     type="email"
-                    required
                     value={newClient.email}
                     onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                    placeholder="carlos@empresa.ao"
+                    required
+                    placeholder="cliente@empresa.ao"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
                   />
                 </div>
 
-                <div>
-                  <label className="font-mono font-bold text-slate-300 block mb-1">TELEFONE / WHATSAPP</label>
+                <div className="space-y-1">
+                  <label className="text-slate-400">Telefone / WhatsApp</label>
                   <input
                     type="text"
                     value={newClient.phone}
                     onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                     placeholder="+244 923 000 000"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
                   />
                 </div>
 
-                <div>
-                  <label className="font-mono font-bold text-slate-300 block mb-1">EMPRESA / NIF</label>
+                <div className="space-y-1">
+                  <label className="text-slate-400">NIF / Número Fiscal</label>
+                  <input
+                    type="text"
+                    value={newClient.nif}
+                    onChange={(e) => setNewClient({ ...newClient, nif: e.target.value })}
+                    placeholder="541298402"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400">Empresa / Negócio</label>
                   <input
                     type="text"
                     value={newClient.company}
                     onChange={(e) => setNewClient({ ...newClient, company: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                    placeholder="Empresa Lda / 5410000000"
+                    placeholder="Ex: Comercial Sul Lda"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
                   />
                 </div>
 
-                <div>
-                  <label className="font-mono font-bold text-slate-300 block mb-1">NÍVEL DE CONTA (HIERARQUIA)</label>
-                  <select
-                    value={newClient.role}
-                    onChange={(e) => setNewClient({ ...newClient, role: e.target.value as UserRole })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                  >
-                    {isSuperAdmin && <option value="super_admin">Super Administrador</option>}
-                    {isSuperAdmin && <option value="admin">Administrador</option>}
-                    <option value="manager">Gestor</option>
-                    <option value="user">Utilizador Operador</option>
-                    <option value="client">Cliente Assinante</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-mono font-bold text-slate-300 block mb-1">PLANO ATRIBUÍDO</label>
+                <div className="space-y-1">
+                  <label className="text-slate-400">Plano Contratado</label>
                   <select
                     value={newClient.planId}
                     onChange={(e) => {
-                      const id = e.target.value;
-                      let name = 'Plano Prata';
+                      const pId = e.target.value;
+                      let pName = 'Plano Prata';
                       let q = 500;
-                      let imp = false;
-                      let bat = false;
-                      let api = false;
-                      if (id === 'plan_ouro') { name = 'Plano Ouro'; q = 1000; bat = true; }
-                      if (id === 'plan_diamante') { name = 'Plano Diamante'; q = 5000; imp = true; bat = true; api = true; }
-                      if (id === 'plan_custom') { name = 'Plano Personalizado'; q = 10000; imp = true; bat = true; api = true; }
+                      if (pId === 'plan_ouro') {
+                        pName = 'Plano Ouro (Multi-Empresas)';
+                        q = 1500;
+                      } else if (pId === 'plan_platina') {
+                        pName = 'Plano Platina (Lotes Excel & Importação)';
+                        q = 5000;
+                      } else if (pId === 'plan_diamante') {
+                        pName = 'Plano Diamante Enterprise (API & Ilimitado)';
+                        q = 20000;
+                      }
                       setNewClient({
                         ...newClient,
-                        planId: id,
-                        planName: name,
+                        planId: pId,
+                        planName: pName,
                         queries: q,
-                        isImportUnlocked: imp,
-                        isBatchUnlocked: bat,
-                        isApiUnlocked: api
+                        isImportUnlocked: pId === 'plan_platina' || pId === 'plan_diamante',
+                        isBatchUnlocked: pId === 'plan_platina' || pId === 'plan_diamante',
+                        isApiUnlocked: pId === 'plan_diamante'
                       });
                     }}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
                   >
                     <option value="plan_prata">Plano Prata (500 Consultas)</option>
-                    <option value="plan_ouro">Plano Ouro (1.000 Consultas + Lotes)</option>
-                    <option value="plan_diamante">Plano Diamante (5.000 Consultas + Importação + API)</option>
-                    <option value="plan_custom">Plano Personalizado</option>
+                    <option value="plan_ouro">Plano Ouro (1.500 Consultas)</option>
+                    <option value="plan_platina">Plano Platina (5.000 Consultas)</option>
+                    <option value="plan_diamante">Plano Diamante (20.000 Consultas)</option>
                   </select>
                 </div>
               </div>
 
-              {/* Módulos Desbloqueados Checkboxes */}
-              <div className="pt-3 border-t border-slate-800">
-                <label className="font-mono font-bold text-slate-300 block mb-2">MÓDULOS DESBLOQUEADOS PARA O CLIENTE:</label>
-                <div className="grid grid-cols-3 gap-3">
-                  <label className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-700 cursor-pointer">
+              {/* Módulos Desbloqueados */}
+              <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2">
+                <label className="text-slate-300 font-bold block">Acesso a Módulos Especiais</label>
+                <div className="flex flex-wrap gap-4 text-[11px]">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={newClient.isImportUnlocked}
                       onChange={(e) => setNewClient({ ...newClient, isImportUnlocked: e.target.checked })}
-                      className="rounded text-indigo-500 focus:ring-0"
+                      className="accent-emerald-500"
                     />
-                    <span className="font-mono text-slate-200">Importação Aduaneira</span>
+                    <span>Importação Aduaneira</span>
                   </label>
-
-                  <label className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-700 cursor-pointer">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={newClient.isBatchUnlocked}
                       onChange={(e) => setNewClient({ ...newClient, isBatchUnlocked: e.target.checked })}
-                      className="rounded text-indigo-500 focus:ring-0"
+                      className="accent-emerald-500"
                     />
-                    <span className="font-mono text-slate-200">Lotes Excel (.xlsx)</span>
+                    <span>Lotes Excel (.xlsx)</span>
                   </label>
-
-                  <label className="flex items-center gap-2 p-3 bg-slate-900 rounded-xl border border-slate-700 cursor-pointer">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={newClient.isApiUnlocked}
                       onChange={(e) => setNewClient({ ...newClient, isApiUnlocked: e.target.checked })}
-                      className="rounded text-indigo-500 focus:ring-0"
+                      className="accent-emerald-500"
                     />
-                    <span className="font-mono text-slate-200">API REST ERP</span>
+                    <span>Acesso API REST</span>
                   </label>
                 </div>
               </div>
 
-              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800">
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-mono font-bold flex items-center gap-2"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-2 cursor-pointer"
                 >
-                  <Save className="w-4 h-4" /> Gravar Cliente
+                  <Save className="w-4 h-4" /> Cadastrar Cliente
                 </button>
               </div>
             </form>
@@ -471,136 +596,138 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
         </div>
       )}
 
-      {/* Modal: Editar Cliente / Alterar Plano (Super Admin Pode Mudar ao Seu Gosto) */}
+      {/* Modal Editar Cliente */}
       {editingClient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#1E293B] border border-slate-700 rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-slate-200">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
-              <div className="flex items-center gap-3">
-                <Edit className="w-5 h-5 text-indigo-400" />
-                <div>
-                  <h3 className="text-sm font-bold text-slate-100 font-mono">EDITAR CLIENTE & ALTERAR PLANO</h3>
-                  <p className="text-[11px] text-slate-400">{editingClient.name} ({editingClient.email})</p>
-                </div>
-              </div>
-              <button onClick={() => setEditingClient(null)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#1E293B] border border-slate-700 rounded-2xl w-full max-w-xl p-6 space-y-5 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <h3 className="text-base font-bold text-slate-100 font-mono flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-emerald-400" />
+                Editar Dados do Cliente
+              </h3>
+              <button onClick={() => setEditingClient(null)} className="text-slate-400 hover:text-slate-200">
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleUpdateClient} className="p-6 overflow-y-auto space-y-4 text-xs">
-              
-              {/* Regra de Proteção: Não permitir eliminar/despromover Super Admin principal se não for Super Admin */}
-              {editingClient.role === 'super_admin' && !isSuperAdmin && (
-                <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 text-xs text-rose-300 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                  Utilizadores sem nível de Super Administrador não podem modificar o Super Administrador.
-                </div>
-              )}
-
-              <div>
-                <label className="font-mono font-bold text-slate-300 block mb-1">NOME DO CLIENTE</label>
-                <input
-                  type="text"
-                  value={editingClient.name}
-                  onChange={(e) => setEditingClient({ ...editingClient, name: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-mono font-bold text-slate-300 block mb-1">SALDO DE CONSULTAS</label>
+            <form onSubmit={handleUpdateClient} className="space-y-4 text-xs font-mono">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-slate-400">Nome do Titular *</label>
                   <input
-                    type="number"
-                    value={editingClient.queriesRemaining}
-                    onChange={(e) => setEditingClient({ ...editingClient, queriesRemaining: Number(e.target.value) })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                    type="text"
+                    value={editingClient.name}
+                    onChange={(e) => setEditingClient({ ...editingClient, name: e.target.value })}
+                    required
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
                   />
                 </div>
 
-                <div>
-                  <label className="font-mono font-bold text-slate-300 block mb-1">ALTERAR PLANO</label>
-                  <select
-                    value={editingClient.activePlanId || ''}
-                    onChange={(e) => {
-                      const pid = e.target.value;
-                      let pname = 'Plano Personalizado';
-                      if (pid === 'plan_prata') pname = 'Plano Prata';
-                      if (pid === 'plan_ouro') pname = 'Plano Ouro';
-                      if (pid === 'plan_diamante') pname = 'Plano Diamante';
-                      setEditingClient({
-                        ...editingClient,
-                        activePlanId: pid,
-                        activePlanName: pname
-                      });
-                    }}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="plan_prata">Plano Prata</option>
-                    <option value="plan_ouro">Plano Ouro</option>
-                    <option value="plan_diamante">Plano Diamante</option>
-                    <option value="plan_custom">Plano Personalizado (Super Admin)</option>
-                  </select>
+                <div className="space-y-1">
+                  <label className="text-slate-400">Email *</label>
+                  <input
+                    type="email"
+                    value={editingClient.email}
+                    onChange={(e) => setEditingClient({ ...editingClient, email: e.target.value })}
+                    required
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400">Telefone</label>
+                  <input
+                    type="text"
+                    value={editingClient.phone || ''}
+                    onChange={(e) => setEditingClient({ ...editingClient, phone: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400">NIF / Número Fiscal</label>
+                  <input
+                    type="text"
+                    value={editingClient.nif || ''}
+                    onChange={(e) => setEditingClient({ ...editingClient, nif: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400">Empresa</label>
+                  <input
+                    type="text"
+                    value={editingClient.company || ''}
+                    onChange={(e) => setEditingClient({ ...editingClient, company: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400">Saldo de Consultas</label>
+                  <input
+                    type="number"
+                    value={editingClient.queriesRemaining}
+                    onChange={(e) => setEditingClient({ ...editingClient, queriesRemaining: Number(e.target.value) || 0 })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 outline-none"
+                  />
                 </div>
               </div>
 
-              <div className="pt-2">
-                <label className="font-mono font-bold text-slate-300 block mb-2">DESBLOQUEIO DE MÓDULOS AVANÇADOS:</label>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 p-2.5 bg-slate-900 rounded-xl border border-slate-700 cursor-pointer">
+              {/* Módulos Desbloqueados */}
+              <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2">
+                <label className="text-slate-300 font-bold block">Acesso a Módulos Especiais</label>
+                <div className="flex flex-wrap gap-4 text-[11px]">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={editingClient.isImportUnlocked}
                       onChange={(e) => setEditingClient({ ...editingClient, isImportUnlocked: e.target.checked })}
-                      className="rounded text-indigo-500 focus:ring-0"
+                      className="accent-emerald-500"
                     />
-                    <span className="font-mono text-slate-200">Módulo de Importação Aduaneira (Mar, Terra, Ar)</span>
+                    <span>Importação Aduaneira</span>
                   </label>
-
-                  <label className="flex items-center gap-2 p-2.5 bg-slate-900 rounded-xl border border-slate-700 cursor-pointer">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={editingClient.isBatchUnlocked}
                       onChange={(e) => setEditingClient({ ...editingClient, isBatchUnlocked: e.target.checked })}
-                      className="rounded text-indigo-500 focus:ring-0"
+                      className="accent-emerald-500"
                     />
-                    <span className="font-mono text-slate-200">Módulo de Operações em Lote via Excel (.xlsx)</span>
+                    <span>Lotes Excel (.xlsx)</span>
                   </label>
-
-                  <label className="flex items-center gap-2 p-2.5 bg-slate-900 rounded-xl border border-slate-700 cursor-pointer">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={editingClient.isApiUnlocked}
                       onChange={(e) => setEditingClient({ ...editingClient, isApiUnlocked: e.target.checked })}
-                      className="rounded text-indigo-500 focus:ring-0"
+                      className="accent-emerald-500"
                     />
-                    <span className="font-mono text-slate-200">Módulo de API REST para ERP e Lojas Online</span>
+                    <span>Acesso API REST</span>
                   </label>
                 </div>
               </div>
 
-              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800">
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setEditingClient(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl"
                 >
-                  Fechar
+                  Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-mono font-bold flex items-center gap-2"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center gap-2 cursor-pointer"
                 >
-                  <Save className="w-4 h-4" /> Salvar Alterações
+                  <Save className="w-4 h-4" /> Atualizar Cliente
                 </button>
               </div>
-
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 };
