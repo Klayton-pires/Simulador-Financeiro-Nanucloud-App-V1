@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { UserSafe } from '../types';
-import { COUNTRIES_DB } from '../data/countries';
+import { COUNTRIES_DB, getEffectiveCountryFiscal, getAvailableCountryList } from '../data/countries';
 import { SupportedLang, TRANSLATIONS } from '../i18n/translations';
 import {
   FileSpreadsheet,
@@ -67,7 +67,9 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const country = COUNTRIES_DB[countryCode] || COUNTRIES_DB['AO'];
+  const isSuperAdmin = user?.role === 'super_admin' || user?.role === 'superadmin' || user?.role === 'admin_level1' || user?.role === 'admin';
+  const availableCountries = getAvailableCountryList(isSuperAdmin);
+  const country = getEffectiveCountryFiscal(countryCode);
 
   // Helper para detetar automaticamente a coluna provável de custo
   const detectCostColumn = (cols: string[]): string => {
@@ -240,15 +242,13 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
 
     // 1. Folha de Resumo Executivo e Identificação (Sem Fórmulas)
     const dossierRows: (string | number)[][] = [
-      ['NANUCLOUD ENTERPRISE - DOSSIÊ DE SIMULAÇÃO EM LOTE EXCEL'],
+      ['Nanucloud - Dossiê de Simulação em Lote'],
       [`Data de Emissão: ${new Date().toLocaleDateString('pt-PT')} ${new Date().toLocaleTimeString('pt-PT')}`],
-      [`Jurisdição Fiscal: ${country.name} (${country.agency})`],
       [`Moeda: ${country.curr}`],
       [''],
       ['1. IDENTIFICAÇÃO DO UTILIZADOR & CONTA'],
-      ['Utilizador / Responsável:', user?.name || 'Utilizador NANUCLOUD'],
-      ['Empresa / Organização:', user?.company || 'NANUCLOUD Workspace'],
-      ['NIF / Documento Fiscal:', user?.nif || 'Não Registado'],
+      ['Utilizador / Responsável:', user?.name || 'Utilizador Nanucloud'],
+      ['Empresa / Organização:', user?.company || 'Nanucloud Workspace'],
       ['Email de Contacto:', user?.email || 'N/A'],
       ['Plano de Subscrição:', user?.activePlanName || 'Plano Profissional'],
       [''],
@@ -263,8 +263,7 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
       ['Total Facturação Prevista (PVP com IVA):', totalPvpFinalCalculated, country.curr],
       ['Total Lucro Líquido Real Estimado:', totalNetProfitCalculated, country.curr],
       [''],
-      ['4. NOTA DE AUDITORIA FISCAL'],
-      ['Aviso:', 'Todos os preços e montantes são valores finais calculados com base nas normas fiscais aplicáveis. Nenhuma fórmula de cálculo interna está exposta nesta folha.']
+      ['Aviso Legal Nanucloud:', 'A utilização deste aplicativo tem caráter meramente informativo e estimativo, não dispensando a consulta de um profissional de contas ou contabilista certificado.']
     ];
 
     const wsSummary = XLSX.utils.aoa_to_sheet(dossierRows);
@@ -275,7 +274,7 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
     const worksheetData = XLSX.utils.json_to_sheet(processedData);
     XLSX.utils.book_append_sheet(workbook, worksheetData, 'Artigos_Calculados');
 
-    XLSX.writeFile(workbook, `NANUCLOUD_Lote_Calculado_${countryCode}_${Date.now()}.xlsx`);
+    XLSX.writeFile(workbook, `Nanucloud_Lote_Calculado_${countryCode}_${Date.now()}.xlsx`);
   };
 
   const handleExportPDF = () => {
@@ -439,14 +438,14 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
               value={countryCode}
               onChange={(e) => {
                 setCountryCode(e.target.value);
-                const c = COUNTRIES_DB[e.target.value];
+                const c = getEffectiveCountryFiscal(e.target.value);
                 if (c) setVatRate(c.vatOptions[0]?.r ?? 14);
               }}
               className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl px-3 py-2.5 text-sm font-medium focus:border-emerald-500 outline-none"
             >
-              {Object.keys(COUNTRIES_DB).map((code) => (
-                <option key={code} value={code}>
-                  {COUNTRIES_DB[code].name} ({COUNTRIES_DB[code].curr})
+              {availableCountries.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name} ({c.curr})
                 </option>
               ))}
             </select>
@@ -731,6 +730,14 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
           )}
         </div>
       )}
+
+      {/* Mandatory Accountant Disclaimer */}
+      <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2.5 text-xs text-amber-300">
+        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+        <span>
+          <strong>Aviso Legal Nanucloud:</strong> A utilização deste simulador em lotes Excel tem caráter estimativo e informativo, <strong>não dispensando a consulta de um profissional de contas</strong> ou contabilista certificado.
+        </span>
+      </div>
     </div>
   );
 };

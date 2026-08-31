@@ -1,12 +1,81 @@
-// browserCompatibility.ts - Suporte e Polyfills para Navegadores Antigos e Novos
+// browserCompatibility.ts - Suporte e Polyfills para Navegadores no Windows e Outros SOs
 /**
  * Garante que a aplicação NANUCLOUD funcione perfeitamente em:
- * - Chrome / Chromium 50+
- * - Safari 10+ (iOS e Mac)
- * - Mozilla Firefox 50+
- * - Microsoft Edge (Legado e Chromium)
- * - Navegadores móveis antigos (Android WebViews, Opera Mini, UC Browser)
+ * - Microsoft Edge (Chromium & Legacy) no Windows 10/11
+ * - Google Chrome no Windows 10/11 / Mac / Linux
+ * - Mozilla Firefox no Windows
+ * - Brave, Opera, Vivaldi
+ * - Safari 10+ (iOS e macOS)
+ * - Navegadores móveis (Android WebViews, Chrome Android, Samsung Internet)
  */
+
+export interface SystemEnvironmentInfo {
+  isWindows: boolean;
+  isEdge: boolean;
+  isChrome: boolean;
+  isFirefox: boolean;
+  isSafari: boolean;
+  isMobile: boolean;
+  isPWA: boolean;
+  supportsTouch: boolean;
+  devicePixelRatio: number;
+  browserName: string;
+  osName: string;
+}
+
+let cachedEnvInfo: SystemEnvironmentInfo | null = null;
+let deferredPrompt: any = null;
+
+export function getSystemEnvironmentInfo(): SystemEnvironmentInfo {
+  if (cachedEnvInfo) return cachedEnvInfo;
+
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const platform = typeof navigator !== 'undefined' ? (navigator.platform || '') : '';
+
+  const isWindows = /Windows|Win32|Win64|WOW64/i.test(ua) || /Win/i.test(platform);
+  const isEdge = /Edg\//i.test(ua);
+  const isChrome = /Chrome\//i.test(ua) && !isEdge;
+  const isFirefox = /Firefox\//i.test(ua);
+  const isSafari = /Safari\//i.test(ua) && !isChrome && !isEdge;
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+  const isPWA = typeof window !== 'undefined' && (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true
+  );
+  const supportsTouch = typeof window !== 'undefined' && (
+    'ontouchstart' in window || navigator.maxTouchPoints > 0
+  );
+  const devicePixelRatio = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+
+  let browserName = 'Navegador Moderno';
+  if (isEdge) browserName = 'Microsoft Edge (Windows)';
+  else if (isChrome) browserName = 'Google Chrome';
+  else if (isFirefox) browserName = 'Mozilla Firefox';
+  else if (isSafari) browserName = 'Apple Safari';
+
+  let osName = 'Outro SO';
+  if (isWindows) osName = 'Microsoft Windows (10/11)';
+  else if (/Mac/i.test(platform) || /Macintosh/i.test(ua)) osName = 'Apple macOS';
+  else if (/Android/i.test(ua)) osName = 'Google Android';
+  else if (/iPhone|iPad/i.test(ua)) osName = 'Apple iOS';
+  else if (/Linux/i.test(platform)) osName = 'GNU/Linux';
+
+  cachedEnvInfo = {
+    isWindows,
+    isEdge,
+    isChrome,
+    isFirefox,
+    isSafari,
+    isMobile,
+    isPWA,
+    supportsTouch,
+    devicePixelRatio,
+    browserName,
+    osName
+  };
+
+  return cachedEnvInfo;
+}
 
 export function initBrowserCompatibility(): void {
   try {
@@ -119,7 +188,55 @@ export function initBrowserCompatibility(): void {
         }
       };
     }
+
+    // 8. Otimização para Navegadores no Windows (ClearType e Font Smoothing)
+    const env = getSystemEnvironmentInfo();
+    if (typeof document !== 'undefined') {
+      if (env.isWindows) {
+        document.documentElement.classList.add('os-windows');
+      }
+      if (env.isEdge) {
+        document.documentElement.classList.add('browser-edge');
+      }
+    }
+
+    // 9. Capturar evento de instalação PWA para Windows / Edge
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        console.log('💡 App instalável no Windows / Edge / Chrome.');
+      });
+    }
+
+    // 10. Atalhos de Teclado Globais para Windows (F11 Fullscreen, Ctrl+P Impressão)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', (e: KeyboardEvent) => {
+        // F11: Alternar ecrã inteiro
+        if (e.key === 'F11') {
+          e.preventDefault();
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          } else {
+            document.exitFullscreen().catch(() => {});
+          }
+        }
+      });
+    }
   } catch (err) {
     console.warn('Compatibilidade inicializada com avisos:', err);
   }
+}
+
+/**
+ * Solicitar instalação PWA no Windows
+ */
+export async function promptWindowsPwaInstall(): Promise<boolean> {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    return outcome === 'accepted';
+  }
+  return false;
 }

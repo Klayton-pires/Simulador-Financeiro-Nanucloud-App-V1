@@ -7,16 +7,10 @@ import {
   FileSpreadsheet,
   Gem,
   History,
-  BookOpen,
-  ShieldAlert,
   ShieldCheck,
   Lock,
-  Terminal,
   Smartphone,
   Code,
-  Table,
-  Sparkles,
-  Users,
   Building,
   LifeBuoy,
   MessageSquare,
@@ -25,9 +19,7 @@ import {
   Scale,
   FileCode,
   Briefcase,
-  Handshake,
-  UserCheck,
-  Download
+  Handshake
 } from 'lucide-react';
 
 export type ActiveTab =
@@ -75,24 +67,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isManager = isAdmin || user?.role === 'manager';
 
   const simItems = [
-    { id: 'local', label: 'Vendas & Comércio (PVP)', icon: Store, unlocked: true },
+    { id: 'local', label: t.mLocal || 'Vendas & Comércio (PVP)', icon: Store, unlocked: true },
     {
       id: 'services_consulting',
-      label: 'Prestação de Serviços & Consultoria',
+      label: t.mServices || 'Prestação de Serviços & Consultoria',
       icon: Briefcase,
       unlocked: true,
-      badge: 'NOVO'
+      badge: 'LIVE'
     },
     {
       id: 'intermediary',
-      label: 'Intermediários & Corretagem',
+      label: t.mIntermediary || 'Intermediários & Corretagem',
       icon: Handshake,
       unlocked: true,
       badge: 'PRO'
     },
     {
       id: 'basic_mobile',
-      label: 'Modo Celular Básico / POS',
+      label: t.mBasicMobile || 'Modo Celular Básico / POS',
       icon: Smartphone,
       unlocked: true,
       badge: 'FAST'
@@ -113,26 +105,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'api_integration',
-      label: 'API REST ERP & Lojas',
+      label: t.mApi || 'API REST ERP & Lojas',
       icon: Code,
       unlocked: user ? (user.isApiUnlocked || isManager) : false,
       badge: user && (user.isApiUnlocked || isManager) ? undefined : 'API'
     }
   ];
 
-  const fiscalGovItems = [
-    { id: 'fiscal_matrix', label: 'Matriz Fiscal de Taxas', icon: Table, unlocked: true },
-    { id: 'fiscal_ai', label: 'IA Fiscal & Notícias AGT/AT', icon: Sparkles, unlocked: true }
-  ];
-
   const managementItems = isManager
     ? [
-        { id: 'clients_management', label: 'Gestão de Clientes & CRM', icon: Building },
-        { id: 'users_management', label: 'Utilizadores & Staff (RBAC)', icon: ShieldCheck },
-        { id: 'tickets', label: 'Tickets & Atendimento', icon: LifeBuoy },
-        { id: 'marketing', label: 'Marketing, SMS & E-mail', icon: MessageSquare },
-        { id: 'reports_metrics', label: 'Métricas & Auditoria', icon: BarChart3 },
-        { id: 'admin_settings', label: 'Definições & RBAC', icon: Settings }
+        { id: 'clients_management', label: t.mClients || 'Gestão de Clientes & CRM', icon: Building },
+        { id: 'users_management', label: t.mUsers || 'Utilizadores & Staff (RBAC)', icon: ShieldCheck },
+        { id: 'tickets', label: t.mTickets || 'Tickets & Atendimento', icon: LifeBuoy },
+        { id: 'marketing', label: t.mMarketing || 'Marketing, SMS & E-mail', icon: MessageSquare },
+        { id: 'reports_metrics', label: t.mReports || 'Métricas & Auditoria', icon: BarChart3 },
+        { id: 'admin_settings', label: t.mAdminSettings || 'Definições & Governança', icon: Settings }
       ]
     : [];
 
@@ -179,56 +166,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           );
         })}
-
-        {/* Fiscal Intelligence & Matrix Section */}
-        <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mt-4 mb-2 px-3 font-mono">
-          Inteligência Fiscal
-        </div>
-
-        {fiscalGovItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.id;
-
-          return (
-            <button
-              key={item.id}
-              onClick={() => onTabChange(item.id as ActiveTab)}
-              className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-xs md:text-sm font-medium transition-colors border text-left ${
-                isActive
-                  ? 'bg-indigo-500/10 text-indigo-400 font-medium border-indigo-500/20'
-                  : 'hover:bg-[#1E293B] text-slate-400 hover:text-slate-200 border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
-                <span className="truncate">{item.label}</span>
-              </div>
-            </button>
-          );
-        })}
-
-        {/* Multi-Plataformas & Download Section */}
-        <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mt-4 mb-2 px-3 font-mono flex items-center justify-between">
-          <span>Ecossistema & Apps</span>
-          <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1 py-0.2 rounded">8 PLATAFORMAS</span>
-        </div>
-
-        <button
-          onClick={() => onTabChange('multiplatform_hub')}
-          className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-xs md:text-sm font-medium transition-colors border text-left ${
-            activeTab === 'multiplatform_hub'
-              ? 'bg-indigo-500/15 text-indigo-300 font-bold border-indigo-500/40 shadow-sm'
-              : 'hover:bg-[#1E293B] text-slate-300 border-slate-800/80 bg-slate-900/40'
-          }`}
-        >
-          <div className="flex items-center gap-2.5">
-            <Download className={`w-4 h-4 shrink-0 ${activeTab === 'multiplatform_hub' ? 'text-indigo-400' : 'text-indigo-400'}`} />
-            <span className="truncate">Download Multi-Plataformas</span>
-          </div>
-          <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-            TESTAR
-          </span>
-        </button>
 
         {/* Management & Governance Section */}
         {managementItems.length > 0 && (
@@ -329,26 +266,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="text-[10px] text-slate-500 font-sans">Legal</span>
         </button>
       )}
-
-      {/* Docs Quick Widget */}
-      <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/60 flex flex-col justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-indigo-400 text-xs font-mono font-bold mb-1">
-            <Terminal className="w-3.5 h-3.5" />
-            <span>MANUAIS_OFICIAIS</span>
-          </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
-            Guias de utilização, exportação PDF e fórmulas de precificação
-          </p>
-        </div>
-        <button
-          onClick={() => onTabChange('manuals')}
-          className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-xs py-2 px-3 rounded-lg border border-slate-600 transition-colors flex items-center justify-center gap-2"
-        >
-          <BookOpen className="w-3.5 h-3.5" />
-          <span>Ver Documentação</span>
-        </button>
-      </div>
     </aside>
   );
 };

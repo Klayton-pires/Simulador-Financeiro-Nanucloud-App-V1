@@ -83,10 +83,10 @@ export const AdminFiscalAiTab: React.FC<AdminFiscalAiTabProps> = ({ isSuperAdmin
           <div>
             <h3 className="text-sm font-bold text-slate-100 uppercase tracking-tight flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Inteligência Artificial Fiscal & Atualizações Tributárias (AGT / OGE)</span>
+              <span>Inteligência Artificial Fiscal & Atualizações Tributárias (Legislação / OGE)</span>
             </h3>
             <p className="text-xs text-slate-400 font-sans mt-1">
-              Monitorização contínua de diplomas legais, decretos do Diário da República de Angola e pautas aduaneiras.
+              Monitorização de diplomas legais, decretos do Diário da República e pautas aduaneiras oficiais.
               As propostas aprovadas atualizam imediatamente as taxas do simulador.
             </p>
           </div>
@@ -114,7 +114,7 @@ export const AdminFiscalAiTab: React.FC<AdminFiscalAiTabProps> = ({ isSuperAdmin
         </div>
       ) : proposals.length === 0 ? (
         <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-12 text-center text-slate-400">
-          Nenhuma proposta fiscal pendente no momento. Todas as regras fiscais estão em conformidade com a AGT.
+          Nenhuma proposta fiscal pendente no momento. Todas as regras fiscais estão em conformidade com as normas tributárias vigentes.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">

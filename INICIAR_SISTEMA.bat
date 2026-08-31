@@ -1,25 +1,43 @@
 @echo off
-title NANUCLOUD - Inicializacao do Sistema
+title NANUCLOUD - Plataforma Fiscal e Comercial (Windows)
 color 0b
 echo ===================================================================
-echo              INICIANDO PLATAFORMA NANUCLOUD
+echo              INICIANDO PLATAFORMA FISCAL NANUCLOUD
 echo ===================================================================
 echo.
-echo [1/3] A verificar dependencias do sistema...
+echo [1/4] A verificar base de dados SQLite predefinida...
+if not exist "data" mkdir data
+if not exist "database" mkdir database
+
+if exist "data\nanucloud.sqlite" (
+    echo [OK] Base de dados SQLite encontrada em data\nanucloud.sqlite
+) else (
+    echo [INFO] A base de dados SQLite sera criada automaticamente na inicializacao.
+)
+
+echo.
+echo [2/4] A verificar dependencias do sistema...
 if not exist node_modules (
-    echo [2/3] Instalando modulos necessarios... Isso pode demorar 1 minuto...
+    echo [INFO] A instalar modulos necessarios... Aguarde um momento...
     call npm install
 ) else (
-    echo [2/3] Dependencias ja instaladas!
+    echo [OK] Dependencias verificadas com sucesso!
 )
+
 echo.
-echo [3/3] A iniciar o servidor da aplicacao na porta 3000...
+echo [3/4] A iniciar o servidor backend e a aplicacao web na porta 3000...
 echo.
 echo ===================================================================
 echo  NANUCLOUD PRONTO!
-echo  Aceda no seu navegador ao endereco: http://localhost:3000
+echo  Base de Dados Padrao: SQLite (/data/nanucloud.sqlite)
+echo  Aceda no navegador: http://localhost:3000
+echo  Admin Padrao: admin / Senha: admin
+echo  Super Admin: joaquim.monteiro@nanucloud.com (admin123)
 echo ===================================================================
 echo.
-start http://localhost:3000
+
+echo [4/4] A abrir o navegador Windows (Microsoft Edge / Google Chrome)...
+start "" http://localhost:3000
+
 call npm run dev
 pause

@@ -23,8 +23,8 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
     name: 'Angola',
     curr: 'Kz',
     currencySymbol: 'Kz',
-    agency: 'AGT - Administração Geral Tributária',
-    officialPortal: 'https://agt.minfin.gov.ao',
+    agency: 'Autoridade Tributária / Fisco',
+    officialPortal: 'https://minfin.gov.ao',
     vatOptions: [
       { n: 'Geral (14%)', r: 14 },
       { n: 'Simplificado (7%)', r: 7 },
@@ -39,8 +39,8 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
     defaultCustomsRate: 10,
     importantNotes: {
       products: 'Em Angola, a taxa geral de IVA é de 14%. Produtos da cesta básica e insumos agropecuários beneficiam de alíquota reduzida de 5% (Lei 17/23). Margens e taxas de TPA (Multicaixa por padrão 0% ou negociado) incidem no momento da venda.',
-      services: 'Serviços prestados por sujeitos passivos a entidades obrigadas à retenção na fonte estão sujeitos à alíquota de 6.5% do Imposto sobre o Rendimento/Serviços (CIRS/AGT).',
-      importation: 'Despacho Aduaneiro AGT: Os direitos aduaneiros (Pauta Aduaneira) variam de 2% a 50%, acrescidos de 0.5% de Taxa Estatística e 14% de IVA Aduaneiro sobre o Valor CIF aduaneiro.'
+      services: 'Serviços prestados por sujeitos passivos a entidades obrigadas à retenção na fonte estão sujeitos à alíquota de 6.5% do Imposto sobre o Rendimento/Serviços (CIRS/Fisco).',
+      importation: 'Despacho Aduaneiro: Os direitos aduaneiros (Pauta Aduaneira) variam de 2% a 50%, acrescidos de 0.5% de Taxa Estatística e 14% de IVA Aduaneiro sobre o Valor CIF aduaneiro.'
     },
     logisticsHubs: {
       seaPorts: ['Porto de Luanda', 'Porto do Lobito', 'Porto do Namibe', 'Porto de Cabinda'],
@@ -432,8 +432,32 @@ export const COUNTRIES_DB: Record<string, CountryFiscalExtended> = {
 };
 
 /**
- * Super Admin Country Visibility Helpers
+ * Super Admin Country Visibility & Custom Fiscal Matrix Helpers
  */
+export const getActiveCountriesDb = (): Record<string, CountryFiscalExtended> => {
+  try {
+    const saved = localStorage.getItem('nanucloud_custom_fiscal_matrix');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { ...COUNTRIES_DB, ...parsed };
+    }
+  } catch (e) {
+    // fallback
+  }
+  return COUNTRIES_DB;
+};
+
+export const getEffectiveCountryFiscal = (code: string): CountryFiscalExtended => {
+  const db = getActiveCountriesDb();
+  return db[code] || db['AO'] || COUNTRIES_DB['AO'];
+};
+
+export const saveCustomFiscalMatrix = (matrix: Record<string, CountryFiscalConfig>): void => {
+  localStorage.setItem('nanucloud_custom_fiscal_matrix', JSON.stringify(matrix));
+  window.dispatchEvent(new Event('nanucloud_custom_fiscal_matrix_updated'));
+  window.dispatchEvent(new Event('nanucloud_countries_updated'));
+};
+
 export const getHiddenCountryCodes = (): string[] => {
   try {
     const saved = localStorage.getItem('nanucloud_hidden_countries');
@@ -454,7 +478,8 @@ export const isCountryHidden = (code: string): boolean => {
 };
 
 export const getAvailableCountryList = (isSuperAdmin: boolean = false): CountryFiscalExtended[] => {
-  const all = Object.values(COUNTRIES_DB);
+  const db = getActiveCountriesDb();
+  const all = Object.values(db);
   if (isSuperAdmin) return all;
   const hidden = getHiddenCountryCodes();
   return all.filter((c) => !hidden.includes(c.code));

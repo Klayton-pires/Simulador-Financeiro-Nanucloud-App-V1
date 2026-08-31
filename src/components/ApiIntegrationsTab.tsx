@@ -131,6 +131,20 @@ export const ApiIntegrationsTab: React.FC<ApiIntegrationsTabProps> = ({
       },
       excelSnippet: '=WEBSERVICE("https://api.nanucloud.com/v1/price?cost=45&margin=30&vat=23")'
     },
+    'XD Software': {
+      category: 'ERP Gestão & POS',
+      singlePriceField: true,
+      recommendedFields: ['PrecoCusto', 'TaxaIVA', 'MargemLucro', 'PVP1', 'PVP2', 'FamiliaArtigo'],
+      description: 'Conector para XD Gestão Comercial, XD POS e XD Rest. Atualiza tarifas de venda e regras fiscais diretamente na base de dados.',
+      samplePayload: {
+        artigo_id: 'XD-9921',
+        custo_aquisicao: 45000,
+        margem_percentagem: 30,
+        taxa_iva: 14,
+        pais: 'AO'
+      },
+      excelSnippet: '=WEBSERVICE("https://api.nanucloud.com/v1/xd/calc?cost=45000&margin=30&vat=14")'
+    },
     WooCommerce: {
       category: 'E-commerce',
       singlePriceField: true,
@@ -202,9 +216,28 @@ export const ApiIntegrationsTab: React.FC<ApiIntegrationsTabProps> = ({
     setTimeout(() => setCopiedUrl(false), 2000);
   };
 
+  const hasValidPlanAndBalance = Boolean(
+    user && 
+    (user.isApiUnlocked || user.role === 'super_admin' || user.role === 'admin_level1') &&
+    (user.queriesRemaining > 0 || user.role === 'super_admin' || user.role === 'admin_level1')
+  );
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       
+      {/* Development Status Notice */}
+      <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono text-amber-300">
+        <div className="flex items-center gap-2.5">
+          <Zap className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+          <span>
+            <strong>Aviso de Engenharia:</strong> O Módulo de Integrações & APIs REST (PHC, Primavera, XD Software, SAP, etc.) encontra-se em <strong>desenvolvimento contínuo (Beta Ativo)</strong> com novos endpoints lançados regularmente.
+          </span>
+        </div>
+        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 font-bold self-start sm:self-auto shrink-0">
+          EM DESENVOLVIMENTO
+        </span>
+      </div>
+
       {/* Top Banner Header */}
       <div className="bg-gradient-to-r from-[#1E293B] via-indigo-950/40 to-[#1E293B] border border-slate-700 rounded-2xl p-6 shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -220,23 +253,63 @@ export const ApiIntegrationsTab: React.FC<ApiIntegrationsTabProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Conecte o motor fiscal NANUCLOUD a qualquer ERP (PHC, Primavera, SAP, Sage), Loja Online ou Planilha Excel
+                Conecte o motor fiscal NANUCLOUD ao XD Software, PHC, Primavera, SAP, Sage, WooCommerce ou Excel.
               </p>
             </div>
           </div>
 
-          {!isApiUnlockedForUser && (
+          {!hasValidPlanAndBalance && (
             <button
-              onClick={onOpenPlans}
-              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-extrabold text-xs font-mono py-2.5 px-5 rounded-xl uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all"
+              onClick={user ? onOpenPlans : onOpenAuth}
+              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-extrabold text-xs font-mono py-2.5 px-5 rounded-xl uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all cursor-pointer"
             >
-              <Zap className="w-4 h-4 fill-current" /> Desbloquear Módulo API no Plano
+              <Zap className="w-4 h-4 fill-current" /> {user ? 'Aderir a um Plano com Módulo API' : 'Iniciar Sessão para Ativar API'}
             </button>
           )}
         </div>
       </div>
 
-      {/* Sub-Navigation Tabs */}
+      {/* Gated Access: If user is on Free plan or has no credits / not unlocked */}
+      {!hasValidPlanAndBalance ? (
+        <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-8 sm:p-12 text-center space-y-6 max-w-2xl mx-auto shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+            <Lock className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-base sm:text-lg font-bold text-slate-100 font-mono uppercase">
+              Módulo de API & Conectores Bloqueado
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-lg mx-auto font-sans">
+              No modo gratuito ou sem saldo ativo de créditos, a documentação técnica, chaves de acesso e endpoints REST para ERPs (XD Software, Primavera, PHC) não estão disponíveis.
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 text-left space-y-2 text-xs font-mono text-slate-300">
+            <p className="font-bold text-indigo-300 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" /> Benefícios do Módulo API NANUCLOUD:
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-slate-400 pl-1">
+              <li>Chave de API Bearer Token vinculada diretamente ao saldo da sua conta;</li>
+              <li>Sincronização em tempo real de PVP com XD Software, PHC e Primavera;</li>
+              <li>Consumo de créditos por chamada de cálculo fiscal automatizada;</li>
+              <li>Bloqueio de segurança e renovação automática via planos Nanucloud.</li>
+            </ul>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={user ? onOpenPlans : onOpenAuth}
+              className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-3 rounded-xl text-xs font-mono uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Zap className="w-4 h-4" />
+              <span>{user ? 'Escolher Plano com Módulo API' : 'Criar Conta / Iniciar Sessão'}</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Sub-Navigation Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
         {[
           { id: 'config', label: '1. Seletor de ERP & Campos Recomendados', icon: Layers },
@@ -446,7 +519,7 @@ export const ApiIntegrationsTab: React.FC<ApiIntegrationsTabProps> = ({
             <ol className="list-decimal pl-5 space-y-1.5 text-slate-300 marker:text-indigo-400">
               <li>O ERP do cliente faz uma requisição HTTP POST para <code>https://api.nanucloud.com/v1/calculate/product</code>.</li>
               <li>Envia no cabeçalho <code>Authorization: Bearer &lt;SUA_CHAVE_API&gt;</code> e no corpo (JSON) o custo, margem e país.</li>
-              <li>O motor NANUCLOUD valida a chave, aplica as regras fiscais vigentes da AGT/AT e retorna o JSON estruturado em menos de 50ms.</li>
+              <li>O motor NANUCLOUD valida a chave, aplica as regras fiscais vigentes do país selecionado e retorna o JSON estruturado em menos de 50ms.</li>
               <li>O ERP grava o preço final diretamente na ficha do artigo ou emite o orçamento automaticamente.</li>
             </ol>
           </div>
@@ -623,6 +696,8 @@ export const ApiIntegrationsTab: React.FC<ApiIntegrationsTabProps> = ({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
 
     </div>

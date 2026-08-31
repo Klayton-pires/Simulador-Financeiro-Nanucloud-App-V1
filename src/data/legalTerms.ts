@@ -38,11 +38,12 @@ export const DEFAULT_LEGAL_TERMS: LegalTermsConfig = {
     },
     {
       id: 'liability',
-      title: '2. Limitação de Responsabilidade',
-      content: 'A NANUCLOUD empenha-se diariamente em manter as alíquotas fiscais e fórmulas matemáticas alinhadas com as fontes oficiais (AGT, AT, Receita Federal, DNRE, etc.). Contudo, alterações legislativas supervenientes, interpretações aduaneiras particulares ou taxas alfandegárias extraordinárias não geram qualquer tipo de responsabilidade civil, financeira ou fiscal para a NANUCLOUD.',
+      title: '2. Limitação de Responsabilidade & Aviso Obrigatório',
+      content: 'A NANUCLOUD empenha-se em disponibilizar ferramentas matemáticas de cálculo e formação de preços. O Simulador Financeiro Nanucloud é uma plataforma privada e independente, sem qualquer vínculo institucional ou filiação com a Administração Geral Tributária (AGT) ou quaisquer órgãos governamentais.',
       bulletPoints: [
+        'AVISO MANDATÓRIO: A utilização deste aplicativo tem caráter meramente informativo e NÃO DISPENSA a consulta de um profissional de contas ou contabilista certificado habilitado.',
         'A exatidão dos cálculos depende integralmente dos valores de custo, margem e enquadramento aduaneiro fornecidos pelo utilizador.',
-        'Os relatórios e dossiês exportados servem como instrumento de gestão interna e não constituem parecer jurídico-tributário vinculativo.'
+        'Os relatórios e dossiês exportados servem como instrumento de apoio à gestão comercial interna e não constituem parecer jurídico-tributário vinculativo perante o Fisco ou autoridades estatais.'
       ]
     },
     {

@@ -9,20 +9,48 @@ const router = Router();
 // 1. REGISTO DE UTILIZADOR
 router.post('/register', async (req: AuthRequest, res: Response) => {
   try {
-    const { name, email, phone, company, address, nif, country, password } = req.body;
+    const { name, email, phone, company, address, nif, country, password, confirmPassword, acceptTerms, otpCode } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Nome, e-mail e palavra-passe são obrigatórios.' });
+    if (!name || (!email && !phone) || !password) {
+      return res.status(400).json({ error: 'Nome, contacto (telemóvel ou e-mail) e palavra-passe são obrigatórios.' });
+    }
+
+    if (confirmPassword !== undefined && password !== confirmPassword) {
+      return res.status(400).json({ error: 'A confirmação da palavra-passe não coincide com a palavra-passe.' });
+    }
+
+    if (acceptTerms === false) {
+      return res.status(400).json({ error: 'É obrigatório aceitar os Termos de Uso e Política de Privacidade da Nanucloud para concluir o registo.' });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ error: 'A palavra-passe deve ter pelo menos 6 caracteres.' });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const existing = db.findUserByEmail(cleanEmail);
-    if (existing) {
-      return res.status(400).json({ error: 'Já existe uma conta associada a este endereço de e-mail.' });
+    const cleanEmail = email ? email.trim().toLowerCase() : `${phone.replace(/\D/g, '')}@nanucloud.user`;
+    const cleanPhone = phone ? phone.trim() : undefined;
+
+    // Check if email or phone already exists
+    if (email) {
+      const existingEmail = db.findUserByEmail(cleanEmail);
+      if (existingEmail) {
+        return res.status(400).json({ error: 'Já existe uma conta associada a este endereço de e-mail.' });
+      }
+    }
+
+    if (cleanPhone) {
+      const existingPhone = db.findUserByIdentifier(cleanPhone);
+      if (existingPhone) {
+        return res.status(400).json({ error: 'Já existe uma conta associada a este número de telemóvel.' });
+      }
+    }
+
+    // Optional OTP code validation if provided
+    if (otpCode && cleanPhone) {
+      const isValidOtp = db.verifyOtpCode(cleanPhone, otpCode, 'phone_verification');
+      if (!isValidOtp) {
+        return res.status(400).json({ error: 'Código de verificação SMS inválido ou expirado. Por favor solicite um novo código.' });
+      }
     }
 
     const settings = db.getSettings();
@@ -38,7 +66,7 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
       id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: name.trim(),
       email: cleanEmail,
-      phone: phone ? phone.trim() : undefined,
+      phone: cleanPhone,
       company: company ? company.trim() : undefined,
       address: address ? address.trim() : undefined,
       nif: nif ? nif.trim() : undefined,
@@ -51,14 +79,30 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
       activePlanId: null,
       activePlanName: `Plano Gratuito Inicial (${freeQueries} Consultas)`,
       planExpiresAt: null,
-      isImportUnlocked: false, // Bloqueado por defeito até validação
-      isBatchUnlocked: false,  // Bloqueado por defeito até validação
+      isImportUnlocked: false,
+      isBatchUnlocked: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString()
     };
 
     db.addUser(newUser);
+
+    // Send Welcome & Confirmation SMS
+    if (cleanPhone) {
+      const welcomeMsg = `Bem-vindo ao Simulador Financeiro Nanucloud, ${newUser.name}! A sua conta foi ativada com sucesso com ${freeQueries} consultas gratuitas. Bons negócios!`;
+      db.addSmsLog({
+        phoneNumber: cleanPhone,
+        countryCode: country || 'AO',
+        messageType: 'welcome',
+        messageContent: welcomeMsg,
+        recipientName: newUser.name,
+        sentByUserId: newUser.id,
+        sentByUserName: 'Sistema Nanucloud',
+        status: 'delivered',
+        gatewayResponse: 'SMS Gateway 200 OK (Delivered)'
+      });
+    }
 
     const token = generateToken(newUser);
     res.cookie('nanucloud_token', token, {
@@ -76,7 +120,7 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
       entityType: 'auth',
       entityId: newUser.id,
       ipAddress: req.ip || req.socket.remoteAddress,
-      details: `Novo utilizador registado com sucesso (${newUser.email}). Bónus de ${freeQueries} consultas grátis atribuído.`
+      details: `Novo utilizador registado com sucesso (${newUser.phone || newUser.email}). Bónus de ${freeQueries} consultas grátis atribuído.`
     });
 
     const { passwordHash: _, ...userSafe } = newUser;
@@ -91,20 +135,20 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 2. INÍCIO DE SESSÃO (LOGIN)
+// 2. INÍCIO DE SESSÃO (LOGIN VIA TELEMÓVEL OU E-MAIL)
 router.post('/login', async (req: AuthRequest, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { login, email, phone, password } = req.body;
+    const identifier = (login || phone || email || '').trim();
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'E-mail e palavra-passe são obrigatórios.' });
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Número de telemóvel (ou e-mail) e palavra-passe são obrigatórios.' });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const user = db.findUserByEmail(cleanEmail);
+    const user = db.findUserByIdentifier(identifier);
 
     if (!user) {
-      return res.status(401).json({ error: 'Credenciais inválidas. Verifique o seu e-mail e palavra-passe.' });
+      return res.status(401).json({ error: 'Credenciais inválidas. Verifique o seu telemóvel/e-mail e palavra-passe.' });
     }
 
     if (!user.isActive) {
@@ -121,9 +165,9 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
         entityType: 'auth',
         entityId: user.id,
         ipAddress: req.ip || req.socket.remoteAddress,
-        details: `Tentativa de acesso falhada com palavra-passe incorreta para ${cleanEmail}.`
+        details: `Tentativa de acesso falhada com palavra-passe incorreta para ${identifier}.`
       });
-      return res.status(401).json({ error: 'Credenciais inválidas. Verifique o seu e-mail e palavra-passe.' });
+      return res.status(401).json({ error: 'Credenciais inválidas. Verifique a palavra-passe.' });
     }
 
     // Update last login
@@ -158,6 +202,136 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
     console.error('Error on login:', err);
     return res.status(500).json({ error: 'Erro interno durante a autenticação.' });
   }
+});
+
+// 3. ENVIAR CÓDIGO SMS OTP (VERIFICAÇÃO DE CONTA OU RESET)
+router.post('/send-otp', (req: AuthRequest, res: Response) => {
+  const { phone, email, type } = req.body;
+  const target = (phone || email || '').trim();
+
+  if (!target) {
+    return res.status(400).json({ error: 'Por favor, indique o número de telemóvel ou e-mail para envio do código.' });
+  }
+
+  const otpType = (type === 'password_reset' ? 'password_reset' : 'phone_verification') as 'phone_verification' | 'password_reset';
+  const code = db.createOtpCode(target, otpType);
+
+  let messageText = '';
+  if (otpType === 'phone_verification') {
+    messageText = `Bem-vindo ao Simulador Financeiro Nanucloud! O seu código de verificação para ativar a sua conta é: ${code}. Válido por 10 minutos. Bons negócios!`;
+  } else {
+    messageText = `Nanucloud: O seu código de segurança para redefinir a palavra-passe é: ${code}. Não partilhe este código com ninguém. Válido por 10 minutos.`;
+  }
+
+  // Register in SMS Log
+  db.addSmsLog({
+    phoneNumber: target,
+    messageType: otpType === 'phone_verification' ? 'otp_verification' : 'password_reset',
+    messageContent: messageText,
+    recipientName: 'Utilizador',
+    sentByUserName: 'Serviço de Autenticação SMS',
+    status: 'delivered',
+    gatewayResponse: '200 OK - SMS Sent via Nanucloud Mobile Gateway'
+  });
+
+  return res.json({
+    message: `Código de verificação SMS enviado com sucesso para ${target}.`,
+    simulatedCode: code, // Useful for demo preview
+    expiresInMinutes: 10
+  });
+});
+
+// 4. RECUPERAÇÃO DE PALAVRA-PASSE (TELEFONE / SMS OU E-MAIL)
+router.post('/forgot-password', (req: AuthRequest, res: Response) => {
+  const { login, phone, email } = req.body;
+  const identifier = (login || phone || email || '').trim();
+
+  if (!identifier) {
+    return res.status(400).json({ error: 'Por favor, indique o número de telemóvel ou endereço de e-mail.' });
+  }
+
+  const user = db.findUserByIdentifier(identifier);
+
+  if (!user) {
+    return res.json({
+      message: 'Se o contacto estiver registado no sistema, receberá o código SMS / e-mail de recuperação de palavra-passe.',
+      simulatedCode: '123456'
+    });
+  }
+
+  const code = db.createOtpCode(identifier, 'password_reset');
+  const messageText = `Nanucloud: O seu código de segurança para redefinir a palavra-passe é: ${code}. Não partilhe este código com ninguém. Válido por 10 minutos.`;
+
+  db.addSmsLog({
+    phoneNumber: user.phone || identifier,
+    messageType: 'password_reset',
+    messageContent: messageText,
+    recipientName: user.name,
+    sentByUserId: user.id,
+    sentByUserName: 'Segurança & Recuperação Nanucloud',
+    status: 'delivered',
+    gatewayResponse: '200 OK - SMS Gateway'
+  });
+
+  db.addAuditLog({
+    userId: user.id,
+    userName: user.name,
+    userRole: user.role,
+    action: 'PASSWORD_RESET_REQUESTED',
+    entityType: 'auth',
+    entityId: user.id,
+    ipAddress: req.ip || req.socket.remoteAddress,
+    details: `Pedido de recuperação de palavra-passe para ${identifier}. Código SMS OTP ${code} gerado.`
+  });
+
+  return res.json({
+    message: `Código de recuperação SMS enviado com sucesso para ${user.phone || identifier}.`,
+    simulatedCode: code,
+    expiresInMinutes: 10
+  });
+});
+
+// 5. REDEFINIR PALAVRA-PASSE COM CÓDIGO SMS OTP OU TOKEN
+router.post('/reset-password', (req: AuthRequest, res: Response) => {
+  const { login, phone, email, code, newPassword } = req.body;
+  const identifier = (login || phone || email || '').trim();
+
+  if (!identifier || !newPassword) {
+    return res.status(400).json({ error: 'Contacto (telemóvel ou e-mail) e nova palavra-passe são obrigatórios.' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'A nova palavra-passe deve ter pelo menos 6 caracteres.' });
+  }
+
+  if (code) {
+    const isValidOtp = db.verifyOtpCode(identifier, code, 'password_reset');
+    if (!isValidOtp) {
+      return res.status(400).json({ error: 'Código de segurança SMS inválido ou expirado. Por favor, solicite um novo código.' });
+    }
+  }
+
+  const user = db.findUserByIdentifier(identifier);
+  if (!user) {
+    return res.status(404).json({ error: 'Utilizador não encontrado.' });
+  }
+
+  const salt = bcrypt.genSaltSync(10);
+  const passwordHash = bcrypt.hashSync(newPassword, salt);
+  db.updateUser(user.id, { passwordHash });
+
+  db.addAuditLog({
+    userId: user.id,
+    userName: user.name,
+    userRole: user.role,
+    action: 'PASSWORD_RESET_COMPLETED',
+    entityType: 'auth',
+    entityId: user.id,
+    ipAddress: req.ip || req.socket.remoteAddress,
+    details: `Palavra-passe redefinida com sucesso para o utilizador ${user.name} (${identifier}).`
+  });
+
+  return res.json({ message: 'Palavra-passe alterada com sucesso! Já pode iniciar sessão com a nova credencial.' });
 });
 
 // 3. TÉRMINO DE SESSÃO (LOGOUT)

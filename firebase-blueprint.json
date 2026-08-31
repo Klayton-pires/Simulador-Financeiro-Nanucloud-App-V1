@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile in Nanucloud",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["user", "manager", "admin_level_1", "admin_level_2", "super_admin"] },
+        "nif": { "type": "string", "maxLength": 30 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "companyName": { "type": "string", "maxLength": 128 },
+        "creditsRemaining": { "type": "number" },
+        "planId": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["active", "suspended", "pending"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role", "creditsRemaining"]
+    },
+    "Simulation": {
+      "title": "Simulation",
+      "description": "Financial simulation record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userName": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["local_trade", "services", "intermediary", "customs_import", "excel_batch"] },
+        "productName": { "type": "string", "maxLength": 200 },
+        "cost": { "type": "number" },
+        "recommendedPVP": { "type": "number" },
+        "marginPct": { "type": "number" },
+        "profit": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "type", "cost", "recommendedPVP"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Invoice or payment record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "planId": { "type": "string", "maxLength": 64 },
+        "planName": { "type": "string", "maxLength": 100 },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "paymentMethod": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["paid", "pending", "rejected", "cancelled"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "planId", "amount", "status"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Platform global configuration and toggles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "companyName": { "type": "string", "maxLength": 128 },
+        "bankTransferEnabled": { "type": "boolean" },
+        "emisEnabled": { "type": "boolean" },
+        "paypalEnabled": { "type": "boolean" },
+        "stripeEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles and account data"
+    },
+    "/simulations/{simulationId}": {
+      "schema": { "$ref": "#/entities/Simulation" },
+      "description": "User calculation simulations"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/Invoice" },
+      "description": "Invoices and subscription payments"
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SystemSetting" },
+      "description": "System settings and payment toggles"
+    }
+  }
+}

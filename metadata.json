@@ -1,6 +1,6 @@
 {
-  "name": "NANUCLOUD",
-  "description": "Plataforma fiscal global de simulação de preços, comércio, serviços e importação aduaneira com motor de IA Fiscal, integração de APIs com ERPs (PHC, Primavera, SAP, Sage), governança RBAC de permissões, modo celular básico POS, suporte a tickets, marketing multicanal e relatórios de auditoria.",
+  "name": "Simulador Financeiro Nanucloud",
+  "description": "Simulador financeiro e de formação de preços Nanucloud para comércio local, importação aduaneira, serviços e intermediação. A utilização deste aplicativo não dispensa a consulta de um profissional de contas.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

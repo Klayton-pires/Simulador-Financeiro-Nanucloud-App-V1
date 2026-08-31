@@ -25,6 +25,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [company, setCompany] = useState('');
@@ -45,6 +47,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+
+    if (mode === 'register') {
+      if (password !== confirmPassword) {
+        setErrorMessage('A confirmação da palavra-passe não coincide. Por favor, verifique as senhas digitadas.');
+        return;
+      }
+      if (!acceptTerms) {
+        setErrorMessage('É obrigatório aceitar os Termos de Uso e Política de Privacidade da Nanucloud para concluir o registo.');
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
@@ -52,7 +66,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const payload =
         mode === 'login'
           ? { email, password }
-          : { name, email, password, phone, company, address, nif, country };
+          : { name, email, password, confirmPassword, acceptTerms, phone, company, address, nif, country };
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -81,18 +95,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     // Static / Offline Fallback Mode (GitHub Pages / Standalone SPA)
     if (mode === 'login') {
-      const isAdm = (email.trim().toLowerCase() === 'admin' && password === 'admin') ||
-                    (email.trim().toLowerCase() === 'joaquim.monteiro@nanucloud.com' && password === 'admin123');
-      
-      if (isAdm) {
+      const isNanuhostAdm =
+        (email.trim().toLowerCase() === 'nanuhost' || email.trim().toLowerCase() === 'admin') &&
+        (password === 'admin' || password === 'admin123');
+      const isKlaytonAdm =
+        email.trim().toLowerCase() === 'klayton.pires.monteiro@gmail.com' && password === 'admin123';
+
+      if (isNanuhostAdm || isKlaytonAdm) {
         const fallbackAdmin: UserSafe = {
-          id: 'usr_admin_master',
-          name: 'Super Administrador (NANUCLOUD)',
-          email: email.trim().toLowerCase() === 'admin' ? 'admin@nanucloud.com' : email.trim(),
+          id: isKlaytonAdm ? 'usr_klayton_pires' : 'usr_admin_nanuhost',
+          name: isKlaytonAdm ? 'Klayton Pires' : 'nanuhost',
+          email: isKlaytonAdm ? 'klayton.pires.monteiro@gmail.com' : 'nanuhost',
           role: 'admin_level1',
           isActive: true,
-          activePlanId: 'plan_corporate_pro',
-          activePlanName: 'Plano Diamante / Corporativo Ilimitado',
+          activePlanId: 'plan_diamante',
+          activePlanName: 'Diamante Ilimitado (Super Admin)',
           planExpiresAt: '2099-12-31T23:59:59.999Z',
           queriesRemaining: 999999,
           totalQueriesUsed: 0,
@@ -139,18 +156,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         email: email.trim(),
         role: 'user',
         isActive: true,
-        activePlanId: 'plan_basic',
-        activePlanName: 'Plano Básico Promocional',
+        activePlanId: null,
+        activePlanName: 'Plano Inicial (3 Consultas)',
         planExpiresAt: null,
-        queriesRemaining: 20,
+        queriesRemaining: 3,
         totalQueriesUsed: 0,
         isImportUnlocked: false,
         isBatchUnlocked: false,
-        phone,
-        company,
-        address,
-        nif,
-        country,
+        company: company.trim() || undefined,
+        address: address.trim() || undefined,
+        nif: nif.trim() || undefined,
+        country: country || 'AO',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         lastLoginAt: new Date().toISOString()
@@ -159,6 +175,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onSuccess(newUser);
       onClose();
     }
+    setIsLoading(false);
   };
 
   return (
@@ -270,15 +287,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               <div>
-                <label className="text-slate-400 font-bold block mb-1">Endereço / Morada *</label>
+                <label className="text-slate-400 font-bold block mb-1">Endereço / Morada (Opcional)</label>
                 <div className="relative">
                   <MapPin className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
                   <input
                     type="text"
-                    required
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Ex: Luanda, Viana, Capalanca"
+                    placeholder="Ex: Luanda, Viana, Capalanca (Opcional)"
                     className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -286,15 +302,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 font-bold block mb-1">NIF (Fiscal) *</label>
+                  <label className="text-slate-400 font-bold block mb-1">NIF (Opcional)</label>
                   <div className="relative">
                     <FileText className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
                     <input
                       type="text"
-                      required
                       value={nif}
                       onChange={(e) => setNif(e.target.value)}
-                      placeholder="NIF da Empresa / Pessoal"
+                      placeholder="NIF (Opcional)"
                       className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -320,7 +335,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <div>
             <label className="text-slate-400 font-bold block mb-1">
-              {mode === 'login' ? 'Email ou Utilizador *' : `${t.lblEmail} *`}
+              {mode === 'login' ? 'Utilizador *' : `${t.lblEmail} *`}
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
@@ -329,7 +344,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={mode === 'login' ? 'admin ou seu.email@exemplo.com' : 'seu.email@exemplo.com'}
+                placeholder={mode === 'login' ? 'Utilizador' : 'seu.email@exemplo.com'}
                 className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-indigo-500"
               />
             </div>
@@ -350,6 +365,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           </div>
 
+          {mode === 'register' && (
+            <>
+              <div>
+                <label className="text-slate-400 font-bold block mb-1">Confirmar Palavra-passe *</label>
+                <div className="relative">
+                  <Key className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repita a palavra-passe"
+                    className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 pt-1">
+                <input
+                  type="checkbox"
+                  id="acceptTerms"
+                  required
+                  checked={acceptTerms}
+                  onChange={(e) => setAcceptTerms(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded border-slate-700 bg-[#0F172A] text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <label htmlFor="acceptTerms" className="text-[11px] text-slate-400 font-mono leading-tight cursor-pointer">
+                  Declaro que li e aceito obrigatoriamente os{' '}
+                  <span className="text-indigo-400 font-bold">Termos de Uso e Política de Privacidade da Nanucloud</span>.
+                </label>
+              </div>
+            </>
+          )}
+
           <button
             type="submit"
             disabled={isLoading}
@@ -357,21 +406,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           >
             {isLoading ? 'A processar...' : mode === 'login' ? t.btnLogin : t.btnRegister}
           </button>
-
-          {mode === 'login' && (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('admin');
-                  setPassword('admin');
-                }}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 font-mono py-1.5 px-3 rounded-lg text-[11px] flex items-center justify-center gap-1.5 transition"
-              >
-                <span>Preencher Teste: <strong>user admin / pass admin</strong></span>
-              </button>
-            </div>
-          )}
         </form>
 
         <div className="mt-4 pt-4 border-t border-slate-800 text-center">

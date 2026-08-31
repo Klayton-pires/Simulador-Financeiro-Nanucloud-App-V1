@@ -212,17 +212,17 @@ export const INITIAL_TICKETS: SupportTicket[] = [
 
 export const INITIAL_FISCAL_NOTIFICATIONS: FiscalNotification[] = [
   {
-    id: 'notif_agt_2026_01',
+    id: 'notif_fisc_2026_01',
     countryCode: 'AO',
     countryName: 'Angola',
-    agencyName: 'AGT - Administração Geral Tributária',
+    agencyName: 'Autoridade Tributária / Fisco',
     title: 'Atualização da Pauta Aduaneira e Regime de Cesta Básica (Lei 17/23)',
-    summary: 'A AGT reforça a manutenção da alíquota de 5% de IVA para produtos essenciais da cesta básica e insumos agropecuários devidamente certificados.',
+    summary: 'Publicação oficial relativa à alíquota de 5% de IVA para produtos essenciais da cesta básica e insumos agropecuários devidamente certificados.',
     taxType: 'IVA',
     oldRate: '14%',
     newRate: '5%',
     effectiveDate: '2026-01-01',
-    sourceUrl: 'https://agt.minfin.gov.ao/portal-agt/#!/legislacao-tributaria',
+    sourceUrl: 'https://minfin.gov.ao/legislacao-tributaria',
     lawReference: 'Lei nº 17/23 de 29 de Dezembro / Código do IVA Artigo 15º',
     isCritical: true,
     readByManagers: [
@@ -588,7 +588,7 @@ export const INITIAL_AUDIT_LOGS: ConsultingAuditEntry[] = [
     operatorName: 'Super Administrador NANUCLOUD',
     operatorRole: 'Super Administrador',
     ipAddress: '197.234.219.42',
-    details: 'Atualização da alíquota da Taxa Estatística Aduaneira para 0.5% (AGT Angola).',
+    details: 'Atualização da alíquota da Taxa Estatística Aduaneira para 0.5% (Tabela Aduaneira Oficial).',
     timestamp: '2026-08-21T16:00:00.000Z'
   },
   {

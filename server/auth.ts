@@ -72,7 +72,10 @@ export function requireAdminLevel2(req: AuthRequest, res: Response, next: NextFu
     return res.status(401).json({ error: 'Autenticação necessária.', code: 'UNAUTHORIZED' });
   }
 
-  if (req.user.role !== 'admin_level2' && req.user.role !== 'admin_level1') {
+  const role = req.user.role as string;
+  const isAuthorized = ['admin_level2', 'admin_level1', 'super_admin', 'superadmin', 'admin', 'manager'].includes(role);
+
+  if (!isAuthorized) {
     return res.status(403).json({
       error: 'Acesso restrito a administradores (Nível 2 ou superior).',
       code: 'FORBIDDEN'
@@ -87,9 +90,12 @@ export function requireAdminLevel1(req: AuthRequest, res: Response, next: NextFu
     return res.status(401).json({ error: 'Autenticação necessária.', code: 'UNAUTHORIZED' });
   }
 
-  if (req.user.role !== 'admin_level1') {
+  const role = req.user.role as string;
+  const isAuthorized = ['admin_level1', 'super_admin', 'superadmin', 'admin'].includes(role);
+
+  if (!isAuthorized) {
     return res.status(403).json({
-      error: 'Acesso restrito exclusivamente ao Super Administrador (Nível 1).',
+      error: 'Acesso restrito exclusivamente a Administradores com privilégios de Nível 1 / Super Administrador.',
       code: 'SUPER_ADMIN_REQUIRED'
     });
   }

@@ -62,7 +62,7 @@ export const DocsAndDeployTab: React.FC<DocsAndDeployTabProps> = ({ currentUser 
     },
     {
       id: 'fiscal_update',
-      title: 'Manual de Atualização das Legislações Fiscais (AGT / AT)',
+      title: 'Manual de Atualização das Legislações Fiscais e Diários da República',
       category: 'Fiscalidade',
       desc: 'Como cadastrar novas alíquotas de IVA, pautas aduaneiras e fontes governamentais'
     },
@@ -281,7 +281,7 @@ docker push gcr.io/nanucloud/fiscal-pricing:latest
             {selectedManual === 'fiscal_update' && (
               <div className="space-y-3">
                 <p className="text-emerald-400 font-bold"># ATUALIZAÇÕES DA LEGISLAÇÃO FISCAL</p>
-                <p>Todas as taxas podem ser alteradas na aba Matriz Fiscal ou sincronizadas pelo módulo IA Fiscal com referência aos portais da AGT, AT, RFB e DNRE.</p>
+                <p>Todas as taxas podem ser alteradas na aba Matriz Fiscal ou sincronizadas pelo módulo IA Fiscal com referência às publicações dos diários e fontes tributárias oficiais.</p>
               </div>
             )}
 

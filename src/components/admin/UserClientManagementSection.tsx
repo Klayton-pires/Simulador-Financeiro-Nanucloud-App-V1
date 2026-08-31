@@ -466,7 +466,7 @@ export const UserClientManagementSection: React.FC<UserClientManagementSectionPr
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500"
                   >
                     <option value="Direção Geral">Direção Geral</option>
-                    <option value="Consultoria Fiscal">Consultoria Fiscal & AGT</option>
+                    <option value="Consultoria Fiscal">Consultoria Fiscal & Contabilidade</option>
                     <option value="Comercial & Vendas">Comercial & Vendas</option>
                     <option value="Suporte Técnico">Suporte Técnico</option>
                     <option value="Auditoria & TI">Auditoria & TI</option>

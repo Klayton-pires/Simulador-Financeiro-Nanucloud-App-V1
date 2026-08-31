@@ -14,8 +14,12 @@ import {
   FiscalProposal,
   ApiKeyItem,
   BotKnowledgeItem,
-  UnresolvedBotQuestion
+  UnresolvedBotQuestion,
+  SmsLogItem,
+  TrafficCampaign,
+  OtpVerificationCode
 } from './types.js';
+import { sqliteDb } from './sqliteDb.js';
 
 interface DatabaseSchema {
   users: User[];
@@ -30,6 +34,9 @@ interface DatabaseSchema {
   apiKeys?: ApiKeyItem[];
   botKnowledgeBase?: BotKnowledgeItem[];
   unresolvedBotQuestions?: UnresolvedBotQuestion[];
+  smsLogs?: SmsLogItem[];
+  trafficCampaigns?: TrafficCampaign[];
+  otpCodes?: OtpVerificationCode[];
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -40,7 +47,7 @@ const DEFAULT_BOT_KNOWLEDGE: BotKnowledgeItem[] = [
     id: 'kb_servicos_01',
     question: 'Como simular prestação de serviços e retenção na fonte?',
     keywords: ['servico', 'serviço', 'servicos', 'serviços', 'retencao', 'retenção', 'fonte', 'prestacao', 'prestação'],
-    answer: 'O simulador NANUCLOUD permite simular tanto PRODUTOS como PRESTAÇÃO DE SERVIÇOS. Para serviços, preencha a taxa de Retenção na Fonte (%) regulamentar do país (ex: 6.5% em Angola segundo o Código do Imposto Industrial/IRT). O sistema calcula o valor bruto com IVA, deduz a retenção na fonte e taxas de TPA, e apresenta o montante líquido real a receber.',
+    answer: 'O simulador NANUCLOUD permite simular tanto PRODUTOS como PRESTAÇÃO DE SERVIÇOS. Para serviços, preencha a taxa de Retenção na Fonte (%) regulamentar do país (ex: 6.5% em Angola conforme a prática fiscal de referência). O sistema calcula o valor bruto com IVA, deduz a retenção na fonte e taxas de TPA, e apresenta o montante líquido real a receber.',
     language: 'pt',
     category: 'fiscal',
     isApproved: true,
@@ -134,8 +141,8 @@ const DEFAULT_FISCAL_PROPOSALS: FiscalProposal[] = [
     countryName: 'Angola',
     taxType: 'IVA',
     currentValue: '7% (Bens de Grande Consumo)',
-    proposedValue: '5% (Lei do Orçamento Geral do Estado 2025/2026)',
-    sourceLaw: 'Diário da República Iª Série - Lei OGE & AGT',
+    proposedValue: '5% (Proposta de Revisão das Taxas)',
+    sourceLaw: 'Pauta e Normas Tributárias de Referência',
     reason: 'Harmonização da taxa reduzida sobre bens essenciais da cesta básica nacional.',
     detectedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
     status: 'pending'
@@ -147,7 +154,7 @@ const DEFAULT_FISCAL_PROPOSALS: FiscalProposal[] = [
     taxType: 'PautaAduaneira',
     currentValue: '10% Direitos Aduaneiros Fertilizantes',
     proposedValue: '2% Direitos Aduaneiros Insumos Agrícolas',
-    sourceLaw: 'Pauta Aduaneira Versão 2024/2025 (Decreto Presidencial)',
+    sourceLaw: 'Pauta Aduaneira em Vigor',
     reason: 'Incentivo à produção agrícola nacional e redução do custo de insumos.',
     detectedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
     status: 'pending'
@@ -198,6 +205,17 @@ class DatabaseEngine {
     this.ensureDataDir();
     this.data = this.loadData();
     this.ensureDefaultUsersAndSettings();
+    this.initSqliteSync();
+  }
+
+  private async initSqliteSync() {
+    try {
+      await sqliteDb.init();
+      sqliteDb.syncFromObject(this.data);
+      console.log('✅ Base de dados SQLite sincronizada com sucesso.');
+    } catch (err) {
+      console.error('Falha ao sincronizar SQLite inicial:', err);
+    }
   }
 
   private ensureDataDir() {
@@ -232,19 +250,30 @@ class DatabaseEngine {
   private ensureDefaultUsersAndSettings() {
     const salt = bcrypt.genSaltSync(10);
     
-    // Filter out old placeholder demo test accounts
+    // Filter out old demo/test accounts, keeping only nanuhost, Klayton Pires and any real registered users
     this.data.users = this.data.users.filter(
-      (u) => u.email !== 'teste@nanucloud.com' && u.email !== 'demo@nanucloud.com'
+      (u) =>
+        u.email !== 'teste@nanucloud.com' &&
+        u.email !== 'demo@nanucloud.com' &&
+        u.email !== 'joaquim.monteiro@nanucloud.com' &&
+        u.email !== 'gerente@nanucloud.com'
     );
 
-    // 0. Ensure default test Admin user (user: admin / password: admin)
-    let defaultAdmin = this.data.users.find(u => u.email.toLowerCase() === 'admin' || u.email.toLowerCase() === 'admin@nanucloud.com');
+    // 1. Ensure default Admin account is named 'nanuhost' (user: nanuhost / password: admin)
+    let defaultAdmin = this.data.users.find(
+      (u) =>
+        u.email.toLowerCase() === 'nanuhost' ||
+        u.email.toLowerCase() === 'admin' ||
+        u.id === 'usr_admin_default' ||
+        u.id === 'usr_admin_nanuhost'
+    );
+
     if (!defaultAdmin) {
       const superAdminDefault: User = {
-        id: 'usr_admin_default',
-        name: 'Administrador (Admin)',
-        email: 'admin',
-        phone: '+244929462681',
+        id: 'usr_admin_nanuhost',
+        name: 'nanuhost',
+        email: 'nanuhost',
+        phone: '+244954269353',
         company: 'NANUCLOUD Lda',
         address: 'Angola, Luanda',
         nif: '5001294819',
@@ -266,7 +295,9 @@ class DatabaseEngine {
       };
       this.data.users.unshift(superAdminDefault);
     } else {
-      defaultAdmin.email = 'admin';
+      defaultAdmin.id = 'usr_admin_nanuhost';
+      defaultAdmin.name = 'nanuhost';
+      defaultAdmin.email = 'nanuhost';
       defaultAdmin.role = 'admin_level1';
       defaultAdmin.isActive = true;
       defaultAdmin.passwordHash = bcrypt.hashSync('admin', salt);
@@ -275,53 +306,12 @@ class DatabaseEngine {
       defaultAdmin.queriesRemaining = 999999;
     }
 
-    // 1. Ensure Joaquim Monteiro is super admin Level 1
-    let joaquim = this.findUserByEmail('joaquim.monteiro@nanucloud.com');
-    if (!joaquim) {
-      const superAdminJoaquim: User = {
-        id: 'usr_super_admin_joaquim',
-        name: 'Joaquim Monteiro',
-        email: 'joaquim.monteiro@nanucloud.com',
-        phone: '+244929462681',
-        company: 'NANUCLOUD Lda',
-        address: 'Angola, Luanda, Viana, Capalanca',
-        nif: '5001294819',
-        country: 'AO',
-        passwordHash: bcrypt.hashSync('admin123', salt),
-        role: 'admin_level1',
-        isActive: true,
-        queriesRemaining: 999999,
-        totalQueriesUsed: 50,
-        activePlanId: 'plan_diamante',
-        activePlanName: 'Diamante Ilimitado (Super Admin)',
-        planExpiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000).toISOString(),
-        isImportUnlocked: true,
-        isBatchUnlocked: true,
-        twoFactorEnabled: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        lastLoginAt: new Date().toISOString()
-      };
-      this.data.users.unshift(superAdminJoaquim);
-    } else {
-      joaquim.name = 'Joaquim Monteiro';
-      joaquim.role = 'admin_level1';
-      joaquim.isActive = true;
-      joaquim.isImportUnlocked = true;
-      joaquim.isBatchUnlocked = true;
-      joaquim.queriesRemaining = 999999;
-      joaquim.phone = '+244929462681';
-      joaquim.passwordHash = bcrypt.hashSync('admin123', salt);
-      if (!joaquim.address) joaquim.address = 'Angola, Luanda, Viana, Capalanca';
-      if (!joaquim.nif) joaquim.nif = '5001294819';
-    }
-
-    // 2. Ensure Klayton Monteiro is also super admin Level 1
+    // 2. Ensure Klayton Pires account is maintained (klayton.pires.monteiro@gmail.com / Super Admin)
     let klayton = this.findUserByEmail('klayton.pires.monteiro@gmail.com');
     if (!klayton) {
       const superAdminKlayton: User = {
-        id: 'usr_super_admin_klayton',
-        name: 'Klayton Monteiro',
+        id: 'usr_klayton_pires',
+        name: 'Klayton Pires',
         email: 'klayton.pires.monteiro@gmail.com',
         phone: '+244954269353',
         company: 'NANUCLOUD Lda',
@@ -345,7 +335,8 @@ class DatabaseEngine {
       };
       this.data.users.push(superAdminKlayton);
     } else {
-      klayton.name = 'Klayton Monteiro';
+      klayton.id = 'usr_klayton_pires';
+      klayton.name = 'Klayton Pires';
       klayton.role = 'admin_level1';
       klayton.isActive = true;
       klayton.isImportUnlocked = true;
@@ -387,7 +378,7 @@ class DatabaseEngine {
       this.data.settings.companyEmail1 = 'joaquim.monteiro@nanucloud.com';
       this.data.settings.companyEmail2 = 'klayton_pires@hotmail.com';
       this.data.settings.companyNif = '5001294819';
-      this.data.settings.footerCopyrightText = '© 2025-2026 NANUCLOUD - Tecnologia e Soluções Lda. Todos os direitos reservados.';
+      this.data.settings.footerCopyrightText = `© ${new Date().getFullYear()} Nanucloud. Todos os direitos reservados.`;
       this.data.settings.activeThemeId = 'theme_nanucloud_dark';
       this.data.settings.autoHolidayThemeEnabled = true;
       this.data.settings.fiscalAiAutoCheckEnabled = true;
@@ -578,18 +569,37 @@ class DatabaseEngine {
       minCustomPlanPriceKz: 500,
       freeQueriesOnRegister: 3,
       freeQueriesDaily: 3,
-      whatsappSupport1: '+244929462681',
-      whatsappSupport2: '+244954269353',
-      supportEmail: 'joaquim.monteiro@nanucloud.com',
-      companyName: 'NANUCLOUD - Tecnologia e Soluções Lda',
-      companyAddress: 'Angola, Luanda, Viana, Capalanca',
-      companyNif: '5001294819',
-      companyPhone1: '+244929462681',
-      companyPhone2: '+244954269353',
-      companyEmail1: 'joaquim.monteiro@nanucloud.com',
+      enableMultiplatformDownloads: false,
+      moduleMinCredits: {
+        local_trade: 1,
+        services_consulting: 1,
+        intermediary_broker: 1,
+        basic_mobile: 1,
+        import: 5,
+        excel: 10,
+        api_integration: 20
+      },
+      moduleQueryPrices: {
+        local_trade: 50,
+        services_consulting: 50,
+        intermediary_broker: 50,
+        basic_mobile: 50,
+        import: 50,
+        excel: 50,
+        api_integration: 50
+      },
+      whatsappSupport1: '+244954269353',
+      whatsappSupport2: '+244929462681',
+      supportEmail: 'klayton.pires.monteiro@gmail.com',
+      companyName: 'Klayton Pires - Prestações de Serviços e Negocios (SU) Lda',
+      companyAddress: 'Luanda, Angola',
+      companyNif: '5417653438',
+      companyPhone1: '+244954269353',
+      companyPhone2: '+244929462681',
+      companyEmail1: 'klayton.pires.monteiro@gmail.com',
       companyEmail2: 'klayton_pires@hotmail.com',
       companyLogoUrl: '',
-      footerCopyrightText: '© 2025-2026 NANUCLOUD - Tecnologia e Soluções Lda. Todos os direitos reservados. Software de Gestão e Simulação Fiscal de Angola.',
+      footerCopyrightText: '© 2026 Nanucloud. Todos os direitos reservados.',
       
       emisEnabled: true,
       emisEntityId: '00123',
@@ -655,7 +665,43 @@ class DatabaseEngine {
       supportInquiries: [],
       chatMessages: [],
       fiscalProposals: DEFAULT_FISCAL_PROPOSALS,
-      apiKeys: DEFAULT_API_KEYS
+      apiKeys: DEFAULT_API_KEYS,
+      smsLogs: [],
+      trafficCampaigns: [
+        {
+          id: 'camp_01',
+          name: 'Campanha Tráfego PAGO Facebook/Instagram 2025',
+          source: 'facebook_ads',
+          medium: 'social',
+          utmCampaign: 'simulador_angola_2025',
+          budgetKz: 150000,
+          impressions: 48500,
+          clicks: 3420,
+          leads: 480,
+          registrations: 215,
+          paidConversions: 42,
+          revenueKz: 630000,
+          startDate: '2025-01-10',
+          status: 'active'
+        },
+        {
+          id: 'camp_02',
+          name: 'Google Ads Search - Termos Fiscais & IVA Angola',
+          source: 'google_ads',
+          medium: 'cpc',
+          utmCampaign: 'busca_iva_retencao_2025',
+          budgetKz: 200000,
+          impressions: 62000,
+          clicks: 5120,
+          leads: 620,
+          registrations: 380,
+          paidConversions: 85,
+          revenueKz: 1275000,
+          startDate: '2025-01-15',
+          status: 'active'
+        }
+      ],
+      otpCodes: []
     };
 
     this.saveDataDirect(schema);
@@ -665,6 +711,7 @@ class DatabaseEngine {
   private saveDataDirect(schema: DatabaseSchema) {
     try {
       fs.writeFileSync(DB_FILE, JSON.stringify(schema, null, 2), 'utf-8');
+      sqliteDb.syncFromObject(schema);
     } catch (err) {
       console.error('Error persisting database:', err);
     }
@@ -1066,7 +1113,33 @@ class DatabaseEngine {
     const clean = email.trim().toLowerCase();
     return this.data.users.find(u => {
       const uEmail = u.email.toLowerCase();
-      return uEmail === clean || (clean === 'admin' && (uEmail === 'admin' || uEmail === 'admin@nanucloud.com'));
+      return uEmail === clean || 
+        ((clean === 'nanuhost' || clean === 'admin') && (uEmail === 'nanuhost' || uEmail === 'admin' || uEmail === 'admin@nanucloud.com'));
+    });
+  }
+
+  public findUserByIdentifier(identifier: string): User | undefined {
+    if (!identifier) return undefined;
+    const clean = identifier.trim().toLowerCase();
+    const cleanDigits = identifier.replace(/\D/g, '');
+
+    return this.data.users.find(u => {
+      const uEmail = u.email.toLowerCase();
+      const uPhone = (u.phone || '').replace(/\D/g, '');
+      const uName = u.name.toLowerCase();
+
+      // Check phone match
+      if (cleanDigits && uPhone && (uPhone === cleanDigits || uPhone.endsWith(cleanDigits) || cleanDigits.endsWith(uPhone))) {
+        return true;
+      }
+      // Check email match or username match
+      if (uEmail === clean || uName === clean) {
+        return true;
+      }
+      if ((clean === 'nanuhost' || clean === 'admin') && (uEmail === 'nanuhost' || uEmail === 'admin' || uEmail === 'admin@nanucloud.com')) {
+        return true;
+      }
+      return false;
     });
   }
 
@@ -1290,6 +1363,305 @@ class DatabaseEngine {
     this.data.settings = { ...this.data.settings, ...updates };
     this.save();
     return this.data.settings;
+  }
+
+  // OTP Verification Codes
+  public createOtpCode(identifier: string, type: 'phone_verification' | 'password_reset' | 'login_otp'): string {
+    if (!this.data.otpCodes) this.data.otpCodes = [];
+    
+    // Generate 6-digit random code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+
+    // Invalidate prior codes for this identifier and type
+    this.data.otpCodes = this.data.otpCodes.filter(
+      item => !(item.identifier.toLowerCase() === identifier.toLowerCase() && item.type === type && !item.used)
+    );
+
+    const record: OtpVerificationCode = {
+      id: `otp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      identifier: identifier.trim(),
+      type,
+      code,
+      expiresAt,
+      used: false,
+      createdAt: new Date().toISOString()
+    };
+
+    this.data.otpCodes.push(record);
+    this.save();
+    return code;
+  }
+
+  public verifyOtpCode(identifier: string, code: string, type: 'phone_verification' | 'password_reset' | 'login_otp'): boolean {
+    if (!this.data.otpCodes) return false;
+    const cleanId = identifier.trim().toLowerCase();
+    const cleanCode = code.trim();
+
+    const now = new Date().getTime();
+    const found = this.data.otpCodes.find(
+      item =>
+        item.identifier.toLowerCase() === cleanId &&
+        item.type === type &&
+        item.code === cleanCode &&
+        !item.used &&
+        new Date(item.expiresAt).getTime() > now
+    );
+
+    if (!found) return false;
+    found.used = true;
+    this.save();
+    return true;
+  }
+
+  // SMS Logging & Marketing Broadcasts
+  public getSmsLogs(): SmsLogItem[] {
+    if (!this.data.smsLogs) this.data.smsLogs = [];
+    return [...this.data.smsLogs].sort(
+      (a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()
+    );
+  }
+
+  public addSmsLog(log: Omit<SmsLogItem, 'id' | 'sentAt'>): SmsLogItem {
+    if (!this.data.smsLogs) this.data.smsLogs = [];
+    const item: SmsLogItem = {
+      ...log,
+      id: `sms_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      sentAt: new Date().toISOString()
+    };
+    this.data.smsLogs.unshift(item);
+    if (this.data.smsLogs.length > 5000) {
+      this.data.smsLogs.pop();
+    }
+    this.save();
+    return item;
+  }
+
+  public clearSmsLogs(adminUser: User): { success: boolean; clearedCount: number; error?: string } {
+    if (adminUser.role !== 'admin_level1' && (adminUser.role as string) !== 'super_admin') {
+      return { success: false, clearedCount: 0, error: 'Apenas Super Administradores podem limpar o histórico de envios SMS.' };
+    }
+    const count = (this.data.smsLogs || []).length;
+    this.data.smsLogs = [];
+    this.addAuditLog({
+      userId: adminUser.id,
+      userName: adminUser.name,
+      userRole: adminUser.role,
+      action: 'SMS_LOGS_CLEARED',
+      entityType: 'marketing',
+      details: `Histórico de envios SMS (${count} registos) limpo pelo Super Administrador ${adminUser.name}.`
+    });
+    this.save();
+    return { success: true, clearedCount: count };
+  }
+
+  // Traffic Campaigns (CEO & Traffic Manager)
+  public getTrafficCampaigns(): TrafficCampaign[] {
+    if (!this.data.trafficCampaigns) {
+      this.data.trafficCampaigns = [];
+    }
+    return this.data.trafficCampaigns;
+  }
+
+  public saveTrafficCampaign(campaign: Partial<TrafficCampaign> & { name: string }): TrafficCampaign {
+    if (!this.data.trafficCampaigns) this.data.trafficCampaigns = [];
+    
+    if (campaign.id) {
+      const idx = this.data.trafficCampaigns.findIndex(c => c.id === campaign.id);
+      if (idx !== -1) {
+        this.data.trafficCampaigns[idx] = {
+          ...this.data.trafficCampaigns[idx],
+          ...campaign
+        } as TrafficCampaign;
+        this.save();
+        return this.data.trafficCampaigns[idx];
+      }
+    }
+
+    const newCamp: TrafficCampaign = {
+      id: `camp_${Date.now()}`,
+      name: campaign.name,
+      source: campaign.source || 'facebook_ads',
+      medium: campaign.medium || 'social',
+      utmCampaign: campaign.utmCampaign || 'campanha_angola',
+      budgetKz: campaign.budgetKz || 0,
+      clicks: campaign.clicks || 0,
+      impressions: campaign.impressions || 0,
+      leads: campaign.leads || 0,
+      registrations: campaign.registrations || 0,
+      paidConversions: campaign.paidConversions || 0,
+      revenueKz: campaign.revenueKz || 0,
+      startDate: campaign.startDate || new Date().toISOString().split('T')[0],
+      status: campaign.status || 'active'
+    };
+
+    this.data.trafficCampaigns.unshift(newCamp);
+    this.save();
+    return newCamp;
+  }
+
+  public deleteTrafficCampaign(id: string): boolean {
+    if (!this.data.trafficCampaigns) return false;
+    const initialLen = this.data.trafficCampaigns.length;
+    this.data.trafficCampaigns = this.data.trafficCampaigns.filter(c => c.id !== id);
+    const changed = this.data.trafficCampaigns.length !== initialLen;
+    if (changed) this.save();
+    return changed;
+  }
+
+  // Purge Demo Data and Temporary Testing Files/Records
+  public purgeDemoData(): {
+    usersRemoved: number;
+    transactionsRemoved: number;
+    historyRemoved: number;
+    chatMessagesRemoved: number;
+    unresolvedQuestionsRemoved: number;
+  } {
+    const isDemoAccount = (email?: string, name?: string) => {
+      if (!email && !name) return true;
+      const e = (email || '').toLowerCase();
+      const n = (name || '').toLowerCase();
+      return (
+        e.includes('demo') ||
+        e.includes('teste') ||
+        e.includes('test') ||
+        e.includes('sample') ||
+        e.includes('exemplo') ||
+        n.includes('demo') ||
+        n.includes('teste') ||
+        n.includes('demonstração') ||
+        n.includes('demonstrativo') ||
+        n.includes('sample')
+      );
+    };
+
+    // 1. Filter out demo users (preserving real admins and real users)
+    const initialUsersCount = this.data.users.length;
+    this.data.users = this.data.users.filter(u => {
+      // Keep real super admin Joaquim and real admin Klayton Pires
+      if (u.email === 'joaquim.monteiro@nanucloud.com' || u.email === 'klayton.pires.monteiro@gmail.com' || u.name === 'nanuhost') {
+        return true;
+      }
+      return !isDemoAccount(u.email, u.name);
+    });
+    const usersRemoved = initialUsersCount - this.data.users.length;
+
+    // 2. Filter out demo transactions
+    const initialTxCount = this.data.transactions.length;
+    this.data.transactions = this.data.transactions.filter(t => {
+      if (isDemoAccount(t.userEmail, t.userName)) return false;
+      if ((t.notes || '').toLowerCase().includes('demo') || (t.notes || '').toLowerCase().includes('teste')) return false;
+      return true;
+    });
+    const transactionsRemoved = initialTxCount - this.data.transactions.length;
+
+    // 3. Filter out demo simulation history
+    const initialHistCount = this.data.queryHistory.length;
+    this.data.queryHistory = this.data.queryHistory.filter(q => {
+      const user = this.data.users.find(u => u.id === q.userId);
+      if (!user) return false; // orphan or deleted demo user
+      if (isDemoAccount(user.email, user.name)) return false;
+      if (q.title?.toLowerCase().includes('demo') || q.title?.toLowerCase().includes('teste') || q.title?.toLowerCase().includes('sample')) return false;
+      return true;
+    });
+    const historyRemoved = initialHistCount - this.data.queryHistory.length;
+
+    // 4. Filter out demo chat messages
+    const initialChatCount = (this.data.chatMessages || []).length;
+    this.data.chatMessages = (this.data.chatMessages || []).filter(c => {
+      return !isDemoAccount(c.senderEmail, c.senderName);
+    });
+    const chatMessagesRemoved = initialChatCount - (this.data.chatMessages || []).length;
+
+    // 5. Filter out demo unresolved bot questions
+    const initialBotCount = (this.data.unresolvedBotQuestions || []).length;
+    this.data.unresolvedBotQuestions = (this.data.unresolvedBotQuestions || []).filter(q => {
+      return !isDemoAccount(q.userEmail, q.userName);
+    });
+    const unresolvedQuestionsRemoved = initialBotCount - (this.data.unresolvedBotQuestions || []).length;
+
+    this.save();
+    return {
+      usersRemoved,
+      transactionsRemoved,
+      historyRemoved,
+      chatMessagesRemoved,
+      unresolvedQuestionsRemoved
+    };
+  }
+
+  // 15-Day Data Retention Policy Engine
+  // Removes old non-essential query history (> 15 days) for normal users
+  // Accounts, credits, transactions, and super admin history are 100% PRESERVED
+  public applyDataRetentionPolicy(daysThreshold: number = 15): {
+    purgedCount: number;
+    retainedCount: number;
+    superAdminRetainedCount: number;
+  } {
+    const cutoffTimestamp = Date.now() - daysThreshold * 24 * 60 * 60 * 1000;
+    const superAdminIds = new Set(
+      this.data.users
+        .filter(u => u.role === 'admin_level1' || (u.role as any) === 'super_admin' || (u.role as any) === 'superadmin')
+        .map(u => u.id)
+    );
+
+    let purgedCount = 0;
+    let retainedCount = 0;
+    let superAdminRetainedCount = 0;
+
+    const remainingHistory = this.data.queryHistory.filter(item => {
+      const isSuperAdmin = superAdminIds.has(item.userId);
+      const itemTimestamp = new Date(item.createdAt).getTime();
+
+      // Super Admins retain history indefinitely (never auto-purged)
+      if (isSuperAdmin) {
+        superAdminRetainedCount++;
+        return true;
+      }
+
+      // If item is older than 15 days, purge it
+      if (itemTimestamp < cutoffTimestamp) {
+        purgedCount++;
+        return false;
+      }
+
+      // Item is within 15 days
+      retainedCount++;
+      return true;
+    });
+
+    this.data.queryHistory = remainingHistory;
+    if (purgedCount > 0) {
+      this.save();
+    }
+
+    return {
+      purgedCount,
+      retainedCount,
+      superAdminRetainedCount
+    };
+  }
+
+  // Super Admin: Clear all simulation query history manually if desired
+  public clearAllQueryHistory(forNonAdminsOnly: boolean = false): number {
+    const superAdminIds = new Set(
+      this.data.users
+        .filter(u => u.role === 'admin_level1' || (u.role as any) === 'super_admin' || (u.role as any) === 'superadmin')
+        .map(u => u.id)
+    );
+
+    const initialLen = this.data.queryHistory.length;
+    if (forNonAdminsOnly) {
+      this.data.queryHistory = this.data.queryHistory.filter(q => superAdminIds.has(q.userId));
+    } else {
+      this.data.queryHistory = [];
+    }
+
+    const removed = initialLen - this.data.queryHistory.length;
+    if (removed > 0) {
+      this.save();
+    }
+    return removed;
   }
 
   // Full System Database Backup Generator

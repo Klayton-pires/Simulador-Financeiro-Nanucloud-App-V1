@@ -424,6 +424,9 @@ export interface SystemSettings {
   minCustomPlanPriceKz: number;
   freeQueriesOnRegister: number;
   freeQueriesDaily: number;
+  enableMultiplatformDownloads: boolean;
+  moduleMinCredits?: Record<string, number>;
+  moduleQueryPrices?: Record<string, number>;
   whatsappSupport1: string;
   whatsappSupport2: string;
   whatsappSupport3?: string;
@@ -477,13 +480,38 @@ export interface SystemSettings {
   emisApiKey?: string;
   emisWebhookUrl?: string;
   emisAutoActivate?: boolean;
+  bankTransferEnabled?: boolean;
   visaMastercardEnabled?: boolean;
   paypalEnabled?: boolean;
   paypalClientId?: string;
+  paypalSecret?: string;
+  paypalReceiverEmail?: string;
+  defaultTheme?: string;
+  allowedDomains?: string[];
   wiseEnabled?: boolean;
   stripeEnabled?: boolean;
   stripePublicKey?: string;
   stripeSecretKey?: string;
+
+  // Reserved Future Gateways: ProxyPay, PayPay África, Alipay
+  proxyPayEnabled?: boolean;
+  proxyPayApiKey?: string;
+  proxyPayEntityId?: string;
+  proxyPaySandboxMode?: boolean;
+  proxyPayAutoActivate?: boolean;
+
+  payPayEnabled?: boolean;
+  payPayMerchantId?: string;
+  payPayApiKey?: string;
+  payPaySandboxMode?: boolean;
+  payPayAutoActivate?: boolean;
+
+  alipayEnabled?: boolean;
+  alipayAppId?: string;
+  alipayMerchantPrivateKey?: string;
+  alipayPublicKey?: string;
+  alipaySandboxMode?: boolean;
+  alipayAutoActivate?: boolean;
 
   // Chat & Support
   chatBotEnabled?: boolean;
@@ -576,6 +604,28 @@ export interface PaypalPaymentConfig {
   mode: 'sandbox' | 'live';
   currency: string;
   autoActivate: boolean;
+}
+
+export interface ProxyPayConfig {
+  apiKey?: string;
+  entityId?: string;
+  sandboxMode?: boolean;
+  autoActivate?: boolean;
+}
+
+export interface PayPayAfricaConfig {
+  merchantId?: string;
+  apiKey?: string;
+  sandboxMode?: boolean;
+  autoActivate?: boolean;
+}
+
+export interface AlipayConfig {
+  appId?: string;
+  merchantPrivateKey?: string;
+  alipayPublicKey?: string;
+  sandboxMode?: boolean;
+  autoActivate?: boolean;
 }
 
 export interface FreeTrialCreditsConfig {

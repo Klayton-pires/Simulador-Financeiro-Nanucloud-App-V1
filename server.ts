@@ -9,9 +9,27 @@ import plansRoutes from './server/routes/plansRoutes.js';
 import adminRoutes from './server/routes/adminRoutes.js';
 import chatRoutes from './server/routes/chatRoutes.js';
 import aiTranslateRoutes from './server/routes/aiTranslateRoutes.js';
+import sqliteRoutes from './server/routes/sqliteRoutes.js';
 import { db } from './server/db.js';
+import { sqliteDb } from './server/sqliteDb.js';
 
 async function startServer() {
+  // Initialize SQLite database and sync initial state
+  try {
+    await sqliteDb.init();
+    sqliteDb.syncFromObject({
+      users: db.getUsers(),
+      plans: db.getPlans(),
+      settings: db.getSettings(),
+      fiscalProposals: db.getFiscalProposals(),
+      apiKeys: db.getApiKeys(),
+      botKnowledgeBase: db.getBotKnowledgeBase()
+    });
+    console.log('✅ SQLite Database conectado e sincronizado com sucesso no arranque do servidor.');
+  } catch (err) {
+    console.error('⚠️ Aviso ao sincronizar base SQLite no arranque:', err);
+  }
+
   const app = express();
   const PORT = 3000;
 
@@ -70,6 +88,7 @@ async function startServer() {
   app.use('/api/admin', adminRoutes);
   app.use('/api/chat', chatRoutes);
   app.use('/api/ai', aiTranslateRoutes);
+  app.use('/api/sqlite', sqliteRoutes);
 
   // Vite middleware for development vs static for production
   if (process.env.NODE_ENV !== 'production') {

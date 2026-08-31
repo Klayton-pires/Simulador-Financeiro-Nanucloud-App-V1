@@ -15,6 +15,9 @@ router.get('/', (req: AuthRequest, res: Response) => {
     plans,
     unitQueryPriceKz: settings.unitQueryPriceKz,
     minCustomPlanPriceKz: settings.minCustomPlanPriceKz,
+    enableMultiplatformDownloads: settings.enableMultiplatformDownloads ?? false,
+    moduleMinCredits: settings.moduleMinCredits,
+    moduleQueryPrices: settings.moduleQueryPrices,
     bankAccounts,
     bankInfo: {
       bankName: settings.bankName,
@@ -22,6 +25,44 @@ router.get('/', (req: AuthRequest, res: Response) => {
       holder: settings.bankHolder,
       expressPhone: settings.expressPhone
     }
+  });
+});
+
+// 1.1 CONFIGURAÇÕES PÚBLICAS DO SISTEMA
+router.get('/public-config', (req: AuthRequest, res: Response) => {
+  const settings = db.getSettings();
+  return res.json({
+    companyName: settings.companyName,
+    companyAddress: settings.companyAddress,
+    companyNif: settings.companyNif,
+    companyPhone1: settings.companyPhone1,
+    companyPhone2: settings.companyPhone2,
+    companyEmail1: settings.companyEmail1,
+    companyEmail2: settings.companyEmail2,
+    footerCopyrightText: settings.footerCopyrightText,
+    whatsappSupport1: settings.whatsappSupport1,
+    whatsappSupport2: settings.whatsappSupport2,
+    supportEmail: settings.supportEmail,
+    enableMultiplatformDownloads: settings.enableMultiplatformDownloads ?? false,
+    moduleMinCredits: settings.moduleMinCredits,
+    moduleQueryPrices: settings.moduleQueryPrices,
+    unitQueryPriceKz: settings.unitQueryPriceKz,
+    minCustomPlanPriceKz: settings.minCustomPlanPriceKz,
+    freeQueriesOnRegister: settings.freeQueriesOnRegister,
+    freeQueriesDaily: settings.freeQueriesDaily,
+    allowRegistration: settings.allowRegistration,
+    maintenanceMode: settings.maintenanceMode,
+    defaultTheme: settings.defaultTheme,
+    allowedDomains: settings.allowedDomains,
+    bankTransferEnabled: settings.bankTransferEnabled ?? true,
+    emisEnabled: settings.emisEnabled ?? true,
+    paypalEnabled: settings.paypalEnabled ?? true,
+    stripeEnabled: settings.stripeEnabled ?? true,
+    proxyPayEnabled: settings.proxyPayEnabled ?? true,
+    payPayEnabled: settings.payPayEnabled ?? true,
+    alipayEnabled: settings.alipayEnabled ?? true,
+    bankAccounts: settings.bankAccounts || [],
+    googleAdsenseSlots: settings.googleAdsenseSlots || []
   });
 });
 

@@ -15,12 +15,12 @@ export interface PartnerItem {
 
 export const OFFICIAL_PARTNERS: PartnerItem[] = [
   {
-    id: 'agt',
-    name: 'AGT Angola',
-    category: 'Administração Geral Tributária',
-    badge: 'Conformidade Fiscal',
-    description: 'Enquadramento tributário, pautas aduaneiras e códigos de IVA homologados.',
-    logoIcon: '🇦🇴 AGT',
+    id: 'nanucloud_core',
+    name: 'Nanucloud Engine',
+    category: 'Motor de Cálculo Independente',
+    badge: 'Algoritmo Financeiro',
+    description: 'Fórmulas auditadas de formação de preços, margens e simulações comerciais.',
+    logoIcon: '⚡ NANU',
     colorBg: 'bg-emerald-500/10',
     colorBorder: 'border-emerald-500/30',
     colorText: 'text-emerald-300'

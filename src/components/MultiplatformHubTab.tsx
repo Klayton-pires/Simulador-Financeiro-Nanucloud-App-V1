@@ -26,13 +26,15 @@ import {
 import JSZip from 'jszip';
 import { UserSafe } from '../types';
 import { ScrollableRibbon } from './common/ScrollableRibbon';
+import { SqliteDatabaseViewer } from './SqliteDatabaseViewer';
+import { WindowsExeManualGuide } from './WindowsExeManualGuide';
 
 interface MultiplatformHubTabProps {
   currentUser: UserSafe | null;
 }
 
 export const MultiplatformHubTab: React.FC<MultiplatformHubTabProps> = ({ currentUser }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'platforms' | 'pc_guide' | 'android_guide' | 'database_hub'>('platforms');
+  const [activeSubTab, setActiveSubTab] = useState<'platforms' | 'windows_exe' | 'sqlite_db' | 'pc_guide' | 'android_guide' | 'database_hub'>('platforms');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
@@ -277,6 +279,30 @@ Versão: 2026.8.0
 
           <button
             type="button"
+            onClick={() => setActiveSubTab('windows_exe')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition shrink-0 cursor-pointer ${
+              activeSubTab === 'windows_exe'
+                ? 'bg-sky-600 text-white font-bold shadow'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <Laptop className="w-4 h-4 text-sky-400" /> 2. Manual Passo a Passo .EXE (Windows)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('sqlite_db')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition shrink-0 cursor-pointer ${
+              activeSubTab === 'sqlite_db'
+                ? 'bg-amber-600 text-white font-bold shadow'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <Database className="w-4 h-4 text-amber-400" /> 3. SQLite Padrão (/data/nanucloud.sqlite)
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveSubTab('pc_guide')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl transition shrink-0 cursor-pointer ${
               activeSubTab === 'pc_guide'
@@ -284,7 +310,7 @@ Versão: 2026.8.0
                 : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
             }`}
           >
-            <Monitor className="w-4 h-4 text-sky-400" /> 2. Manual de Testes no PC
+            <Monitor className="w-4 h-4 text-slate-300" /> 4. Manual de Testes no PC
           </button>
 
           <button
@@ -296,7 +322,7 @@ Versão: 2026.8.0
                 : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
             }`}
           >
-            <Smartphone className="w-4 h-4 text-emerald-400" /> 3. Manual de Testes no Telemóvel Android
+            <Smartphone className="w-4 h-4 text-emerald-400" /> 5. Manual de Testes no Android
           </button>
 
           <button
@@ -308,7 +334,7 @@ Versão: 2026.8.0
                 : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
             }`}
           >
-            <Database className="w-4 h-4 text-amber-400" /> 4. Bases de Dados & Schemas SQL
+            <Layers className="w-4 h-4 text-indigo-400" /> 6. Schemas SQL Unificados
           </button>
         </ScrollableRibbon>
       </div>
@@ -380,6 +406,16 @@ Versão: 2026.8.0
             );
           })}
         </div>
+      )}
+
+      {/* SUB-TAB: WINDOWS EXE MANUAL GUIDE */}
+      {activeSubTab === 'windows_exe' && (
+        <WindowsExeManualGuide />
+      )}
+
+      {/* SUB-TAB: SQLITE DATABASE VIEWER */}
+      {activeSubTab === 'sqlite_db' && (
+        <SqliteDatabaseViewer />
       )}
 
       {/* SUB-TAB 2: PC TESTING GUIDE */}

@@ -35,6 +35,33 @@ export interface BankAccount {
   isActive: boolean;
 }
 
+export interface DatabaseEngineConfig {
+  id: string;
+  type: 'mysql' | 'mssql' | 'postgres' | 'sqlite' | 'json';
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password?: string;
+  ssl: boolean;
+  isActive: boolean;
+  connectionStatus: 'connected' | 'error' | 'disconnected' | 'testing';
+  lastTestedAt?: string;
+  errorMessage?: string;
+}
+
+export interface AdsenseSlotConfig {
+  id: string;
+  slotName: string;
+  position: 'header' | 'sidebar' | 'footer' | 'interstitial';
+  adClient: string;
+  adSlot: string;
+  adFormat: 'auto' | 'rectangle' | 'horizontal' | 'vertical';
+  isEnabled: boolean;
+  displayMode: 'free_only' | 'all';
+}
+
 export interface Plan {
   id: string;
   name: string;
@@ -130,7 +157,7 @@ export interface AuditLog {
   userName?: string;
   userRole?: string;
   action: string; // e.g. 'USER_LOGIN', 'PLAN_PURCHASE_REQUEST', 'PAYMENT_APPROVED', 'SETTINGS_UPDATED'
-  entityType: 'auth' | 'simulator' | 'plan' | 'payment' | 'user' | 'system' | 'support' | 'chat' | 'security' | 'database';
+  entityType: 'auth' | 'simulator' | 'plan' | 'payment' | 'user' | 'system' | 'support' | 'chat' | 'security' | 'database' | 'marketing';
   entityId?: string;
   ipAddress?: string;
   details: string;
@@ -168,6 +195,9 @@ export interface SystemSettings {
   minCustomPlanPriceKz: number; // default 500 Kz
   freeQueriesOnRegister: number; // default 3
   freeQueriesDaily: number; // default 3 daily
+  enableMultiplatformDownloads: boolean; // default false
+  moduleMinCredits?: Record<string, number>; // Minimum credit required per simulator module
+  moduleQueryPrices?: Record<string, number>; // Price in Kz per query for each module, default 50 Kz
   whatsappSupport1: string;
   whatsappSupport2: string;
   supportEmail: string;
@@ -188,6 +218,7 @@ export interface SystemSettings {
   emisApiKey?: string;
   emisWebhookUrl?: string;
   emisAutoActivate?: boolean;
+  bankTransferEnabled?: boolean;
   visaMastercardEnabled?: boolean;
   paypalEnabled?: boolean;
   paypalClientId?: string;
@@ -195,6 +226,9 @@ export interface SystemSettings {
   stripeEnabled?: boolean;
   stripePublicKey?: string;
   stripeSecretKey?: string;
+  proxyPayEnabled?: boolean;
+  payPayEnabled?: boolean;
+  alipayEnabled?: boolean;
 
   // Support & Chat
   chatBotEnabled?: boolean;
@@ -231,6 +265,14 @@ export interface SystemSettings {
   googleAdsenseEnabled?: boolean;
   googleAdsensePublisherId?: string;
   googleAdsenseSlotId?: string;
+  googleAdsenseSlots?: AdsenseSlotConfig[];
+
+  // Database Engines & Themes
+  dbEngines?: DatabaseEngineConfig[];
+  defaultTheme?: string;
+  allowedDomains?: string[];
+  paypalSecret?: string;
+  paypalReceiverEmail?: string;
 
   bankName: string;
   bankIban: string;
@@ -269,4 +311,45 @@ export interface ChatMessage {
   attachmentType?: string;
   timestamp: string;
   isRead?: boolean;
+}
+
+export interface SmsLogItem {
+  id: string;
+  phoneNumber: string;
+  countryCode?: string;
+  messageType: 'welcome' | 'otp_verification' | 'password_reset' | 'low_balance' | 'marketing_broadcast' | 'custom';
+  messageContent: string;
+  recipientName?: string;
+  sentByUserId?: string;
+  sentByUserName?: string;
+  status: 'delivered' | 'sent' | 'failed' | 'simulated';
+  gatewayResponse?: string;
+  sentAt: string;
+}
+
+export interface TrafficCampaign {
+  id: string;
+  name: string;
+  source: 'facebook_ads' | 'google_ads' | 'tiktok_ads' | 'whatsapp' | 'instagram' | 'direct' | 'organic_seo' | 'referral';
+  medium: 'cpc' | 'social' | 'influencer' | 'organic' | 'banner' | 'direct';
+  utmCampaign: string;
+  budgetKz: number;
+  clicks: number;
+  impressions: number;
+  leads: number;
+  registrations: number;
+  paidConversions: number;
+  revenueKz: number;
+  startDate: string;
+  status: 'active' | 'paused' | 'completed';
+}
+
+export interface OtpVerificationCode {
+  id: string;
+  identifier: string; // phone or email
+  type: 'phone_verification' | 'password_reset' | 'login_otp';
+  code: string;
+  expiresAt: string;
+  used: boolean;
+  createdAt: string;
 }

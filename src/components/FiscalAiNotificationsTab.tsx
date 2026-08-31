@@ -95,7 +95,7 @@ export const FiscalAiNotificationsTab: React.FC<FiscalAiNotificationsTabProps> =
     doc.setFontSize(14);
     doc.text('NANUCLOUD — RELATÓRIO DE ALTERAÇÕES FISCAIS & NOTÍCIAS OFICIAIS', 14, 15);
     doc.setFontSize(9);
-    doc.text(`Período de Análise: ${startDate} a ${endDate} • Fontes Oficiais: AGT, AT, Receita Federal, DNRE`, 14, 22);
+    doc.text(`Período de Análise: ${startDate} a ${endDate} • Diários Oficiais e Legislações Fiscais`, 14, 22);
 
     const rows = filteredNotifications.map((n) => [
       n.countryName,
@@ -137,7 +137,7 @@ export const FiscalAiNotificationsTab: React.FC<FiscalAiNotificationsTabProps> =
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Monitorização contínua de portais oficiais (AGT, AT, Receita Federal, DNRE) com registo de leitura por gestor
+              Monitorização de diplomas legais, diários da república e códigos tributários com registo de leitura por gestor
             </p>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserSafe } from '../types';
-import { COUNTRIES_DB, getAvailableCountryList } from '../data/countries';
+import { COUNTRIES_DB, getAvailableCountryList, getEffectiveCountryFiscal } from '../data/countries';
 import { SupportedLang } from '../i18n/translations';
 import {
   Users,
@@ -65,7 +65,8 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
   const [includeVatOnCommission, setIncludeVatOnCommission] = useState<boolean>(false);
   const [commissionVatRate, setCommissionVatRate] = useState<number>(14);
   const [retentionRate, setRetentionRate] = useState<string>('6.5');
-  const [tpaRate, setTpaRate] = useState<number>(0);
+  const [tpaRate, setTpaRate] = useState<string>('0');
+  const [tpaMode, setTpaMode] = useState<'pct' | 'fixed'>('pct');
   const [notes, setNotes] = useState<string>('');
 
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
@@ -74,7 +75,20 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const country = COUNTRIES_DB[countryCode] || COUNTRIES_DB['AO'];
+  const [countryVersion, setCountryVersion] = useState<number>(0);
+  const country = getEffectiveCountryFiscal(countryCode);
+
+  useEffect(() => {
+    const handleMatrixUpdate = () => {
+      setCountryVersion((v) => v + 1);
+    };
+    window.addEventListener('nanucloud_custom_fiscal_matrix_updated', handleMatrixUpdate);
+    window.addEventListener('nanucloud_countries_updated', handleMatrixUpdate);
+    return () => {
+      window.removeEventListener('nanucloud_custom_fiscal_matrix_updated', handleMatrixUpdate);
+      window.removeEventListener('nanucloud_countries_updated', handleMatrixUpdate);
+    };
+  }, []);
 
   // Update default legal recommendations when country or intermediary type changes
   useEffect(() => {
@@ -127,7 +141,7 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
     const fixCommVal = parseFloat(fixedCommissionAmount) || 0;
     const retPct = parseFloat(retentionRate) || 0;
     const vatRate = includeVatOnCommission ? commissionVatRate : 0;
-    const tpa = tpaRate || 0;
+    const tpaVal = parseFloat(tpaRate) || 0;
 
     // 1. Determine the commission calculation base
     let commissionBaseTarget = 0;
@@ -156,14 +170,18 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
     // The withholding tax is calculated on the gross taxable base (grossCommission)
     const withholdingTaxAmount = grossCommission * (retPct / 100);
 
-    // 4. Banking / Transfer / POS fee (TPA) if applicable
-    const tpaCost = (grossCommission + commissionVatAmount) * (tpa / 100);
+    // 4. Banking / Transfer / POS fee (TPA) if applicable (Manual & Optional)
+    const tpaCost = tpaVal <= 0
+      ? 0
+      : tpaMode === 'fixed'
+        ? tpaVal
+        : (grossCommission + commissionVatAmount) * (tpaVal / 100);
 
     // 5. Net amount that the owner must transfer to the intermediary
     // Owner pays: Invoice - Withholding Tax - TPA
     const netPayableToIntermediary = grossCommission + commissionVatAmount - withholdingTaxAmount - tpaCost;
 
-    // 6. Tax that the owner MUST deliver to the State / AGT (DAR)
+    // 6. Tax that the owner MUST deliver to the State / Fisco (DAR/Guia)
     const taxToDeliverToState = withholdingTaxAmount;
 
     // 7. Total cash outlay by the owner for intermediation
@@ -195,7 +213,8 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
       invoiceTotalFromIntermediary,
       retentionRate: retPct,
       withholdingTaxAmount,
-      tpaRate: tpa,
+      tpaRate: tpaVal,
+      tpaMode,
       tpaCost,
       netPayableToIntermediary,
       taxToDeliverToState,
@@ -264,139 +283,155 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
     }, 200);
   };
 
+  const activeResults = results;
+
   // Export to Excel (.xlsx)
   const handleExportExcel = () => {
-    if (!results) return;
+    if (!activeResults) return;
 
     const wb = XLSX.utils.book_new();
 
     const data = [
-      ['SIMULAÇÃO DE INTERMEDIAÇÃO COMERCIAL & FISCALIDADE DE COMISSÕES'],
-      ['Plataforma NANUCLOUD • Módulo Oficial de Intermediários'],
-      ['Data:', results.date],
-      ['País / Jurisdição:', country.name],
+      ['Nanucloud - Simulação de Intermediação Comercial & Comissões'],
+      ['Data:', activeResults.date],
+      ['País:', country.name],
       [''],
       ['1. DADOS DO NEGÓCIO & INTERVENIENTES'],
-      ['Descrição do Negócio:', results.dealTitle],
-      ['Proprietário / Vendedor Principal:', `${results.ownerName} (NIF: ${results.ownerNif})`],
-      ['Intermediário / Corretor:', `${results.intermediaryName} (NIF: ${results.intermediaryNif})`],
-      ['Tipo de Intermediário:', results.intermediaryType === 'company' ? 'Empresa (Pessoa Coletiva)' : 'Particular / Consultor Independente'],
+      ['Descrição do Negócio:', activeResults.dealTitle || 'Intermediação Comercial'],
+      ['Proprietário / Vendedor Principal:', `${activeResults.ownerName || 'Não especificado'} (NIF: ${activeResults.ownerNif || '---'})`],
+      ['Intermediário / Corretor:', `${activeResults.intermediaryName || 'Não especificado'} (NIF: ${activeResults.intermediaryNif || '---'})`],
+      ['Tipo de Intermediário:', activeResults.intermediaryType === 'company' ? 'Empresa (Pessoa Coletiva)' : 'Particular / Consultor Independente'],
       [''],
       ['2. VALOR GLOBAL DO NEGÓCIO INTERMEDIADO'],
-      ['Valor de Produtos / Mercadorias:', results.productsTotal, country.curr],
-      ['Valor de Prestação de Serviços:', results.servicesTotal, country.curr],
-      ['Valor Total Global da Transação:', results.totalDealVal, country.curr],
+      ['Valor de Produtos / Mercadorias:', activeResults.productsTotal, country.curr],
+      ['Valor de Prestação de Serviços:', activeResults.servicesTotal, country.curr],
+      ['Valor Total Global da Transação:', activeResults.totalDealVal, country.curr],
       [''],
       ['3. ESTRATÉGIA DE COMISSÃO'],
-      ['Incidência da Comissão:', results.commissionScopeLabel],
-      ['Base de Incidência de Cálculo:', results.commissionBaseTarget, country.curr],
-      ['Percentagem / Taxa de Comissão:', `${results.commissionPct}%`],
-      ['Comissão Bruta Acordada:', results.grossCommission, country.curr],
-      ['IVA sobre a Comissão:', results.commissionVatAmount, country.curr],
-      ['Total da Fatura do Intermediário:', results.invoiceTotalFromIntermediary, country.curr],
+      ['Incidência da Comissão:', activeResults.commissionScopeLabel],
+      ['Base de Incidência de Cálculo:', activeResults.commissionBaseTarget, country.curr],
+      ['Percentagem / Taxa de Comissão:', `${activeResults.commissionPct}%`],
+      ['Comissão Bruta Acordada:', activeResults.grossCommission, country.curr],
+      ['IVA sobre a Comissão:', activeResults.commissionVatAmount, country.curr],
+      ['Total da Fatura do Intermediário:', activeResults.invoiceTotalFromIntermediary, country.curr],
       [''],
-      ['4. OBRIGAÇÕES LEGAIS & RETENÇÃO NA FONTE (AGT / FISCO)'],
-      ['Taxa de Retenção na Fonte:', `${results.retentionRate}%`],
-      ['Valor de Retenção Retido pelo Proprietário:', results.withholdingTaxAmount, country.curr],
-      ['Entidade Responsável pela Retenção:', 'Proprietário (desconta e entrega à AGT via DAR)'],
-      ['Taxa Bancária / TPA:', results.tpaCost, country.curr],
+      ['4. OBRIGAÇÕES LEGAIS & RETENÇÃO NA FONTE (FISCO / TRIBUTAÇÃO)'],
+      ['Taxa de Retenção na Fonte:', `${activeResults.retentionRate}%`],
+      ['Valor de Retenção Retido pelo Proprietário:', activeResults.withholdingTaxAmount, country.curr],
+      ['Entidade Responsável pela Retenção:', 'Proprietário (desconta e entrega ao Estado via Guia/DAR)'],
+      ['Taxa Bancária / TPA (Opcional):', activeResults.tpaCost, country.curr],
       [''],
       ['5. APURAMENTO FINAL DE DESEMBOLSOS'],
-      ['VALOR LÍQUIDO A PAGAR AO INTERMEDIÁRIO (BANCÁRIO):', results.netPayableToIntermediary, country.curr],
-      ['IMPOSTO A ENTREGAR AO ESTADO PELO PROPRIETÁRIO:', results.taxToDeliverToState, country.curr],
-      ['CUSTO TOTAL DE INTERMEDIAÇÃO PARA O PROPRIETÁRIO:', results.totalOwnerIntermediationCost, country.curr],
-      ['VALOR LÍQUIDO REMANESCENTE PARA O PROPRIETÁRIO:', results.ownerRemainingDealBalance, country.curr],
+      ['VALOR LÍQUIDO A PAGAR AO INTERMEDIÁRIO (BANCÁRIO):', activeResults.netPayableToIntermediary, country.curr],
+      ['IMPOSTO A ENTREGAR AO ESTADO PELO PROPRIETÁRIO:', activeResults.taxToDeliverToState, country.curr],
+      ['CUSTO TOTAL DE INTERMEDIAÇÃO PARA O PROPRIETÁRIO:', activeResults.totalOwnerIntermediationCost, country.curr],
+      ['VALOR LÍQUIDO REMANESCENTE PARA O PROPRIETÁRIO:', activeResults.ownerRemainingDealBalance, country.curr],
+      [''],
+      ['Aviso Legal Nanucloud:', 'A utilização deste aplicativo tem caráter meramente informativo e estimativo, não dispensando a consulta de um profissional de contas ou contabilista certificado.'],
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(data);
     XLSX.utils.book_append_sheet(wb, ws, 'Intermediacao_Fiscal');
-    XLSX.writeFile(wb, `NANUCLOUD_Intermediacao_${results.dealTitle.replace(/\s+/g, '_')}.xlsx`);
+    XLSX.writeFile(wb, `Nanucloud_Intermediacao_${(activeResults.dealTitle || 'Negocio').replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`);
   };
 
   // Export to PDF
   const handleExportPDF = () => {
-    if (!results) return;
+    if (!activeResults) return;
 
     const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
 
-    // Brand Header
-    doc.setFillColor(30, 41, 59); // Slate-800
-    doc.rect(0, 0, 210, 24, 'F');
+    // Header Banner (Fundo Branco com Logo Oficial Nanucloud)
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageWidth, 28, 'F');
 
-    doc.setTextColor(255, 255, 255);
+    // Linha de acento verde oficial
+    doc.setDrawColor(0, 168, 89);
+    doc.setLineWidth(0.8);
+    doc.line(14, 26, pageWidth - 14, 26);
+
+    // Logo Nanucloud
+    doc.setDrawColor(0, 168, 89);
+    doc.setFillColor(0, 168, 89);
+    doc.roundedRect(14, 7, 7, 7, 1.5, 1.5, 'FD');
+    doc.setFillColor(255, 255, 255);
+    doc.circle(17.5, 10.5, 2, 'F');
+
+    doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('NANUCLOUD • SIMULADOR DE INTERMEDIAÇÃO & COMISSÕES', 14, 15);
+    doc.setTextColor(24, 24, 27);
+    doc.text('Nanu', 24, 14);
+    const nanuWidth = doc.getTextWidth('Nanu');
+    doc.setTextColor(0, 168, 89);
+    doc.text('cloud', 24 + nanuWidth, 14);
 
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Relatório Fiscal & Financeiro de Corretagem • ${results.date}`, 14, 21);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Data: ${activeResults.date} | Ref: INT-${Date.now().toString().slice(-6)}`, pageWidth - 14, 14, { align: 'right' });
 
     // Business Summary Info
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('1. Informação do Negócio e Intervenientes', 14, 34);
+    doc.text('1. Informação do Negócio e Intervenientes', 14, 35);
 
     autoTable(doc, {
-      startY: 37,
+      startY: 38,
       theme: 'grid',
       headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
       head: [['Campo', 'Discriminação']],
       body: [
-        ['Negócio Intermediado', results.dealTitle],
-        ['Proprietário / Vendedor Principal', `${results.ownerName} (NIF: ${results.ownerNif})`],
-        ['Intermediário / Corretor', `${results.intermediaryName} (NIF: ${results.intermediaryNif}) - ${results.intermediaryType === 'company' ? 'Empresa' : 'Particular'}`],
-        ['Valor de Produtos / Mercadorias', formatMoney(results.productsTotal)],
-        ['Valor de Serviços', formatMoney(results.servicesTotal)],
-        ['Valor Global da Operação', formatMoney(results.totalDealVal)],
-        ['Incidência da Comissão', results.commissionScopeLabel],
-      ]
+        ['Negócio Intermediado', activeResults.dealTitle || 'Intermediação Comercial'],
+        ['Proprietário / Vendedor Principal', `${activeResults.ownerName || 'Não especificado'} (NIF: ${activeResults.ownerNif || '---'})`],
+        ['Intermediário / Corretor', `${activeResults.intermediaryName || 'Não especificado'} (NIF: ${activeResults.intermediaryNif || '---'}) - ${activeResults.intermediaryType === 'company' ? 'Empresa' : 'Particular'}`],
+        ['Valor de Produtos / Mercadorias', formatMoney(activeResults.productsTotal)],
+        ['Valor de Serviços', formatMoney(activeResults.servicesTotal)],
+        ['Valor Global da Operação', formatMoney(activeResults.totalDealVal)],
+        ['Incidência da Comissão', activeResults.commissionScopeLabel],
+      ],
+      styles: { fontSize: 8, cellPadding: 2.5 }
     });
 
-    const finalY1 = (doc as any).lastAutoTable.finalY || 100;
+    const finalY1 = (doc as any).lastAutoTable.finalY || 95;
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.text('2. Liquidação de Comissão, Impostos e Retenções na Fonte', 14, finalY1 + 10);
+    doc.text('2. Liquidação de Comissão, Impostos e Retenções na Fonte', 14, finalY1 + 8);
 
     autoTable(doc, {
-      startY: finalY1 + 13,
+      startY: finalY1 + 11,
       theme: 'striped',
       headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
       head: [['Rubrica de Cálculo', 'Percentual', 'Montante', 'Enquadramento / Destinatário']],
       body: [
-        ['Comissão Bruta Acordada', `${results.commissionPct}%`, formatMoney(results.grossCommission), 'Base de incidência do intermediário'],
-        ['IVA s/ Comissão (se aplicável)', `${results.commissionVatRate}%`, formatMoney(results.commissionVatAmount), 'Liquidado na fatura do intermediário'],
-        ['Retenção na Fonte por Lei', `${results.retentionRate}%`, `- ${formatMoney(results.withholdingTaxAmount)}`, 'Descontado pelo Proprietário e entregue à AGT'],
-        ['Taxas Bancárias / TPA', `${results.tpaRate}%`, `- ${formatMoney(results.tpaCost)}`, 'Encargo de processamento'],
-        ['LÍQUIDO A PAGAR AO INTERMEDIÁRIO', '---', formatMoney(results.netPayableToIntermediary), 'Transferência Bancária / Pagamento Líquido'],
-        ['IMPOSTO A ENTREGAR AO ESTADO (AGT/DAR)', '---', formatMoney(results.taxToDeliverToState), 'Obrigação tributária do Proprietário'],
-        ['VALOR REMANESCENTE PROPRIETÁRIO', '---', formatMoney(results.ownerRemainingDealBalance), 'Saldo Líquido final da venda'],
-      ]
+        ['Comissão Bruta Acordada', `${activeResults.commissionPct}%`, formatMoney(activeResults.grossCommission), 'Base de incidência do intermediário'],
+        ['IVA s/ Comissão (se aplicável)', `${activeResults.commissionVatRate}%`, formatMoney(activeResults.commissionVatAmount), 'Liquidado na fatura do intermediário'],
+        ['Retenção na Fonte por Lei', `${activeResults.retentionRate}%`, `- ${formatMoney(activeResults.withholdingTaxAmount)}`, 'Descontado pelo Proprietário e entregue ao Fisco'],
+        ['Taxas Bancárias / TPA (Opcional)', activeResults.tpaCost > 0 ? (activeResults.tpaMode === 'fixed' ? `${formatMoney(activeResults.tpaRate)}` : `${activeResults.tpaRate}%`) : '0% (Isento)', `- ${formatMoney(activeResults.tpaCost)}`, 'Encargo de processamento'],
+        ['LÍQUIDO A PAGAR AO INTERMEDIÁRIO', '---', formatMoney(activeResults.netPayableToIntermediary), 'Transferência Bancária / Pagamento Líquido'],
+        ['IMPOSTO A ENTREGAR AO ESTADO (GUIA / DAR)', '---', formatMoney(activeResults.taxToDeliverToState), 'Obrigação tributária do Proprietário'],
+        ['VALOR REMANESCENTE PROPRIETÁRIO', '---', formatMoney(activeResults.ownerRemainingDealBalance), 'Saldo Líquido final da venda'],
+      ],
+      styles: { fontSize: 8, cellPadding: 2.5 }
     });
 
     const finalY2 = (doc as any).lastAutoTable.finalY || 180;
 
-    // Legal Warning / Decree Citation Box
-    doc.setFillColor(241, 245, 249);
-    doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(14, finalY2 + 8, 182, 38, 3, 3, 'FD');
+    // Rodapé com Aviso Legal Oficial
+    doc.setDrawColor(226, 232, 240);
+    doc.line(14, 281, pageWidth - 14, 281);
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      'Aviso Legal Nanucloud: A utilização deste aplicativo tem caráter meramente informativo e estimativo, não dispensando a consulta de um profissional de contas ou contabilista certificado.',
+      14,
+      286,
+      { maxWidth: 180 }
+    );
 
-    doc.setTextColor(51, 65, 85);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('AVISO LEGAL & ENQUADRAMENTO TRIBUTÁRIO:', 18, finalY2 + 15);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    const legalText =
-      countryCode === 'AO'
-        ? 'Em Angola, nos termos do Código do Imposto Industrial (Lei n.º 19/14 e Lei n.º 26/20) e Decreto Legislativo Presidencial n.º 2/14, os pagamentos de comissões e intermediação estão sujeitos a retenção na fonte (taxa de referência 6.5%). O proprietário/pagador é o substituto tributário responsável por reter o montante e entregá-lo à AGT através do Documento de Arrecadação de Receitas (DAR) até ao final do mês subsequente.'
-        : 'Nos termos da legislação fiscal aplicável, a retenção na fonte sobre comissões e intermediação de negócios deve ser retida pela entidade pagadora e entregue à Autoridade Tributária nos prazos regulamentares.';
-    
-    doc.text(doc.splitTextToSize(legalText, 174), 18, finalY2 + 21);
-
-    doc.save(`NANUCLOUD_Intermediacao_${results.dealTitle.replace(/\s+/g, '_')}.pdf`);
+    doc.save(`Nanucloud_Intermediacao_${(activeResults.dealTitle || 'Negocio').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
   };
 
   return (
@@ -418,7 +453,7 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Simulação financeira e fiscal de comissões, incidência sobre produtos/serviços, apuramento da retenção na fonte legal e obrigações do proprietário perante a AGT/Fisco.
+                Simulação financeira e fiscal de comissões, incidência sobre produtos/serviços, apuramento da retenção na fonte legal e obrigações do proprietário perante as autoridades fiscais.
               </p>
             </div>
           </div>
@@ -743,7 +778,7 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-amber-400" />
               <label className="text-xs font-bold text-slate-200 font-mono uppercase tracking-wider">
-                4. Enquadramento Legal & Taxas de Retenção na Fonte (AGT / Fisco)
+                4. Enquadramento Legal & Taxas de Retenção na Fonte (Fisco / Tributação)
               </label>
             </div>
             <span className="text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded font-mono font-bold">
@@ -766,7 +801,7 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
             <p className="text-[11px] text-slate-300 font-sans leading-relaxed">
               {countryCode === 'AO' ? (
                 <>
-                  Pela lei fiscal angolana, a intermediação de negócios e comissões sujeita-se à <strong>Retenção na Fonte de 6.5%</strong>. A obrigação legal de entrega do imposto ao Estado é do <strong>Proprietário do Negócio / Entidade Adquirente</strong>, que desconta este valor no ato do pagamento ao intermediário e entrega à AGT via <strong>DAR (Documento de Arrecadação de Receitas)</strong>.
+                  Pela lei fiscal angolana, a intermediação de negócios e comissões sujeita-se à <strong>Retenção na Fonte de 6.5%</strong>. A obrigação legal de entrega do imposto ao Estado é do <strong>Proprietário do Negócio / Entidade Adquirente</strong>, que desconta este valor no ato do pagamento ao intermediário e entrega ao Estado via <strong>DAR (Documento de Arrecadação de Receitas)</strong>.
                   <br />
                   <span className="text-amber-200 text-[10px]">
                     * As taxas abaixo são recomendações baseadas no decreto. O utilizador pode alterar livremente conforme o contrato ou acordos de isenção.
@@ -821,21 +856,73 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
               </div>
             </div>
 
-            {/* TPA / Banking Transfer Fee */}
+            {/* TPA / Banking Transfer Fee - Optional & Manual */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-400 font-mono uppercase tracking-wider">
-                Taxa TPA / Multicaixa (Padrão 0%)
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-400 font-mono uppercase tracking-wider">
+                  Taxa TPA / Multicaixa (Opcional)
+                </label>
+                <div className="flex items-center bg-slate-900 border border-slate-700 rounded-md p-0.5 text-[10px] font-mono">
+                  <button
+                    type="button"
+                    onClick={() => setTpaMode('pct')}
+                    className={`px-1.5 py-0.5 rounded cursor-pointer ${
+                      tpaMode === 'pct' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    %
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTpaMode('fixed')}
+                    className={`px-1.5 py-0.5 rounded cursor-pointer ${
+                      tpaMode === 'fixed' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {country.curr}
+                  </button>
+                </div>
+              </div>
+
               <div className="relative">
                 <input
                   type="number"
                   value={tpaRate}
-                  onChange={(e) => setTpaRate(parseFloat(e.target.value) || 0)}
-                  step="0.1"
+                  onChange={(e) => setTpaRate(e.target.value)}
+                  step={tpaMode === 'pct' ? '0.1' : '100'}
                   min="0"
+                  placeholder="0 (Isento)"
                   className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs font-mono focus:border-indigo-500 outline-none transition"
                 />
-                <span className="absolute right-3 top-2 text-xs text-slate-500 font-mono">%</span>
+                <span className="absolute right-3 top-2 text-xs text-slate-500 font-mono">
+                  {tpaMode === 'pct' ? '%' : country.curr}
+                </span>
+              </div>
+
+              {/* Quick Presets for TPA */}
+              <div className="flex items-center gap-1 pt-1">
+                {[
+                  { label: '0% (Isento)', val: '0', mode: 'pct' as const },
+                  { label: '1.0%', val: '1.0', mode: 'pct' as const },
+                  { label: '1.5%', val: '1.5', mode: 'pct' as const },
+                  { label: '2.5%', val: '2.5', mode: 'pct' as const }
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      setTpaMode(item.mode);
+                      setTpaRate(item.val);
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer transition ${
+                      tpaRate === item.val && tpaMode === item.mode
+                        ? 'bg-indigo-600 text-white font-bold'
+                        : 'bg-slate-900 text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -889,29 +976,36 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
         </div>
 
         {/* Calculate Action */}
-        <button
-          onClick={handleSimulate}
-          disabled={isCalculating}
-          className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 px-6 rounded-xl text-xs font-mono uppercase tracking-wider transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-        >
-          <Calculator className="w-4 h-4" />
-          <span>{isCalculating ? 'A CALCULAR & ENQUADRAR...' : 'SIMULAR INTERMEDIAÇÃO & APURAR DESEMBOLSOS'}</span>
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <button
+            onClick={handleSimulate}
+            disabled={isCalculating}
+            className="w-full sm:flex-1 bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold py-3.5 px-6 rounded-xl text-xs font-mono uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+          >
+            <Calculator className="w-4 h-4" />
+            <span>{isCalculating ? 'A CALCULAR & ENQUADRAR...' : 'CALCULAR INTERMEDIAÇÃO & COMISSÕES'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Results Breakdown */}
-      {results && (
-        <div className="space-y-6">
+      {/* Results Breakdown (Gated behind Calculate button) */}
+      {activeResults ? (
+        <div className="space-y-6 animate-in zoom-in-95 duration-200">
           {/* Action Bar with Export Buttons */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#1E293B] border border-slate-800 rounded-xl p-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-emerald-400" />
               <div>
-                <h3 className="text-xs font-bold text-slate-100 font-mono uppercase">
-                  Demonstração da Intermediação & Liquidação Fiscal
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-slate-100 font-mono uppercase">
+                    Demonstração da Intermediação & Liquidação Fiscal
+                  </h3>
+                  <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                    Apurado • 1 Crédito
+                  </span>
+                </div>
                 <span className="text-[10px] text-slate-400 font-mono">
-                  Base de Cálculo: {results.commissionScopeLabel} ({formatMoney(results.commissionBaseTarget)})
+                  Base de Cálculo: {activeResults.commissionScopeLabel} ({formatMoney(activeResults.commissionBaseTarget)})
                 </span>
               </div>
             </div>
@@ -945,31 +1039,31 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
                   </div>
                   <div>
                     <h4 className="text-xs font-bold font-mono text-indigo-300 uppercase">
-                      1. Visão do Intermediário ({results.intermediaryType === 'company' ? 'Empresa' : 'Particular'})
+                      1. Visão do Intermediário ({activeResults.intermediaryType === 'company' ? 'Empresa' : 'Particular'})
                     </h4>
                     <p className="text-[10px] text-slate-400">Montante líquido creditado na conta bancária</p>
                   </div>
                 </div>
                 <span className="text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20">
-                  Comissão: {results.commissionPct}%
+                  Comissão: {activeResults.commissionPct}%
                 </span>
               </div>
 
               <div className="space-y-2.5 text-xs font-mono">
                 <div className="flex justify-between text-slate-300 bg-[#0F172A] p-2.5 rounded-lg border border-slate-800">
-                  <span>Base de Incidência ({results.commissionScopeLabel})</span>
-                  <strong className="text-slate-100">{formatMoney(results.commissionBaseTarget)}</strong>
+                  <span>Base de Incidência ({activeResults.commissionScopeLabel})</span>
+                  <strong className="text-slate-100">{formatMoney(activeResults.commissionBaseTarget)}</strong>
                 </div>
 
                 <div className="flex justify-between text-indigo-300 bg-[#0F172A] p-2.5 rounded-lg border border-slate-800">
                   <span>Comissão Bruta Acordada</span>
-                  <strong className="text-indigo-400 font-bold">{formatMoney(results.grossCommission)}</strong>
+                  <strong className="text-indigo-400 font-bold">{formatMoney(activeResults.grossCommission)}</strong>
                 </div>
 
-                {results.includeVatOnCommission && (
+                {activeResults.includeVatOnCommission && (
                   <div className="flex justify-between text-indigo-300 bg-[#0F172A] p-2.5 rounded-lg border border-slate-800">
-                    <span>(+) IVA s/ Comissão ({results.commissionVatRate}%)</span>
-                    <strong>+ {formatMoney(results.commissionVatAmount)}</strong>
+                    <span>(+) IVA s/ Comissão ({activeResults.commissionVatRate}%)</span>
+                    <strong>+ {formatMoney(activeResults.commissionVatAmount)}</strong>
                   </div>
                 )}
 
@@ -980,14 +1074,14 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
                   </p>
 
                   <div className="flex justify-between text-rose-300 font-bold">
-                    <span>(-) Retenção na Fonte por Lei ({results.retentionRate}%)</span>
-                    <span>- {formatMoney(results.withholdingTaxAmount)}</span>
+                    <span>(-) Retenção na Fonte por Lei ({activeResults.retentionRate}%)</span>
+                    <span>- {formatMoney(activeResults.withholdingTaxAmount)}</span>
                   </div>
 
-                  {results.tpaCost > 0 && (
+                  {activeResults.tpaCost > 0 && (
                     <div className="flex justify-between text-rose-300">
-                      <span>(-) Encargo Bancário / TPA ({results.tpaRate}%)</span>
-                      <span>- {formatMoney(results.tpaCost)}</span>
+                      <span>(-) Encargo Bancário / TPA ({activeResults.tpaRate}%)</span>
+                      <span>- {formatMoney(activeResults.tpaCost)}</span>
                     </div>
                   )}
                 </div>
@@ -1003,7 +1097,7 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
                     </span>
                   </div>
                   <strong className="text-lg font-bold font-mono text-emerald-400">
-                    {formatMoney(results.netPayableToIntermediary)}
+                    {formatMoney(activeResults.netPayableToIntermediary)}
                   </strong>
                 </div>
               </div>
@@ -1031,19 +1125,19 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
               <div className="space-y-2.5 text-xs font-mono">
                 <div className="flex justify-between text-slate-300 bg-[#0F172A] p-2.5 rounded-lg border border-slate-800">
                   <span>Faturação Total Bruta do Negócio</span>
-                  <strong className="text-slate-100">{formatMoney(results.totalDealVal)}</strong>
+                  <strong className="text-slate-100">{formatMoney(activeResults.totalDealVal)}</strong>
                 </div>
 
                 <div className="flex justify-between text-amber-300 bg-[#0F172A] p-2.5 rounded-lg border border-slate-800">
                   <span>(-) Pagamento Líquido ao Intermediário</span>
-                  <strong>- {formatMoney(results.netPayableToIntermediary)}</strong>
+                  <strong>- {formatMoney(activeResults.netPayableToIntermediary)}</strong>
                 </div>
 
                 {/* Tax Duty to the State */}
                 <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/30 space-y-1.5">
                   <div className="flex justify-between text-amber-300 font-bold">
-                    <span>(-) Imposto Retido a Entregar à AGT / DAR</span>
-                    <span>- {formatMoney(results.taxToDeliverToState)}</span>
+                    <span>(-) Imposto Retido a Entregar ao Estado / DAR</span>
+                    <span>- {formatMoney(activeResults.taxToDeliverToState)}</span>
                   </div>
                   <p className="text-[10px] text-slate-400 font-sans">
                     O proprietário deve recolher este imposto ao Estado até ao final do mês subsequente.
@@ -1051,8 +1145,8 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
                 </div>
 
                 <div className="flex justify-between text-slate-400 bg-[#0F172A] p-2.5 rounded-lg border border-slate-800">
-                  <span>Custo Total de Intermediação (Intermediário + AGT)</span>
-                  <strong className="text-rose-400 font-bold">{formatMoney(results.totalOwnerIntermediationCost)}</strong>
+                  <span>Custo Total de Intermediação (Intermediário + Imposto)</span>
+                  <strong className="text-rose-400 font-bold">{formatMoney(activeResults.totalOwnerIntermediationCost)}</strong>
                 </div>
 
                 {/* Net Remaining Balance for Owner */}
@@ -1066,23 +1160,39 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
                     </span>
                   </div>
                   <strong className="text-lg font-bold font-mono text-emerald-400">
-                    {formatMoney(results.ownerRemainingDealBalance)}
+                    {formatMoney(activeResults.ownerRemainingDealBalance)}
                   </strong>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Legal Compliance Banner */}
-          <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4 text-xs font-mono space-y-2">
+          {/* Legal Compliance Banner & Professional Disclaimer */}
+          <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4 text-xs font-mono space-y-3">
             <div className="flex items-center gap-2 text-indigo-400 font-bold">
               <Scale className="w-4 h-4" />
               <span>Resumo Fiscal da Operação de Intermediação</span>
             </div>
             <p className="text-[11px] text-slate-300 font-sans leading-relaxed">
-              Esta simulação discrimina com precisão a separação de obrigações: o <strong>Intermediário</strong> recebe o seu rendimento líquido na conta ({formatMoney(results.netPayableToIntermediary)}), enquanto o <strong>Proprietário</strong> retém a taxa por lei ({formatMoney(results.taxToDeliverToState)}) e assume a responsabilidade formal de liquidar a guia de retenção junto da Autoridade Geral Tributária (AGT).
+              Esta simulação discrimina com precisão a separação de obrigações: o <strong>Intermediário</strong> recebe o seu rendimento líquido na conta ({formatMoney(activeResults.netPayableToIntermediary)}), enquanto o <strong>Proprietário</strong> retém a taxa por lei ({formatMoney(activeResults.taxToDeliverToState)}) e assume a responsabilidade formal de liquidar a guia de retenção junto das autoridades fiscais.
             </p>
+            <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2 text-[11px] text-amber-300 font-sans">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+              <span>
+                <strong>Aviso Legal Nanucloud:</strong> A utilização deste aplicativo tem caráter meramente informativo e estimativo, não dispensando a consulta de um profissional de contas ou contabilista certificado.
+              </span>
+            </div>
           </div>
+        </div>
+      ) : (
+        <div className="bg-[#1E293B]/60 border border-dashed border-slate-700 rounded-2xl p-8 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
+            <Calculator className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-200 font-mono">Aguardando Execução do Cálculo</h3>
+          <p className="text-xs text-slate-400 font-mono max-w-sm mx-auto leading-relaxed">
+            Preencha os valores da transação e parâmetros da comissão e clique no botão <strong>"CALCULAR INTERMEDIAÇÃO & COMISSÕES"</strong> para apurar os montantes e retenções fiscais.
+          </p>
         </div>
       )}
     </div>

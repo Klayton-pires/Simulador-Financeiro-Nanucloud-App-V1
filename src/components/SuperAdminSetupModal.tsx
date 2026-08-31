@@ -19,11 +19,13 @@ import { COUNTRIES_DB } from '../data/countries';
 
 interface SuperAdminSetupModalProps {
   isOpen: boolean;
+  onClose?: () => void;
   onComplete: (superAdminUser: UserSafe) => void;
 }
 
 export const SuperAdminSetupModal: React.FC<SuperAdminSetupModalProps> = ({
   isOpen,
+  onClose,
   onComplete
 }) => {
   const [step, setStep] = useState<1 | 2>(1);
@@ -133,23 +135,35 @@ export const SuperAdminSetupModal: React.FC<SuperAdminSetupModalProps> = ({
       <div className="bg-[#1E293B] border border-indigo-500/50 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 border-b border-indigo-500/30 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
-            <ShieldAlert className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-slate-100 font-mono tracking-wider">
-                CONFIGURAÇÃO INICIAL DO SUPER ADMINISTRADOR
-              </h2>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 font-mono font-bold">
-                Passo {step} de 2
-              </span>
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 border-b border-indigo-500/30 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
+              <ShieldAlert className="w-6 h-6" />
             </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Primeiro acesso ao sistema: defina as credenciais mestre de governança e dados institucionais da aplicação.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-100 font-mono tracking-wider">
+                  CONFIGURAÇÃO DO SUPER ADMINISTRADOR
+                </h2>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 font-mono font-bold">
+                  Passo {step} de 2
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Opcional: Defina credenciais mestre de governança e dados institucionais da aplicação.
+              </p>
+            </div>
           </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              type="button"
+              className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition"
+              title="Fechar / Usar como Convidado"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {errorMsg && (
@@ -244,7 +258,18 @@ export const SuperAdminSetupModal: React.FC<SuperAdminSetupModalProps> = ({
               </div>
             </div>
 
-            <div className="pt-3 flex justify-end">
+            <div className="pt-3 flex justify-between items-center">
+              {onClose ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="text-slate-400 hover:text-slate-200 text-xs font-mono"
+                >
+                  Pular / Entrar Direto
+                </button>
+              ) : (
+                <div />
+              )}
               <button
                 type="submit"
                 className="bg-indigo-600 hover:bg-indigo-500 text-white font-mono font-bold text-xs py-2.5 px-6 rounded-xl flex items-center gap-2 shadow-lg transition-all"

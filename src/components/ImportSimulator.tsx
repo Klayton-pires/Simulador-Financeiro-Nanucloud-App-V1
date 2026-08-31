@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserSafe } from '../types';
-import { COUNTRIES_DB } from '../data/countries';
+import { COUNTRIES_DB, getEffectiveCountryFiscal, getAvailableCountryList } from '../data/countries';
 import { SupportedLang, TRANSLATIONS } from '../i18n/translations';
 import {
   Ship,
@@ -51,6 +51,7 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
   const [iecRate, setIecRate] = useState<string>('');
   const [otherFees, setOtherFees] = useState<string>('');
   const [marginPct, setMarginPct] = useState<string>('');
+  const [tpaRate, setTpaRate] = useState<string>('1.0');
   const [productName, setProductName] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
@@ -59,7 +60,9 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const destFiscal = COUNTRIES_DB[destCountry] || COUNTRIES_DB['AO'];
+  const isSuperAdmin = user?.role === 'super_admin' || user?.role === 'superadmin' || user?.role === 'admin_level1' || user?.role === 'admin';
+  const availableCountries = getAvailableCountryList(isSuperAdmin);
+  const destFiscal = getEffectiveCountryFiscal(destCountry);
 
   const formatMoney = (val: number) => {
     return (
@@ -153,8 +156,10 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
         const vat = vatBase * (vatRate / 100);
         const totalCustoms = customsDuty + iec + statFee + vat + cOther;
         const landedCost = cif + totalCustoms;
+        const cTpa = parseFloat(tpaRate) || 0;
         const recommendedPVP = landedCost * (1 + cMargin / 100);
-        const estimatedProfit = recommendedPVP - landedCost;
+        const tpaCost = recommendedPVP * (cTpa / 100);
+        const estimatedProfit = recommendedPVP - landedCost - tpaCost;
 
         calcData = {
           fob: cFob,
@@ -169,6 +174,8 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
           totalCustomsDuties: totalCustoms,
           landedCost,
           marginPct: cMargin,
+          tpaRate: cTpa,
+          tpaCost,
           recommendedPVP,
           estimatedProfit,
           currency: destFiscal.curr
@@ -206,7 +213,7 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
       ],
       calculatedFields: [
         { label: 'Valor Aduaneiro Internacional (CIF)', amount: results.cif || 0, rateOrMargin: 'CIF', fiscalDestiny: 'Origem + Frete + Seguro' },
-        { label: 'Direitos Aduaneiros Liquidados', amount: results.customsDuty || 0, rateOrMargin: `${customsRate}%`, isDeduction: false, fiscalDestiny: 'Alfândega / AGT' },
+        { label: 'Direitos Aduaneiros Liquidados', amount: results.customsDuty || 0, rateOrMargin: `${customsRate}%`, isDeduction: false, fiscalDestiny: 'Alfândega / Fisco' },
         { label: 'Imposto Especial de Consumo (IEC)', amount: results.iec || results.iecTax || 0, rateOrMargin: `${iecRate}%`, isDeduction: false, fiscalDestiny: 'Tributos Aduaneiros' },
         { label: 'CUSTO BASE NACIONALIZADO (Sem IVA)', amount: results.nationalizedCostNet || results.landedCost || 0, rateOrMargin: 'Nacionalizado', isFinalHighlight: true, fiscalDestiny: 'Custo de Entrada em Armazém' },
         { label: 'IVA Aduaneiro e de Venda', amount: results.vatSale || results.vat || 0, rateOrMargin: `${vatRate}%`, fiscalDestiny: destFiscal.agency },
@@ -342,9 +349,9 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
               onChange={(e) => setOriginCountry(e.target.value)}
               className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl px-3 py-2.5 text-sm font-medium focus:border-indigo-500 outline-none"
             >
-              {Object.keys(COUNTRIES_DB).map((code) => (
-                <option key={code} value={code}>
-                  {COUNTRIES_DB[code].name}
+              {availableCountries.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
                 </option>
               ))}
             </select>
@@ -356,14 +363,14 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
               value={destCountry}
               onChange={(e) => {
                 setDestCountry(e.target.value);
-                const c = COUNTRIES_DB[e.target.value];
+                const c = getEffectiveCountryFiscal(e.target.value);
                 if (c) setVatRate(c.vatOptions[0]?.r ?? 14);
               }}
               className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl px-3 py-2.5 text-sm font-medium focus:border-indigo-500 outline-none"
             >
-              {Object.keys(COUNTRIES_DB).map((code) => (
-                <option key={code} value={code}>
-                  {COUNTRIES_DB[code].name} ({COUNTRIES_DB[code].curr})
+              {availableCountries.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name} ({c.curr})
                 </option>
               ))}
             </select>
@@ -467,16 +474,30 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
           </div>
         </div>
 
-        {/* Margin & Notes */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        {/* Margin, TPA & Notes */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300">{t.lblImpMargin}</label>
+            <label className="text-xs font-bold text-slate-300">{t.lblImpMargin} (%)</label>
             <input
               type="number"
               value={marginPct}
               onChange={(e) => setMarginPct(e.target.value)}
               placeholder="30"
               className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl px-3 py-2.5 text-sm font-medium focus:border-indigo-500 outline-none"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-300">Taxa TPA / Banco (%)</label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              max="20"
+              value={tpaRate}
+              onChange={(e) => setTpaRate(e.target.value)}
+              placeholder="1.0"
+              className="w-full bg-slate-900 border border-slate-700 text-indigo-300 rounded-xl px-3 py-2.5 text-sm font-medium focus:border-indigo-500 outline-none"
             />
           </div>
 
@@ -629,6 +650,14 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
           </div>
         </div>
       )}
+
+      {/* Mandatory Accountant Disclaimer */}
+      <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2.5 text-xs text-amber-300">
+        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+        <span>
+          <strong>Aviso Legal Nanucloud:</strong> A utilização deste simulador tem caráter estimativo e informativo, <strong>não dispensando a consulta de um profissional de contas</strong> ou despachante aduaneiro certificado.
+        </span>
+      </div>
     </div>
   );
 };

@@ -20,7 +20,22 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
       productName,
       itemType, // 'product' | 'service'
       retentionRate, // % retenção na fonte
-      notes
+      notes,
+      // Optional extra logistics & acquisition expenses
+      transportCost,
+      transportRoundTrip,
+      transportTaxMode,
+      transportVatRate,
+      mealsCost,
+      mealsTaxMode,
+      mealsVatRate,
+      lodgingCost,
+      lodgingTaxMode,
+      lodgingVatRate,
+      otherExtrasCost,
+      otherExtrasLabel,
+      otherExtrasTaxMode,
+      otherExtrasVatRate
     } = req.body;
 
     const cCostNet = Number(costNet) || 0;
@@ -31,6 +46,45 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
     const cRetentionRate = Number(retentionRate) || 0;
     const isService = itemType === 'service' || cRetentionRate > 0;
 
+    // Helper for computing item net and input VAT
+    const computeExtraCostTax = (amount: number, mode: string = 'without_vat', rate: number = cVatRate) => {
+      if (amount <= 0) return { net: 0, vat: 0, total: 0 };
+      if (mode === 'exempt' || rate === 0) {
+        return { net: amount, vat: 0, total: amount };
+      }
+      if (mode === 'with_vat') {
+        const net = amount / (1 + rate / 100);
+        const vat = amount - net;
+        return { net, vat, total: amount };
+      }
+      // without_vat
+      const net = amount;
+      const vat = net * (rate / 100);
+      return { net, vat, total: net + vat };
+    };
+
+    // Calculate individual extra acquisition costs
+    const cTransportCost = Number(transportCost) || 0;
+    const cTransportRoundTrip = Boolean(transportRoundTrip);
+    const transportVal = cTransportCost * (cTransportRoundTrip ? 2 : 1);
+    const transportCalc = computeExtraCostTax(transportVal, transportTaxMode, Number(transportVatRate) || cVatRate);
+
+    const cMealsCost = Number(mealsCost) || 0;
+    const mealsCalc = computeExtraCostTax(cMealsCost, mealsTaxMode, Number(mealsVatRate) || cVatRate);
+
+    const cLodgingCost = Number(lodgingCost) || 0;
+    const lodgingCalc = computeExtraCostTax(cLodgingCost, lodgingTaxMode, Number(lodgingVatRate) || cVatRate);
+
+    const cOtherExtrasCost = Number(otherExtrasCost) || 0;
+    const otherExtrasCalc = computeExtraCostTax(cOtherExtrasCost, otherExtrasTaxMode, Number(otherExtrasVatRate) || cVatRate);
+
+    const totalExtraCostsNet = transportCalc.net + mealsCalc.net + lodgingCalc.net + otherExtrasCalc.net;
+    const totalExtraCostsVat = transportCalc.vat + mealsCalc.vat + lodgingCalc.vat + otherExtrasCalc.vat;
+    const totalExtraCostsPaid = transportCalc.total + mealsCalc.total + lodgingCalc.total + otherExtrasCalc.total;
+
+    // Total Effective Cost of Acquisition
+    const effectiveCostNet = cCostNet + totalExtraCostsNet;
+
     // Field Validation Alerts
     if (isService) {
       if (cFixedPrice <= 0 && cCostNet <= 0) {
@@ -39,7 +93,7 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
         });
       }
     } else {
-      if (cCostNet <= 0) {
+      if (cCostNet <= 0 && effectiveCostNet <= 0) {
         return res.status(400).json({
           error: 'Para comércio de produtos, o Preço de Custo Base (SEM IVA) é obrigatório e deve ser superior a zero.'
         });
@@ -64,18 +118,19 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
       pvpFinal = cFixedPrice;
       pvpBase = pvpFinal / (1 + cVatRate / 100);
       vatSale = pvpFinal - pvpBase;
-      profit = pvpBase - cCostNet;
-      actualMarginApplied = cCostNet > 0 ? (profit / cCostNet) * 100 : 0;
+      profit = pvpBase - effectiveCostNet;
+      actualMarginApplied = effectiveCostNet > 0 ? (profit / effectiveCostNet) * 100 : 0;
     } else {
-      profit = cCostNet * (cMargin / 100);
-      pvpBase = cCostNet + profit;
+      profit = effectiveCostNet * (cMargin / 100);
+      pvpBase = effectiveCostNet + profit;
       vatSale = pvpBase * (cVatRate / 100);
       pvpFinal = pvpBase + vatSale;
       actualMarginApplied = cMargin;
     }
 
-    const vatCost = cCostNet * (cVatRate / 100);
-    const netVatToPay = Math.max(0, vatSale - vatCost);
+    const merchandiseVatCost = cCostNet * (cVatRate / 100);
+    const totalInputVatSupported = merchandiseVatCost + totalExtraCostsVat;
+    const netVatToPay = Math.max(0, vatSale - totalInputVatSupported);
     const tpaCost = pvpFinal * (cTpaRate / 100);
     
     // Retenção na fonte (deduzida no preço final/base de faturação conforme lei de cada país)
@@ -84,7 +139,7 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
     // Montante Líquido Efetivo a Receber (PVP Final - Retenção na Fonte - Taxa TPA)
     const netReceived = pvpFinal - retentionAmount - tpaCost;
 
-    const operatingProfit = profit - tpaCost - (isService ? 0 : 0); // retention counts towards company income tax credit
+    const operatingProfit = profit - tpaCost;
 
     // Industrial tax approximation (default 25% for AO, 21% for PT, etc.)
     const industrialTaxRate = countryCode === 'PT' ? 21 : (countryCode === 'AO' ? 25 : 20);
@@ -117,8 +172,21 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
       netProfit: netProfit,
       currency: countryCode === 'PT' ? 'EUR' : (countryCode === 'AO' ? 'Kz' : 'USD'),
       details: {
-        costNet: cCostNet,
-        vatCost,
+        costNet: effectiveCostNet,
+        merchandiseCostNet: cCostNet,
+        effectiveCostNet,
+        totalExtraCostsNet,
+        totalExtraCostsPaid,
+        totalExtraCostsVat,
+        totalInputVatSupported,
+        vatCost: totalInputVatSupported,
+        extraCosts: {
+          transport: transportCalc,
+          meals: mealsCalc,
+          lodging: lodgingCalc,
+          otherExtras: otherExtrasCalc,
+          isRoundTrip: cTransportRoundTrip
+        },
         grossProfit: profit,
         pvpBase,
         vatSale,

@@ -1,0 +1,464 @@
+{
+  "users": [
+    {
+      "id": "usr_admin_nanuhost",
+      "name": "nanuhost",
+      "email": "nanuhost",
+      "phone": "+244954269353",
+      "company": "NANUCLOUD Lda",
+      "address": "Angola, Luanda, Maianga",
+      "nif": "5001294819",
+      "country": "AO",
+      "passwordHash": "$2b$10$EHiFEPaoKeD8R7hd6rxoUeG/IgYTdXUAtv.cJm8/GbrqiYqrFpy.u",
+      "role": "admin_level1",
+      "isActive": true,
+      "queriesRemaining": 999999,
+      "totalQueriesUsed": 0,
+      "activePlanId": "plan_diamante",
+      "activePlanName": "Diamante Ilimitado (Super Admin)",
+      "planExpiresAt": "2036-08-24T21:34:05.455Z",
+      "isImportUnlocked": true,
+      "isBatchUnlocked": true,
+      "twoFactorEnabled": false,
+      "createdAt": "2026-08-27T21:34:05.455Z",
+      "updatedAt": "2026-08-30T13:32:14.391Z",
+      "lastLoginAt": "2026-08-30T13:32:14.391Z"
+    },
+    {
+      "id": "usr_klayton_pires",
+      "name": "Klayton Pires",
+      "email": "klayton.pires.monteiro@gmail.com",
+      "phone": "+244954269353",
+      "company": "NANUCLOUD Lda",
+      "address": "Angola, Luanda, Maianga",
+      "nif": "5001294819",
+      "country": "AO",
+      "passwordHash": "$2b$10$EHiFEPaoKeD8R7hd6rxoUehkCqwvi.UdMWy5DtTYZO6wuEGzFXLAS",
+      "role": "admin_level1",
+      "isActive": true,
+      "queriesRemaining": 999999,
+      "totalQueriesUsed": 20,
+      "activePlanId": "plan_diamante",
+      "activePlanName": "Diamante Ilimitado (Super Admin)",
+      "planExpiresAt": "2036-08-24T21:34:05.455Z",
+      "isImportUnlocked": true,
+      "isBatchUnlocked": true,
+      "twoFactorEnabled": false,
+      "createdAt": "2026-08-27T21:34:05.358Z",
+      "updatedAt": "2026-08-27T21:34:05.358Z",
+      "lastLoginAt": "2026-08-27T21:34:05.358Z"
+    }
+  ],
+  "plans": [
+    {
+      "id": "plan_bronze",
+      "name": "Plano Bronze",
+      "priceKz": 500,
+      "queriesCount": 10,
+      "validityDays": 30,
+      "unitPriceKz": 50,
+      "features": [
+        "10 Pesquisas / Simulações (50 Kz/cada)",
+        "Módulo Comércio Local Completo",
+        "Histórico e Exportação Excel",
+        "Validade 30 dias"
+      ],
+      "unlocksImport": false,
+      "unlocksBatch": false,
+      "badge": "Iniciante",
+      "sortOrder": 1
+    },
+    {
+      "id": "plan_prata",
+      "name": "Plano Prata",
+      "priceKz": 1500,
+      "queriesCount": 30,
+      "validityDays": 30,
+      "unitPriceKz": 50,
+      "features": [
+        "30 Pesquisas / Simulações (50 Kz/cada)",
+        "Comércio Local + Análise de Margens",
+        "Relatórios & Exportação XLSX",
+        "Validade 30 dias"
+      ],
+      "unlocksImport": false,
+      "unlocksBatch": false,
+      "badge": "Popular",
+      "sortOrder": 2
+    },
+    {
+      "id": "plan_ouro",
+      "name": "Plano Ouro Pro",
+      "priceKz": 3000,
+      "queriesCount": 60,
+      "validityDays": 30,
+      "unitPriceKz": 50,
+      "features": [
+        "60 Pesquisas / Simulações (50 Kz/cada)",
+        "🚢 Desbloqueia Módulo de Importação Aduaneira (CIF/FOB/IEC)",
+        "Suporte Prioritário WhatsApp",
+        "Validade 30 dias"
+      ],
+      "unlocksImport": true,
+      "unlocksBatch": false,
+      "badge": "Mais Recomendado",
+      "sortOrder": 3
+    },
+    {
+      "id": "plan_platina",
+      "name": "Plano Platina Business",
+      "priceKz": 5000,
+      "queriesCount": 100,
+      "validityDays": 30,
+      "unitPriceKz": 50,
+      "features": [
+        "100 Pesquisas / Simulações (50 Kz/cada)",
+        "🚢 Módulo de Importação Desbloqueado",
+        "📊 Módulo de Lote Excel (.xlsx) Desbloqueado",
+        "Validade 30 dias"
+      ],
+      "unlocksImport": true,
+      "unlocksBatch": true,
+      "badge": "Empresarial",
+      "sortOrder": 4
+    },
+    {
+      "id": "plan_diamante",
+      "name": "Plano Diamante Enterprise",
+      "priceKz": 10000,
+      "queriesCount": 200,
+      "validityDays": 30,
+      "unitPriceKz": 50,
+      "features": [
+        "200 Pesquisas / Simulações (50 Kz/cada)",
+        "🚢 Acesso Total Módulo Importação Ilimitado",
+        "📊 Acesso Total Módulo Lote Excel",
+        "Atendimento VIP Dedicado",
+        "Validade 30 dias"
+      ],
+      "unlocksImport": true,
+      "unlocksBatch": true,
+      "badge": "Ilimitado VIP",
+      "sortOrder": 5
+    },
+    {
+      "id": "plan_custom",
+      "name": "Plano Personalizado sob Medida",
+      "priceKz": 500,
+      "queriesCount": 10,
+      "validityDays": 30,
+      "unitPriceKz": 50,
+      "features": [
+        "Defina o valor e número de consultas",
+        "Cálculo automático: 50 Kz por pesquisa",
+        "Desbloqueia Módulos de Importação e Lote",
+        "Validade 30 dias"
+      ],
+      "unlocksImport": true,
+      "unlocksBatch": true,
+      "isCustom": true,
+      "minPriceKz": 500,
+      "badge": "Flexível",
+      "sortOrder": 6
+    }
+  ],
+  "transactions": [],
+  "queryHistory": [],
+  "auditLogs": [
+    {
+      "userId": "usr_admin_nanuhost",
+      "userName": "nanuhost",
+      "userRole": "admin_level1",
+      "action": "USER_LOGIN",
+      "entityType": "auth",
+      "entityId": "usr_admin_nanuhost",
+      "ipAddress": "127.0.0.1",
+      "details": "Sessão iniciada com sucesso por nanuhost (admin_level1).",
+      "id": "log_1788096734402_sgqgu",
+      "createdAt": "2026-08-30T13:32:14.403Z"
+    },
+    {
+      "userId": "usr_admin_nanuhost",
+      "userName": "nanuhost",
+      "userRole": "admin_level1",
+      "action": "FAILED_LOGIN_ATTEMPT",
+      "entityType": "auth",
+      "entityId": "usr_admin_nanuhost",
+      "ipAddress": "127.0.0.1",
+      "details": "Tentativa de acesso falhada com palavra-passe incorreta para admin.",
+      "id": "log_1788096706694_cb181",
+      "createdAt": "2026-08-30T13:31:46.694Z"
+    },
+    {
+      "id": "log_init_001",
+      "userId": "usr_super_admin_joaquim",
+      "userName": "Joaquim Monteiro",
+      "userRole": "admin_level1",
+      "action": "SYSTEM_INITIALIZATION",
+      "entityType": "system",
+      "details": "Sistema de Simulação Financeira NANUCLOUD inicializado com sucesso.",
+      "createdAt": "2026-08-27T21:34:05.358Z"
+    }
+  ],
+  "settings": {
+    "unitQueryPriceKz": 50,
+    "minCustomPlanPriceKz": 500,
+    "freeQueriesOnRegister": 3,
+    "freeQueriesDaily": 3,
+    "whatsappSupport1": "+244929462681",
+    "whatsappSupport2": "+244954269353",
+    "supportEmail": "klayton.pires.monteiro@gmail.com",
+    "companyName": "Klayton Pires - Prestações de Serviços e Negocios (SU) Lda",
+    "companyAddress": "Luanda, Angola",
+    "companyNif": "5417653438",
+    "companyPhone1": "+244954269353",
+    "companyPhone2": "+244929462681",
+    "companyEmail1": "klayton.pires.monteiro@gmail.com",
+    "companyEmail2": "klayton_pires@hotmail.com",
+    "companyLogoUrl": "",
+    "footerCopyrightText": "© 2025-2026 Nanucloud — Klayton Pires - Prestações de Serviços e Negocios (SU) Lda. NIF 5417653438. Marca Registada no IAPI. Todos os direitos reservados.",
+    "emisEnabled": true,
+    "emisEntityId": "00123",
+    "emisTerminalId": "TER99",
+    "emisApiKey": "emis_live_sec_89237489237498",
+    "emisWebhookUrl": "/api/payments/emis/callback",
+    "emisAutoActivate": true,
+    "visaMastercardEnabled": true,
+    "paypalEnabled": true,
+    "wiseEnabled": true,
+    "stripeEnabled": true,
+    "chatBotEnabled": true,
+    "chatAdminHoursStart": "08:00",
+    "chatAdminHoursEnd": "18:00",
+    "chatWelcomeMessage": "Olá! Seja bem-vindo ao Suporte NANUCLOUD. Em que podemos ajudar hoje?",
+    "chatOfflineMessage": "A equipa de administradores atende nos dias úteis, das 08h às 18h. O Robô Assistente Inteligente está disponível para ajudar imediatamente com dúvidas sobre a plataforma.",
+    "chatMaxInactivityMinutes": 15,
+    "twoFactorAuthEnabled": false,
+    "cyberSecurityAiEnabled": true,
+    "blockedIps": [],
+    "socialFacebook": "https://facebook.com/nanucloud",
+    "socialInstagram": "https://instagram.com/nanucloud",
+    "socialLinkedIn": "https://linkedin.com/company/nanucloud",
+    "socialWhatsApp": "https://wa.me/244929462681",
+    "socialYouTube": "https://youtube.com/@nanucloud",
+    "activeThemeId": "theme_nanucloud_dark",
+    "autoHolidayThemeEnabled": true,
+    "fiscalAiAutoCheckEnabled": true,
+    "bankName": "Banco BAI / BFA / Millennium Atlântico",
+    "bankIban": "AO06 0040 0000 1234 5678 9012 3",
+    "bankHolder": "NANUCLOUD Lda",
+    "expressPhone": "929462681",
+    "bankAccounts": [
+      {
+        "id": "bank_bai_01",
+        "bankName": "Banco Angolano de Investimentos (BAI)",
+        "iban": "AO06 0040 0000 1234 5678 9012 3",
+        "swift": "BAIAOLLU",
+        "holder": "NANUCLOUD Lda",
+        "currency": "AOA (Kz)",
+        "isActive": true
+      },
+      {
+        "id": "bank_bfa_02",
+        "bankName": "Banco de Fomento Angola (BFA)",
+        "iban": "AO06 0006 0000 9876 5432 1098 7",
+        "swift": "BFAAOLLU",
+        "holder": "NANUCLOUD Lda",
+        "currency": "AOA (Kz)",
+        "isActive": true
+      },
+      {
+        "id": "bank_bma_03",
+        "bankName": "Banco Millennium Atlântico (BMA)",
+        "iban": "AO06 0055 0000 4567 8901 2345 6",
+        "swift": "BMAAOLLU",
+        "holder": "NANUCLOUD Lda",
+        "currency": "AOA (Kz)",
+        "isActive": true
+      },
+      {
+        "id": "bank_bic_04",
+        "bankName": "Banco BIC Angola",
+        "iban": "AO06 0051 0000 3344 5566 7788 9",
+        "swift": "BICAOLLU",
+        "holder": "NANUCLOUD Lda",
+        "currency": "AOA (Kz)",
+        "isActive": true
+      }
+    ],
+    "allowRegistration": true,
+    "maintenanceMode": false
+  },
+  "supportInquiries": [],
+  "chatMessages": [],
+  "fiscalProposals": [
+    {
+      "id": "prop_ao_iva_cesta",
+      "countryCode": "AO",
+      "countryName": "Angola",
+      "taxType": "IVA",
+      "currentValue": "7% (Bens de Grande Consumo)",
+      "proposedValue": "5% (Lei do Orçamento Geral do Estado 2025/2026)",
+      "sourceLaw": "Diário da República Iª Série - Lei OGE & AGT",
+      "reason": "Harmonização da taxa reduzida sobre bens essenciais da cesta básica nacional.",
+      "detectedAt": "2026-08-27T17:34:05.022Z",
+      "status": "pending"
+    },
+    {
+      "id": "prop_ao_pauta_agro",
+      "countryCode": "AO",
+      "countryName": "Angola",
+      "taxType": "PautaAduaneira",
+      "currentValue": "10% Direitos Aduaneiros Fertilizantes",
+      "proposedValue": "2% Direitos Aduaneiros Insumos Agrícolas",
+      "sourceLaw": "Pauta Aduaneira Versão 2024/2025 (Decreto Presidencial)",
+      "reason": "Incentivo à produção agrícola nacional e redução do custo de insumos.",
+      "detectedAt": "2026-08-27T09:34:05.022Z",
+      "status": "pending"
+    },
+    {
+      "id": "prop_mz_iva",
+      "countryCode": "MZ",
+      "countryName": "Moçambique",
+      "taxType": "IVA",
+      "currentValue": "16%",
+      "proposedValue": "16% (Confirmado Decreto Tributário Autoridade Tributária Moçambique)",
+      "sourceLaw": "Código do IVA Moçambicano atualizado",
+      "reason": "Verificação periódica de conformidade com a AT Moçambique.",
+      "detectedAt": "2026-08-26T21:34:05.022Z",
+      "status": "approved",
+      "reviewedBy": "Joaquim Monteiro (Super Admin)",
+      "reviewedAt": "2026-08-27T19:34:05.022Z"
+    }
+  ],
+  "apiKeys": [
+    {
+      "id": "api_key_xd_01",
+      "name": "Integração XD Software POS",
+      "key": "nc_live_xd_98234710298371928371",
+      "system": "xd",
+      "permissions": [
+        "simulate:local",
+        "tax:read"
+      ],
+      "status": "active",
+      "createdAt": "2026-08-17T21:34:05.022Z",
+      "lastUsedAt": "2026-08-27T21:34:05.022Z"
+    },
+    {
+      "id": "api_key_primavera_02",
+      "name": "Integração Primavera BSS ERP",
+      "key": "nc_live_prm_48102983471092834710",
+      "system": "primavera",
+      "permissions": [
+        "simulate:local",
+        "simulate:import",
+        "tax:read"
+      ],
+      "status": "active",
+      "createdAt": "2026-08-22T21:34:05.022Z",
+      "lastUsedAt": "2026-08-27T21:34:05.022Z"
+    }
+  ],
+  "botKnowledgeBase": [
+    {
+      "id": "kb_servicos_01",
+      "question": "Como simular prestação de serviços e retenção na fonte?",
+      "keywords": [
+        "servico",
+        "serviço",
+        "servicos",
+        "serviços",
+        "retencao",
+        "retenção",
+        "fonte",
+        "prestacao",
+        "prestação"
+      ],
+      "answer": "O simulador NANUCLOUD permite simular tanto PRODUTOS como PRESTAÇÃO DE SERVIÇOS. Para serviços, preencha a taxa de Retenção na Fonte (%) regulamentar do país (ex: 6.5% em Angola segundo o Código do Imposto Industrial/IRT). O sistema calcula o valor bruto com IVA, deduz a retenção na fonte e taxas de TPA, e apresenta o montante líquido real a receber.",
+      "language": "pt",
+      "category": "fiscal",
+      "isApproved": true,
+      "learnedAt": "2026-08-27T21:34:05.021Z"
+    },
+    {
+      "id": "kb_aduaneira_02",
+      "question": "Como funciona o cálculo de importação e despacho aduaneiro?",
+      "keywords": [
+        "importacao",
+        "importação",
+        "aduana",
+        "aduaneiro",
+        "alfandega",
+        "alfândega",
+        "fob",
+        "cif",
+        "iec",
+        "pauta"
+      ],
+      "answer": "No Módulo de Importação Aduaneira, introduza o valor FOB da mercadoria, Frete, Seguro, Direitos Aduaneiros (5% a 70%), Imposto Especial de Consumo (IEC), Taxa Estatística (10.000 Kz), TPS e IVA Aduaneiro (14%). O simulador calcula o custo de desembarque CIF e apura o preço de venda recomendado.",
+      "language": "pt",
+      "category": "customs",
+      "isApproved": true,
+      "learnedAt": "2026-08-27T21:34:05.021Z"
+    },
+    {
+      "id": "kb_en_03",
+      "question": "How to calculate prices for products and services with tax retention?",
+      "keywords": [
+        "service",
+        "services",
+        "retention",
+        "withholding",
+        "tax",
+        "product",
+        "vat",
+        "price"
+      ],
+      "answer": "NANUCLOUD supports simulations for both PRODUCTS and SERVICES. For service contracts, enter the applicable Withholding/Retention Rate (%) based on local tax law (e.g. 6.5% in Angola). The engine calculates gross price with VAT, deducts withholding tax and POS transaction fees, and shows your real net revenue.",
+      "language": "en",
+      "category": "fiscal",
+      "isApproved": true,
+      "learnedAt": "2026-08-27T21:34:05.021Z"
+    },
+    {
+      "id": "kb_fr_04",
+      "question": "Comment calculer les taxes pour produits et services avec retenue à la source?",
+      "keywords": [
+        "service",
+        "services",
+        "retenue",
+        "source",
+        "tva",
+        "produit",
+        "impot",
+        "facture"
+      ],
+      "answer": "Le simulateur NANUCLOUD s'applique aux PRODUITS et aux SERVICES. Pour les prestations de services, indiquez le taux de retenue à la source (%) selon la législation fiscale du pays (ex. 6,5% en Angola). Le système calcule le prix TTC, déduit la retenue à la source et les frais TPA, et affiche le revenu net réel.",
+      "language": "fr",
+      "category": "fiscal",
+      "isApproved": true,
+      "learnedAt": "2026-08-27T21:34:05.021Z"
+    },
+    {
+      "id": "kb_es_05",
+      "question": "¿Cómo simular precios de productos y servicios con retención en la fuente?",
+      "keywords": [
+        "servicio",
+        "servicios",
+        "retencion",
+        "retención",
+        "fuente",
+        "iva",
+        "producto",
+        "impuesto"
+      ],
+      "answer": "El simulador NANUCLOUD permite calcular tanto PRODUCTOS como SERVICIOS. Para servicios, ingrese el porcentaje de Retención en la Fuente (%) según la ley tributaria de cada país (ej. 6.5% en Angola). El sistema calcula el PVP con IVA, deduce la retención y comisiones de TPA, mostrando la ganancia neta líquida real.",
+      "language": "es",
+      "category": "fiscal",
+      "isApproved": true,
+      "learnedAt": "2026-08-27T21:34:05.022Z"
+    }
+  ],
+  "unresolvedBotQuestions": []
+}

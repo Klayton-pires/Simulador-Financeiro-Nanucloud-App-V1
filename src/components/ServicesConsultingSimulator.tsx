@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserSafe, ServiceBillingMode } from '../types';
-import { COUNTRIES_DB } from '../data/countries';
+import { COUNTRIES_DB, getEffectiveCountryFiscal, getAvailableCountryList } from '../data/countries';
 import { SupportedLang, TRANSLATIONS } from '../i18n/translations';
 import {
   Briefcase,
@@ -81,8 +81,26 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
   const [pdfGenerating, setPdfGenerating] = useState<boolean>(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [hasCalculated, setHasCalculated] = useState<boolean>(false);
+  const [isCalculating, setIsCalculating] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const country = COUNTRIES_DB[countryCode] || COUNTRIES_DB['AO'];
+  const [countryVersion, setCountryVersion] = useState<number>(0);
+  const country = getEffectiveCountryFiscal(countryCode);
+  const isSuperAdmin = user?.role === 'super_admin' || user?.role === 'superadmin' || user?.role === 'admin_level1' || user?.role === 'admin';
+  const availableCountries = getAvailableCountryList(isSuperAdmin);
+
+  useEffect(() => {
+    const handleMatrixUpdate = () => {
+      setCountryVersion((v) => v + 1);
+    };
+    window.addEventListener('nanucloud_custom_fiscal_matrix_updated', handleMatrixUpdate);
+    window.addEventListener('nanucloud_countries_updated', handleMatrixUpdate);
+    return () => {
+      window.removeEventListener('nanucloud_custom_fiscal_matrix_updated', handleMatrixUpdate);
+      window.removeEventListener('nanucloud_countries_updated', handleMatrixUpdate);
+    };
+  }, []);
 
   // Initialize fiscal defaults on country change
   useEffect(() => {
@@ -90,8 +108,9 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
       setVatRate(country.vatOptions[0]?.r ?? 14);
       setTpaRate(country.tpa || 1.0);
       setRetentionRate(country.retentionServiceRate ?? (countryCode === 'AO' ? 6.5 : countryCode === 'PT' ? 11.5 : 5.0));
+      setHasCalculated(false);
     }
-  }, [countryCode]);
+  }, [countryCode, countryVersion]);
 
   // Calculations
   const calcBaseLabor = () => {
@@ -143,24 +162,48 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
   // Gross Total Invoiced (Valor Bruto Faturado com IVA)
   const grossInvoiceTotal = taxableBase + vatAmount;
 
-  // Withholding Tax (Retenção na Fonte) - normally calculated on taxable base excluding VAT
+  // Withholding Tax (Retenção na Fonte)
   const effectiveRetentionRate = applyRetention ? retentionRate : 0;
   const withholdingTaxAmount = taxableBase * (effectiveRetentionRate / 100);
 
   // TPA fee (if client pays by card/Multicaixa)
   const tpaFeeAmount = grossInvoiceTotal * (tpaRate / 100);
 
-  // Net Cash Received by Service Provider (Valor Líquido a Receber no Banco)
-  // Client pays (Gross Total - Withholding Tax). From this, TPA fee is subtracted by the bank.
+  // Net Cash Received by Service Provider
   const netReceivedFromClient = grossInvoiceTotal - withholdingTaxAmount;
   const netBankReceived = netReceivedFromClient - tpaFeeAmount;
 
   // Net Operational Profit for Provider (Lucro Líquido Real)
-  // Net Bank Received - Total Logistics Direct Costs - Base Direct Labor Cost + Markup
   const netOperationalProfit = (baseLabor + markupAmount) - withholdingTaxAmount - tpaFeeAmount;
 
   const formatCurrency = (val: number) => {
     return `${val.toLocaleString('pt-AO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${country.curr}`;
+  };
+
+  const handleCalculate = async () => {
+    setErrorMessage(null);
+
+    if (baseLabor <= 0) {
+      setErrorMessage('Por favor defina valores válidos para os honorários de serviço.');
+      return;
+    }
+
+    if (user && user.queriesRemaining <= 0) {
+      setErrorMessage('As suas consultas esgotaram. Adquira um plano para continuar.');
+      onOpenPlans();
+      return;
+    }
+
+    setIsCalculating(true);
+    try {
+      if (user && user.queriesRemaining > 0) {
+        const newQueries = Math.max(0, user.queriesRemaining - 1);
+        onCalculationDone(newQueries);
+      }
+      setHasCalculated(true);
+    } finally {
+      setIsCalculating(false);
+    }
   };
 
   // Export to PDF
@@ -170,31 +213,45 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
 
-      // Header Banner
-      doc.setFillColor(30, 41, 59); // slate-800
-      doc.rect(0, 0, pageWidth, 40, 'F');
+      // Header Banner (Fundo Branco com Logo Oficial Nanucloud)
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, pageWidth, 28, 'F');
 
-      doc.setTextColor(255, 255, 255);
+      // Linha de acento verde oficial
+      doc.setDrawColor(0, 168, 89);
+      doc.setLineWidth(0.8);
+      doc.line(14, 26, pageWidth - 14, 26);
+
+      // Logo Nanucloud
+      doc.setDrawColor(0, 168, 89);
+      doc.setFillColor(0, 168, 89);
+      doc.roundedRect(14, 7, 7, 7, 1.5, 1.5, 'FD');
+      doc.setFillColor(255, 255, 255);
+      doc.circle(17.5, 10.5, 2, 'F');
+
       doc.setFontSize(18);
       doc.setFont('helvetica', 'bold');
-      doc.text('NANUCLOUD FISCAL & GESTÃO', 14, 18);
+      doc.setTextColor(24, 24, 27);
+      doc.text('Nanu', 24, 14);
+      const nanuWidth = doc.getTextWidth('Nanu');
+      doc.setTextColor(0, 168, 89);
+      doc.text('cloud', 24 + nanuWidth, 14);
 
-      doc.setFontSize(10);
+      doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text('PROPOSTA COMERCIAL & SIMULAÇÃO DE PRESTAÇÃO DE SERVIÇOS', 14, 26);
-      doc.text(`Data: ${new Date().toLocaleDateString('pt-PT')} | Ref: SERV-${Date.now().toString().slice(-6)}`, 14, 33);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Data: ${new Date().toLocaleDateString('pt-PT')} | Ref: SERV-${Date.now().toString().slice(-6)}`, pageWidth - 14, 14, { align: 'right' });
 
       // Client & Service Info Box
       doc.setTextColor(30, 41, 59);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text('DADOS DA PROPOSTA', 14, 48);
+      doc.text('DADOS DA PROPOSTA DE SERVIÇOS', 14, 38);
 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Serviço / Projeto: ${serviceTitle || 'Não especificado'}`, 14, 55);
-      doc.text(`Cliente: ${clientName || 'Consumidor Final / Não informado'}`, 14, 61);
-      doc.text(`País de Enquadramento: ${country.name} (${country.agency})`, 14, 67);
+      doc.text(`Serviço / Projeto: ${serviceTitle || 'Não especificado'}`, 14, 45);
+      doc.text(`Cliente: ${clientName || 'Consumidor Final / Não informado'}`, 14, 51);
       doc.text(
         `Modalidade de Cobrança: ${
           billingMode === 'fixed'
@@ -204,7 +261,7 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
             : `Por Distância (${distanceKm} km ${isRoundTrip ? 'Ida e Volta' : 'Só Ida'} a ${formatCurrency(parseFloat(ratePerKm) || 0)}/km)`
         }`,
         14,
-        73
+        57
       );
 
       // Breakdown Table
@@ -220,7 +277,7 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
           formatCurrency(totalMeals)
         ],
         ['Subtotal Tributável (Incidência de IVA e Retenção)', formatCurrency(taxableBase)],
-        [`IVA Liquidado (${vatRate}%)`, formatCurrency(vatAmount)],
+        [`IVA Liquidado (${vatRate}% - Se Aplicável)`, formatCurrency(vatAmount)],
         ['VALOR BRUTO TOTAL DA FATURAÇÃO', formatCurrency(grossInvoiceTotal)],
         [
           `Retenção na Fonte Suportada (${effectiveRetentionRate}% - Deduzida pelo Cliente)`,
@@ -231,12 +288,12 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
       ];
 
       autoTable(doc, {
-        startY: 80,
+        startY: 65,
         head: [['Item / Discriminação Financeira', 'Valor']],
         body: tableRows,
         theme: 'striped',
         headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
-        styles: { fontSize: 9, cellPadding: 4 },
+        styles: { fontSize: 8.5, cellPadding: 3.5 },
         columnStyles: {
           0: { cellWidth: 120 },
           1: { cellWidth: 60, halign: 'right', fontStyle: 'bold' }
@@ -247,17 +304,21 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
       const finalY = (doc as any).lastAutoTable?.finalY || 180;
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
-      doc.text('NOTAS FISCAIS & ENQUADRAMENTO JURÍDICO:', 14, finalY + 10);
-      doc.text(country.importantNotes.services, 14, finalY + 16, { maxWidth: 180 });
+      doc.text('NOTAS E ENQUADRAMENTO DA PROPOSTA:', 14, finalY + 8);
+      doc.text(country.importantNotes?.services || 'Valores calculados em conformidade com as taxas fiscais aplicáveis.', 14, finalY + 14, { maxWidth: 180 });
 
+      // Rodapé com Aviso Legal Oficial
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, 281, pageWidth - 14, 281);
+      doc.setFontSize(6.5);
       doc.text(
-        'Documento gerado eletronicamente pela plataforma NANUCLOUD. Os valores retidos na fonte devem ser declarados e entregues à administração tributária competente.',
+        'Aviso Legal Nanucloud: A utilização deste aplicativo tem caráter meramente informativo e estimativo, não dispensando a consulta de um profissional de contas ou contabilista certificado.',
         14,
-        finalY + 30,
+        286,
         { maxWidth: 180 }
       );
 
-      doc.save(`Proposta_Servicos_${(serviceTitle || 'Servico').replace(/\s+/g, '_')}.pdf`);
+      doc.save(`Nanucloud_Proposta_Servicos_${(serviceTitle || 'Servico').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
       setExportNotice('Proposta comercial em PDF exportada com sucesso!');
       setTimeout(() => setExportNotice(null), 4000);
     } catch (err) {
@@ -271,11 +332,10 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
   const handleExportExcel = () => {
     try {
       const data = [
-        ['NANUCLOUD - SIMULAÇÃO DE PRESTAÇÃO DE SERVIÇOS & CONSULTORIA'],
+        ['Nanucloud - Proposta de Prestação de Serviços'],
         ['Data', new Date().toLocaleDateString('pt-PT')],
         ['Serviço', serviceTitle],
         ['Cliente', clientName || 'Não especificado'],
-        ['País', country.name],
         ['Moeda', country.curr],
         [],
         ['PARÂMETRO', 'VALOR / QUANTIDADE', 'TOTAL'],
@@ -290,13 +350,15 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
         ['Retenção na Fonte (%)', `${effectiveRetentionRate}%`, withholdingTaxAmount],
         ['Taxa TPA (%)', `${tpaRate}%`, tpaFeeAmount],
         ['Valor Líquido a Receber', '', netBankReceived],
-        ['Lucro Operacional Líquido', '', netOperationalProfit]
+        ['Lucro Operacional Líquido', '', netOperationalProfit],
+        [],
+        ['Aviso Legal Nanucloud:', 'A utilização deste aplicativo tem caráter meramente informativo e estimativo, não dispensando a consulta de um profissional de contas ou contabilista certificado.']
       ];
 
       const ws = XLSX.utils.aoa_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Simulacao_Servicos');
-      XLSX.writeFile(wb, `Simulacao_Servicos_${Date.now()}.xlsx`);
+      XLSX.writeFile(wb, `Nanucloud_Servicos_${Date.now()}.xlsx`);
 
       setExportNotice('Ficheiro Excel (.xlsx) exportado com sucesso!');
       setTimeout(() => setExportNotice(null), 4000);
@@ -416,7 +478,7 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
                   onChange={(e) => setCountryCode(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
                 >
-                  {Object.values(COUNTRIES_DB).map((c) => (
+                  {availableCountries.map((c) => (
                     <option key={c.code} value={c.code}>
                       {c.name} ({c.curr}) - {c.agency}
                     </option>
@@ -688,7 +750,7 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
               <TrendingUp className="w-4 h-4 text-cyan-400" /> MARGEM DE LUCRO & ENQUADRAMENTO FISCAL
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="text-[11px] font-mono text-slate-400 block mb-1">MARGEM DE LUCRO (%):</label>
                 <div className="flex items-center gap-1">
@@ -730,6 +792,22 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
                   <span className="text-slate-500 font-mono text-xs">%</span>
                 </div>
               </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-slate-400 block mb-1">TAXA TPA / MULTICAIXA (%):</label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="25"
+                    value={tpaRate}
+                    onChange={(e) => setTpaRate(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-indigo-300 font-mono font-bold"
+                  />
+                  <span className="text-slate-500 font-mono text-xs">%</span>
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-800 flex-wrap gap-2">
@@ -737,15 +815,52 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
                 <input
                   type="checkbox"
                   checked={applyRetention}
-                  onChange={(e) => setApplyRetention(e.target.checked)}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
+                  onChange={(e) => {
+                    setApplyRetention(e.target.checked);
+                    setHasCalculated(false);
+                  }}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700 cursor-pointer"
                 />
                 Aplicar Dedução de Retenção na Fonte (Cliente Corporativo)
               </label>
 
-              <span className="text-[11px] font-mono text-slate-400">
-                Taxa TPA Multicaixa: <strong className="text-slate-200">{tpaRate}%</strong>
-              </span>
+              <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
+                <span>Taxa TPA Multicaixa:</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="25"
+                  value={tpaRate}
+                  onChange={(e) => {
+                    setTpaRate(parseFloat(e.target.value) || 0);
+                    setHasCalculated(false);
+                  }}
+                  className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-xs text-indigo-300 font-mono font-bold text-center"
+                />
+                <span className="text-slate-400">%</span>
+              </div>
+            </div>
+
+            {/* Error notice */}
+            {errorMessage && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 font-mono flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* Botão de Calcular */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleCalculate}
+                disabled={isCalculating}
+                className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 active:scale-[0.98] text-white rounded-xl text-sm font-mono font-bold transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <TrendingUp className="w-4 h-4" />
+                <span>{isCalculating ? 'A Processar Cálculo...' : 'CALCULAR PROPOSTA DE SERVIÇOS'}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -753,102 +868,122 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
         {/* Right Column: Live Fiscal & Financial Breakdown */}
         <div className="lg:col-span-5 space-y-6">
           
-          {/* Main Financial Summary Card */}
-          <div className="bg-[#1E293B] border border-indigo-500/30 rounded-2xl p-6 shadow-2xl space-y-5 sticky top-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-sm font-bold text-slate-100 font-mono">FICHA DE PRESTAÇÃO DE SERVIÇOS</h3>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono">
-                {country.curr}
-              </span>
-            </div>
-
-            {/* Line Items */}
-            <div className="space-y-2.5 text-xs font-mono">
-              <div className="flex justify-between items-center text-slate-300">
-                <span>Honorários Base do Trabalho:</span>
-                <span className="font-bold">{formatCurrency(baseLabor)}</span>
-              </div>
-
-              <div className="flex justify-between items-center text-slate-400">
-                <span>Margem de Consultoria ({marginPct}%):</span>
-                <span className="text-indigo-300 font-bold">+{formatCurrency(markupAmount)}</span>
-              </div>
-
-              {(clientPaysTransport || clientPaysMeals) && (
-                <div className="flex justify-between items-center text-slate-400">
-                  <span>Logística (Transporte + Refeições):</span>
-                  <span className="text-amber-300 font-bold">+{formatCurrency(totalLogistics)}</span>
+          {hasCalculated ? (
+            /* Main Financial Summary Card */
+            <div className="bg-[#1E293B] border border-indigo-500/30 rounded-2xl p-6 shadow-2xl space-y-5 sticky top-4 animate-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-indigo-400" />
+                  <h3 className="text-sm font-bold text-slate-100 font-mono">FICHA DE PRESTAÇÃO DE SERVIÇOS</h3>
                 </div>
-              )}
-
-              <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-slate-200 font-bold">
-                <span>Base Tributável de Incidência:</span>
-                <span className="text-slate-100">{formatCurrency(taxableBase)}</span>
-              </div>
-
-              <div className="flex justify-between items-center text-slate-400">
-                <span>IVA Liquidado ({vatRate}%):</span>
-                <span className="text-slate-300">+{formatCurrency(vatAmount)}</span>
-              </div>
-
-              {/* Total Invoiced */}
-              <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-[11px] text-slate-400 block font-mono">TOTAL BRUTO FATURADO AO CLIENTE:</span>
-                  <span className="text-base font-bold text-indigo-300 font-mono">{formatCurrency(grossInvoiceTotal)}</span>
-                </div>
-              </div>
-
-              {/* Deductions: Retention & TPA */}
-              <div className="p-3 bg-rose-500/5 rounded-xl border border-rose-500/20 space-y-1.5">
-                <div className="flex justify-between items-center text-rose-300">
-                  <span>Retenção na Fonte ({effectiveRetentionRate}%):</span>
-                  <span className="font-bold">-{formatCurrency(withholdingTaxAmount)}</span>
-                </div>
-                <div className="flex justify-between items-center text-rose-400/80 text-[11px]">
-                  <span>Taxa TPA / Multicaixa ({tpaRate}%):</span>
-                  <span>-{formatCurrency(tpaFeeAmount)}</span>
-                </div>
-              </div>
-
-              {/* Net Cash Received */}
-              <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/30 space-y-1">
-                <span className="text-[10px] text-emerald-400 block font-mono font-bold uppercase tracking-wider">
-                  VALOR LÍQUIDO A RECEBER EM CONTA
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                  Apurado • 1 Crédito
                 </span>
-                <div className="text-xl font-bold text-emerald-300 font-mono">
-                  {formatCurrency(netBankReceived)}
+              </div>
+
+              {/* Line Items */}
+              <div className="space-y-2.5 text-xs font-mono">
+                <div className="flex justify-between items-center text-slate-300">
+                  <span>Honorários Base do Trabalho:</span>
+                  <span className="font-bold">{formatCurrency(baseLabor)}</span>
                 </div>
-                <p className="text-[10px] text-emerald-400/70 font-mono">
-                  Montante creditado em banco após retenção obrigatória do cliente e tarifa POS.
+
+                <div className="flex justify-between items-center text-slate-400">
+                  <span>Margem de Consultoria ({marginPct}%):</span>
+                  <span className="text-indigo-300 font-bold">+{formatCurrency(markupAmount)}</span>
+                </div>
+
+                {(clientPaysTransport || clientPaysMeals) && (
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Logística (Transporte + Refeições):</span>
+                    <span className="text-amber-300 font-bold">+{formatCurrency(totalLogistics)}</span>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-slate-200 font-bold">
+                  <span>Base Tributável de Incidência:</span>
+                  <span className="text-slate-100">{formatCurrency(taxableBase)}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-slate-400">
+                  <span>IVA Liquidado ({vatRate}%):</span>
+                  <span className="text-slate-300">+{formatCurrency(vatAmount)}</span>
+                </div>
+
+                {/* Total Invoiced */}
+                <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <span className="text-[11px] text-slate-400 block font-mono">TOTAL BRUTO FATURADO AO CLIENTE:</span>
+                    <span className="text-base font-bold text-indigo-300 font-mono">{formatCurrency(grossInvoiceTotal)}</span>
+                  </div>
+                </div>
+
+                {/* Deductions: Retention & TPA */}
+                <div className="p-3 bg-rose-500/5 rounded-xl border border-rose-500/20 space-y-1.5">
+                  <div className="flex justify-between items-center text-rose-300">
+                    <span>Retenção na Fonte ({effectiveRetentionRate}%):</span>
+                    <span className="font-bold">-{formatCurrency(withholdingTaxAmount)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-rose-400/80 text-[11px]">
+                    <span>Taxa TPA / Multicaixa ({tpaRate}%):</span>
+                    <span>-{formatCurrency(tpaFeeAmount)}</span>
+                  </div>
+                </div>
+
+                {/* Net Cash Received */}
+                <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/30 space-y-1">
+                  <span className="text-[10px] text-emerald-400 block font-mono font-bold uppercase tracking-wider">
+                    VALOR LÍQUIDO A RECEBER EM CONTA
+                  </span>
+                  <div className="text-xl font-bold text-emerald-300 font-mono">
+                    {formatCurrency(netBankReceived)}
+                  </div>
+                  <p className="text-[10px] text-emerald-400/70 font-mono">
+                    Montante creditado em banco após retenção obrigatória do cliente e tarifa POS.
+                  </p>
+                </div>
+
+                {/* Real Operational Profit */}
+                <div className="p-3 bg-cyan-500/10 rounded-xl border border-cyan-500/20 flex justify-between items-center">
+                  <div>
+                    <span className="text-[10px] text-cyan-400 block font-mono font-bold uppercase">
+                      LUCRO OPERACIONAL ESTIMADO
+                    </span>
+                    <span className="text-sm font-bold text-cyan-300 font-mono">{formatCurrency(netOperationalProfit)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Official Legal Notes */}
+              <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                <div className="flex items-center gap-1.5 text-indigo-400 font-bold font-mono text-[10px] uppercase">
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  Regime Fiscal de Serviços
+                </div>
+                <p className="leading-relaxed">
+                  {country.importantNotes?.services || 'Cálculo de prestação de serviços conforme as alíquotas fiscais aplicáveis.'}
                 </p>
               </div>
 
-              {/* Real Operational Profit */}
-              <div className="p-3 bg-cyan-500/10 rounded-xl border border-cyan-500/20 flex justify-between items-center">
-                <div>
-                  <span className="text-[10px] text-cyan-400 block font-mono font-bold uppercase">
-                    LUCRO OPERACIONAL ESTIMADO
-                  </span>
-                  <span className="text-sm font-bold text-cyan-300 font-mono">{formatCurrency(netOperationalProfit)}</span>
-                </div>
+              {/* Mandatory Legal Disclaimer */}
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2.5 text-xs text-amber-300">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  <strong>Aviso Legal Nanucloud:</strong> A utilização deste aplicativo tem caráter meramente informativo e estimativo, não dispensando a consulta de um profissional de contas ou contabilista certificado.
+                </span>
               </div>
             </div>
-
-            {/* Official Legal Notes */}
-            <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 text-[11px] text-slate-400 space-y-1">
-              <div className="flex items-center gap-1.5 text-indigo-400 font-bold font-mono text-[10px] uppercase">
-                <HelpCircle className="w-3.5 h-3.5" />
-                Regime Fiscal de Serviços ({country.agency})
+          ) : (
+            <div className="bg-[#1E293B]/60 border border-dashed border-slate-700 rounded-2xl p-8 text-center space-y-3 sticky top-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
+                <Receipt className="w-6 h-6" />
               </div>
-              <p className="leading-relaxed">
-                {country.importantNotes.services}
+              <h3 className="text-sm font-bold text-slate-200 font-mono">Aguardando Execução do Cálculo</h3>
+              <p className="text-xs text-slate-400 font-mono max-w-sm mx-auto leading-relaxed">
+                Preencha os dados do serviço e despesas logísticas e clique no botão <strong>"CALCULAR PROPOSTA DE SERVIÇOS"</strong> para apurar o total bruto, retenções e valor líquido.
               </p>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

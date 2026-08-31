@@ -3,11 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NANUCLOUD</title>
-    <meta name="description" content="Simulador financeiro de produtos e serviços, gestão aduaneira e plataforma empresarial NANUCLOUD." />
+    <title>Simulador Financeiro Nanucloud</title>
+    <meta name="description" content="Simulador Financeiro Nanucloud - Formação de preços, margens comerciais, serviços, importação e intermediação. A utilização deste aplicativo não dispensa a consulta de um profissional de contas." />
     <link rel="icon" type="image/svg+xml" href="/nanucloud-logo.svg" />
-    <meta property="og:title" content="NANUCLOUD" />
-    <meta property="og:description" content="Plataforma profissional de simulação de preços, margens e custos aduaneiros." />
+    <meta property="og:title" content="Simulador Financeiro Nanucloud" />
+    <meta property="og:description" content="Simulador financeiro independente. A utilização deste aplicativo não dispensa a consulta de um profissional de contas." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
   </head>
@@ -66,6 +66,26 @@
         }
       }
     </script>
+
+    <!-- Google Translate Auto-Localization Integration -->
+    <div id="google_translate_element" style="display: none !important;"></div>
+    <script type="text/javascript">
+      window.googleTranslateElementInit = function() {
+        try {
+          if (window.google && window.google.translate) {
+            new window.google.translate.TranslateElement({
+              pageLanguage: 'pt',
+              includedLanguages: 'pt,en,es,fr,zh-CN,ar,ja,it,ko,hi',
+              autoDisplay: false
+            }, 'google_translate_element');
+          }
+        } catch (e) {
+          console.warn('Google translate element note:', e);
+        }
+      };
+    </script>
+    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async defer></script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

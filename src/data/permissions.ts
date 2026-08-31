@@ -12,7 +12,7 @@ export const SYSTEM_PERMISSIONS: PermissionDef[] = [
     key: 'calc_services',
     label: 'Cálculo de Prestação de Serviços & Retenção',
     category: 'Simulação e Cálculos',
-    description: 'Permite simular honorários sem preço de custo com retenção na fonte (6.5% AGT, 11.5% AT, etc.).'
+    description: 'Permite simular honorários sem preço de custo com retenção na fonte (6.5% Fisco Angola, 11.5% IRS, etc.).'
   },
   {
     key: 'calc_import_sea',

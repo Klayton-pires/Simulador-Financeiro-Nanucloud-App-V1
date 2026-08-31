@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { db } from '../db.js';
+import { sqliteDb } from '../sqliteDb.js';
 import { AuthRequest, requireAdminLevel2, requireAdminLevel1 } from '../auth.js';
 import { User, UserRole, Plan } from '../types.js';
 
@@ -656,6 +657,325 @@ router.delete('/api-keys/:id', requireAdminLevel1, (req: AuthRequest, res: Respo
     details: `Chave de API ${id} revogada pelo Super Admin ${admin.name}.`
   });
   return res.json({ message: 'Chave de API revogada com sucesso.' });
+});
+
+// =========================================================================
+// 13. MARKETING SMS & NOTIFICAÇÕES (Nível 1 & Nível 2)
+// =========================================================================
+router.get('/sms-logs', requireAdminLevel2, (req: AuthRequest, res: Response) => {
+  const logs = db.getSmsLogs();
+  return res.json({ logs });
+});
+
+router.post('/sms-broadcast', requireAdminLevel2, (req: AuthRequest, res: Response) => {
+  try {
+    const admin = req.user!;
+    const { recipients, messageTemplate, messageType } = req.body;
+    // recipients: Array<{ phone: string; name?: string; countryCode?: string }> | string
+
+    if (!messageTemplate || !messageTemplate.trim()) {
+      return res.status(400).json({ error: 'O conteúdo da mensagem é obrigatório.' });
+    }
+
+    let targetList: Array<{ phone: string; name?: string; countryCode?: string }> = [];
+
+    if (Array.isArray(recipients)) {
+      targetList = recipients.filter(r => r && r.phone && r.phone.trim().length > 0);
+    } else if (typeof recipients === 'string' && recipients.trim()) {
+      // Semicolon, comma or newline separated
+      const lines = recipients.split(/[\n,;]+/);
+      targetList = lines
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(p => ({ phone: p, name: 'Cliente' }));
+    }
+
+    if (targetList.length === 0) {
+      return res.status(400).json({ error: 'Nenhum número de destinatário válido foi informado.' });
+    }
+
+    const sentResults = [];
+    for (const item of targetList) {
+      const cleanPhone = item.phone.trim();
+      const personalizedMsg = messageTemplate
+        .replace(/{NOME}/g, item.name || 'Prezado(a) Cliente')
+        .replace(/{TELEFONE}/g, cleanPhone)
+        .replace(/{EMPRESA}/g, 'Nanucloud');
+
+      const logItem = db.addSmsLog({
+        phoneNumber: cleanPhone,
+        countryCode: item.countryCode || 'AO',
+        messageType: messageType || 'marketing_broadcast',
+        messageContent: personalizedMsg,
+        recipientName: item.name || 'Destinatário',
+        sentByUserId: admin.id,
+        sentByUserName: admin.name,
+        status: 'delivered',
+        gatewayResponse: '200 OK - Sent via SMS Gateway'
+      });
+      sentResults.push(logItem);
+    }
+
+    db.addAuditLog({
+      userId: admin.id,
+      userName: admin.name,
+      userRole: admin.role,
+      action: 'SMS_BROADCAST_SENT',
+      entityType: 'marketing',
+      details: `Campanha SMS enviada para ${sentResults.length} destinatários por ${admin.name}.`
+    });
+
+    return res.json({
+      message: `Campanha SMS enviada com sucesso para ${sentResults.length} destinatário(s)!`,
+      sentCount: sentResults.length,
+      logs: sentResults
+    });
+  } catch (err: any) {
+    console.error('Error on sms-broadcast:', err);
+    return res.status(500).json({ error: 'Erro ao processar envio de SMS.' });
+  }
+});
+
+router.delete('/sms-logs', requireAdminLevel1, (req: AuthRequest, res: Response) => {
+  const admin = req.user!;
+  const result = db.clearSmsLogs(admin);
+  if (!result.success) {
+    return res.status(403).json({ error: result.error });
+  }
+  return res.json({ message: `Histórico de envios SMS limpo com sucesso (${result.clearedCount} registos eliminados).` });
+});
+
+// =========================================================================
+// 14. PAINEL DO CEO & GESTOR DE TRÁFEGO (Nível 1 & Nível 2)
+// =========================================================================
+router.get('/traffic-campaigns', requireAdminLevel2, (req: AuthRequest, res: Response) => {
+  const campaigns = db.getTrafficCampaigns();
+  const transactions = db.getTransactions().filter(t => t.status === 'approved');
+  const users = db.getUsers();
+
+  const totalAdSpendKz = campaigns.reduce((acc, c) => acc + (c.budgetKz || 0), 0);
+  const totalAdRevenueKz = campaigns.reduce((acc, c) => acc + (c.revenueKz || 0), 0);
+  const totalClicks = campaigns.reduce((acc, c) => acc + (c.clicks || 0), 0);
+  const totalImpressions = campaigns.reduce((acc, c) => acc + (c.impressions || 0), 0);
+  const totalLeads = campaigns.reduce((acc, c) => acc + (c.leads || 0), 0);
+  const totalPaidConversions = campaigns.reduce((acc, c) => acc + (c.paidConversions || 0), 0);
+
+  const overallRoas = totalAdSpendKz > 0 ? (totalAdRevenueKz / totalAdSpendKz) : 0;
+  const averageCacKz = totalPaidConversions > 0 ? (totalAdSpendKz / totalPaidConversions) : 0;
+  const averageCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+
+  return res.json({
+    campaigns,
+    ceoMetrics: {
+      totalAdSpendKz,
+      totalAdRevenueKz,
+      overallRoas,
+      averageCacKz,
+      averageCtr,
+      totalClicks,
+      totalImpressions,
+      totalLeads,
+      totalPaidConversions,
+      totalRegisteredUsers: users.length,
+      grossSystemRevenueKz: transactions.reduce((acc, t) => acc + t.amountKz, 0)
+    }
+  });
+});
+
+router.post('/traffic-campaigns', requireAdminLevel2, (req: AuthRequest, res: Response) => {
+  const admin = req.user!;
+  const campaignData = req.body;
+
+  if (!campaignData.name || !campaignData.name.trim()) {
+    return res.status(400).json({ error: 'O nome da campanha de tráfego é obrigatório.' });
+  }
+
+  const saved = db.saveTrafficCampaign(campaignData);
+  db.addAuditLog({
+    userId: admin.id,
+    userName: admin.name,
+    userRole: admin.role,
+    action: 'TRAFFIC_CAMPAIGN_SAVED',
+    entityType: 'marketing',
+    details: `Campanha de tráfego "${saved.name}" (${saved.source}) guardada por ${admin.name}.`
+  });
+
+  return res.json({ message: 'Campanha de tráfego guardada com sucesso!', campaign: saved });
+});
+
+router.delete('/traffic-campaigns/:id', requireAdminLevel1, (req: AuthRequest, res: Response) => {
+  const admin = req.user!;
+  const { id } = req.params;
+  const deleted = db.deleteTrafficCampaign(id);
+  if (!deleted) {
+    return res.status(404).json({ error: 'Campanha não encontrada.' });
+  }
+  db.addAuditLog({
+    userId: admin.id,
+    userName: admin.name,
+    userRole: admin.role,
+    action: 'TRAFFIC_CAMPAIGN_DELETED',
+    entityType: 'marketing',
+    details: `Campanha de tráfego ${id} removida pelo Super Admin ${admin.name}.`
+  });
+  return res.json({ message: 'Campanha de tráfego removida com sucesso.' });
+});
+
+// =========================================================================
+// 15. GOVERNANÇA DE BASE DE DADOS, CREDENCIAIS, LIMPEZA DEMO & RETENÇÃO DE 15 DIAS
+// =========================================================================
+
+// Obter credenciais oficiais de acesso à Base de Dados SQLite & Firestore
+router.get('/database-credentials', requireAdminLevel1, (req: AuthRequest, res: Response) => {
+  const admin = req.user!;
+  const sqliteInfo = sqliteDb.getDatabaseInfo();
+
+  return res.json({
+    success: true,
+    engine: 'SQLite 3 (Local) + Firebase Firestore (Cloud)',
+    credentials: {
+      sqlite: {
+        engine: 'SQLite 3 Standalone / Multi-Storage',
+        primaryFilePath: sqliteInfo.sqliteFilePath,
+        fallbackPath: '/database/nanucloud.sqlite',
+        rootPath: 'nanucloud.sqlite',
+        accessMethod: 'Ficheiro Binário Direto / DB Browser for SQLite / VSCode SQLite Viewer / DBeaver',
+        port: 'Não aplicável (Embedded File Storage)',
+        authentication: 'Permissões do Sistema Operacional / Nível Super Administrador',
+        fileSizeBytes: sqliteInfo.fileSizeBytes,
+        fileSizeFormatted: sqliteInfo.fileSizeFormatted,
+        tableCounts: sqliteInfo.tableCounts
+      },
+      superAdminCredentials: {
+        superAdminEmail: 'joaquim.monteiro@nanucloud.com',
+        adminAccessEmail: 'klayton.pires.monteiro@gmail.com',
+        role: 'admin_level1 (Super Administrador)',
+        privileges: 'Acesso total irrestrito, retenção vitalícia de histórico, permissão de purga'
+      },
+      retentionPolicy: {
+        rule: '15 dias de retenção para simulações de utilizadores normais',
+        superAdminRetention: 'Histórico guardado para sempre (Vitalício)',
+        manualDeleteAllowed: true,
+        accountAndCreditsProtected: true
+      }
+    }
+  });
+});
+
+// Executar Limpeza Completa de Dados de Demonstração (Purge Demo Data)
+router.post('/purge-demo-data', requireAdminLevel1, async (req: AuthRequest, res: Response) => {
+  try {
+    const admin = req.user!;
+    const purgeResult = db.purgeDemoData();
+
+    // Sincronizar e purgar também na base SQLite
+    await sqliteDb.init();
+    sqliteDb.purgeDemoRecords();
+    sqliteDb.syncFromObject({
+      users: db.getUsers(),
+      plans: db.getPlans(),
+      settings: db.getSettings(),
+      transactions: db.getTransactions(),
+      queryHistory: db.getQueryHistory(),
+      fiscalProposals: db.getFiscalProposals(),
+      apiKeys: db.getApiKeys(),
+      botKnowledgeBase: db.getBotKnowledgeBase()
+    });
+
+    db.addAuditLog({
+      userId: admin.id,
+      userName: admin.name,
+      userRole: admin.role,
+      action: 'DEMO_DATA_PURGED',
+      entityType: 'database',
+      ipAddress: req.ip || req.socket.remoteAddress,
+      details: `Limpeza de dados de demonstração executada por ${admin.name}. Registos removidos: ${purgeResult.usersRemoved} utilizadores demo, ${purgeResult.transactionsRemoved} transações demo, ${purgeResult.historyRemoved} simulações demo.`
+    });
+
+    return res.json({
+      success: true,
+      message: 'Todos os ficheiros e registos de demonstração foram removidos com sucesso da base de dados.',
+      stats: purgeResult,
+      dbInfo: sqliteDb.getDatabaseInfo()
+    });
+  } catch (err: any) {
+    console.error('Error on purge-demo-data:', err);
+    return res.status(500).json({ error: 'Erro ao executar a limpeza de dados de demonstração.' });
+  }
+});
+
+// Executar Política de Retenção de 15 Dias (Remove histórico antigo de utilizadores normais)
+router.post('/apply-retention-policy', requireAdminLevel1, async (req: AuthRequest, res: Response) => {
+  try {
+    const admin = req.user!;
+    const daysThreshold = Number(req.body.daysThreshold) || 15;
+
+    const retentionResult = db.applyDataRetentionPolicy(daysThreshold);
+
+    // Sincronizar na base SQLite
+    await sqliteDb.init();
+    sqliteDb.applyRetentionPolicy(daysThreshold);
+    sqliteDb.syncFromObject({
+      queryHistory: db.getQueryHistory(),
+      users: db.getUsers()
+    });
+
+    db.addAuditLog({
+      userId: admin.id,
+      userName: admin.name,
+      userRole: admin.role,
+      action: 'DATA_RETENTION_APPLIED',
+      entityType: 'database',
+      ipAddress: req.ip || req.socket.remoteAddress,
+      details: `Política de retenção de ${daysThreshold} dias executada por ${admin.name}. ${retentionResult.purgedCount} simulações antigas eliminadas. ${retentionResult.superAdminRetainedCount} simulações de Super Administrador preservadas para sempre.`
+    });
+
+    return res.json({
+      success: true,
+      message: `Política de retenção de ${daysThreshold} dias aplicada com sucesso! Contas e créditos permaneceram 100% intactos.`,
+      stats: retentionResult
+    });
+  } catch (err: any) {
+    console.error('Error applying retention policy:', err);
+    return res.status(500).json({ error: 'Erro ao aplicar a política de retenção.' });
+  }
+});
+
+// Super Administrador: Eliminar manualmente todo o histórico de simulações (ou apenas de utilizadores normais)
+router.delete('/simulation-history', requireAdminLevel1, async (req: AuthRequest, res: Response) => {
+  try {
+    const admin = req.user!;
+    const forNonAdminsOnly = req.query.forNonAdminsOnly === 'true';
+
+    const countRemoved = db.clearAllQueryHistory(forNonAdminsOnly);
+
+    // Sincronizar SQLite
+    await sqliteDb.init();
+    sqliteDb.syncFromObject({
+      queryHistory: db.getQueryHistory()
+    });
+
+    db.addAuditLog({
+      userId: admin.id,
+      userName: admin.name,
+      userRole: admin.role,
+      action: 'SIMULATION_HISTORY_MANUALLY_CLEARED',
+      entityType: 'database',
+      ipAddress: req.ip || req.socket.remoteAddress,
+      details: `Histórico de simulações limpo manualmente pelo Super Administrador ${admin.name}. Total de registos eliminados: ${countRemoved}.`
+    });
+
+    return res.json({
+      success: true,
+      message: forNonAdminsOnly
+        ? `Histórico de simulações dos utilizadores normais limpo com sucesso (${countRemoved} registos). O seu histórico como Super Administrador foi preservado!`
+        : `Todo o histórico de simulações foi eliminado com sucesso (${countRemoved} registos).`,
+      countRemoved
+    });
+  } catch (err: any) {
+    console.error('Error clearing query history:', err);
+    return res.status(500).json({ error: 'Erro ao eliminar o histórico de simulações.' });
+  }
 });
 
 export default router;

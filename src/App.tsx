@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { UserSafe } from './types';
+import { UserSafe, SystemSettings } from './types';
 import { SupportedLang } from './i18n/translations';
+import { useI18n } from './i18n/I18nContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar, ActiveTab } from './components/Sidebar';
 import { Footer } from './components/Footer';
@@ -9,7 +10,6 @@ import { ImportSimulator } from './components/ImportSimulator';
 import { ExcelBatchSimulator } from './components/ExcelBatchSimulator';
 import { UserProfile } from './components/UserProfile';
 import { AdminPanel } from './components/AdminPanel';
-import { DocumentationTab } from './components/DocumentationTab';
 import { AuthModal } from './components/AuthModal';
 import { PlansModal } from './components/PlansModal';
 import { SupportChatWidget } from './components/SupportChatWidget';
@@ -19,8 +19,6 @@ import { BasicPhoneMobileMode } from './components/BasicPhoneMobileMode';
 import { ServicesConsultingSimulator } from './components/ServicesConsultingSimulator';
 import { IntermediaryBrokerSimulator } from './components/IntermediaryBrokerSimulator';
 import { ApiIntegrationsTab } from './components/ApiIntegrationsTab';
-import { ManualFiscalMatrixTab } from './components/ManualFiscalMatrixTab';
-import { FiscalAiNotificationsTab } from './components/FiscalAiNotificationsTab';
 import { ClientsManagementTab } from './components/ClientsManagementTab';
 import { UsersManagementTab } from './components/UsersManagementTab';
 import { TicketsManagementTab } from './components/TicketsManagementTab';
@@ -31,16 +29,40 @@ import { DocsAndDeployTab } from './components/DocsAndDeployTab';
 import { LegalTermsModal } from './components/LegalTermsModal';
 import { SuperAdminSetupModal } from './components/SuperAdminSetupModal';
 import { CornerMenu } from './components/CornerMenu';
-import { MultiplatformHubTab } from './components/MultiplatformHubTab';
 
 // Themes and Greetings logic
 import { checkSpecialGreetings, SYSTEM_THEMES } from './data/themes';
-import { Sparkles, Gift, X, AlertCircle } from 'lucide-react';
+import { Sparkles, Gift, X, AlertCircle, Lock } from 'lucide-react';
 
 export default function App() {
+  const { language, setLanguage } = useI18n();
   const [user, setUser] = useState<UserSafe | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
-  const [currentLang, setCurrentLang] = useState<SupportedLang>('pt');
+  const [currentLang, setCurrentLang] = useState<SupportedLang>(language || 'pt');
+
+  const isSuperAdmin = user?.role === 'super_admin' || user?.role === 'admin_level1' || user?.role === 'superadmin';
+  const isAdmin = isSuperAdmin || user?.role === 'admin' || user?.role === 'admin_level2';
+  const isManager = isAdmin || user?.role === 'manager';
+
+  const defaultAdminUser: UserSafe = {
+    id: 'usr_admin_1',
+    name: 'Super Administrador NANUCLOUD',
+    email: 'admin@nanucloud.com',
+    role: 'super_admin',
+    country: 'AO',
+    isActive: true,
+    queriesRemaining: 999999,
+    totalQueriesUsed: 0,
+    activePlanId: 'plan_unlimited_corp',
+    activePlanName: 'Corporativo Vitalício',
+    planExpiresAt: null,
+    isImportUnlocked: true,
+    isBatchUnlocked: true,
+    isApiUnlocked: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString()
+  };
   const [activeTab, setActiveTab] = useState<ActiveTab>('local');
   const [isSidebarHidden, setIsSidebarHidden] = useState<boolean>(() => {
     return localStorage.getItem('nanucloud_sidebar_hidden') === 'true';
@@ -60,9 +82,32 @@ export default function App() {
   const [isPlansOpen, setIsPlansOpen] = useState<boolean>(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isTermsOpen, setIsTermsOpen] = useState<boolean>(false);
-  const [isSuperAdminSetupOpen, setIsSuperAdminSetupOpen] = useState<boolean>(() => {
-    return !localStorage.getItem('nanucloud_super_admin_configured');
-  });
+  const [isSuperAdminSetupOpen, setIsSuperAdminSetupOpen] = useState<boolean>(false);
+  const [isMenuDrawerOpen, setIsMenuDrawerOpen] = useState<boolean>(false);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+
+  const fetchSystemSettings = async () => {
+    try {
+      const res = await fetch('/api/plans/public-config');
+      if (res.ok) {
+        const data = await res.json();
+        setSystemSettings(data);
+      }
+    } catch {
+      // offline fallback
+    }
+  };
+
+  useEffect(() => {
+    fetchSystemSettings();
+    const handleSettingsUpdated = () => {
+      fetchSystemSettings();
+    };
+    window.addEventListener('nanucloud_settings_updated', handleSettingsUpdated);
+    return () => {
+      window.removeEventListener('nanucloud_settings_updated', handleSettingsUpdated);
+    };
+  }, []);
 
   // Greeting Banner
   const [specialGreeting, setSpecialGreeting] = useState<{
@@ -74,12 +119,19 @@ export default function App() {
 
   useEffect(() => {
     // Check saved language
-    const savedLang = localStorage.getItem('nanucloud_lang') as SupportedLang;
+    const savedLang = (localStorage.getItem('nanucloud_user_lang') || localStorage.getItem('nanucloud_lang')) as SupportedLang;
     if (savedLang) {
       setCurrentLang(savedLang);
+      setLanguage(savedLang);
     }
     checkAuth();
-  }, []);
+  }, [setLanguage]);
+
+  useEffect(() => {
+    if (language && language !== currentLang) {
+      setCurrentLang(language);
+    }
+  }, [language, currentLang]);
 
   useEffect(() => {
     if (user) {
@@ -119,7 +171,9 @@ export default function App() {
 
   const handleLangChange = (lang: SupportedLang) => {
     setCurrentLang(lang);
+    setLanguage(lang);
     localStorage.setItem('nanucloud_lang', lang);
+    localStorage.setItem('nanucloud_user_lang', lang);
   };
 
   const handleOpenAuth = (mode: 'login' | 'register' = 'login') => {
@@ -160,6 +214,8 @@ export default function App() {
         onOpenProfile={() => setActiveTab('history')}
         onOpenAdmin={() => setActiveTab('admin_settings')}
         onOpenDocs={() => setActiveTab('manuals')}
+        onToggleMenu={() => setIsMenuDrawerOpen((prev) => !prev)}
+        onNavigateHome={() => setActiveTab('local')}
       />
 
       {/* Special Holiday / Birthday Greeting Banner */}
@@ -308,60 +364,56 @@ export default function App() {
             />
           )}
 
-          {/* TAB: Matriz Fiscal de Taxas */}
-          {activeTab === 'fiscal_matrix' && (
-            <ManualFiscalMatrixTab
-              currentUser={
-                user || {
-                  id: 'guest',
-                  name: 'Visitante',
-                  email: 'visitante@nanucloud.com',
-                  role: 'client',
-                  isActive: true,
-                  queriesRemaining: 5,
-                  totalQueriesUsed: 0,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }
-              }
+          {/* Módulos Restritos para Administradores (Inteligência Fiscal, Ecossistema & Apps, Manuais Oficiais) */}
+          {(activeTab === 'fiscal_matrix' || activeTab === 'fiscal_ai' || activeTab === 'multiplatform_hub' || activeTab === 'manuals') && !isManager && (
+            <div className="bg-[#1E293B] border border-amber-500/30 rounded-2xl p-8 sm:p-12 text-center max-w-xl mx-auto my-8 shadow-2xl space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto">
+                <Lock className="w-8 h-8" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-100 font-mono">
+                MÓDULO EXCLUSIVO PARA ADMINISTRADORES
+              </h2>
+              <p className="text-xs text-slate-300 font-mono leading-relaxed">
+                As opções de <span className="text-amber-300 font-bold">Inteligência Fiscal</span>, <span className="text-amber-300 font-bold">Ecossistema & Apps</span> e <span className="text-amber-300 font-bold">Manuais Oficiais</span> foram integradas exclusivamente no menu de <strong>Definições do Sistema</strong>, acessível unicamente por administradores.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+                <button
+                  onClick={() => setActiveTab('local')}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-mono font-bold transition border border-slate-700"
+                >
+                  Voltar ao Simulador
+                </button>
+                <button
+                  onClick={() => handleOpenAuth('login')}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg"
+                >
+                  Iniciar Sessão como Administrador
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: Matriz Fiscal de Taxas (Apenas Administradores nas Definições) */}
+          {activeTab === 'fiscal_matrix' && isManager && (
+            <AdminAdvancedSettingsTab
+              currentUser={user || defaultAdminUser}
+              initialSection="fiscal_intelligence"
             />
           )}
 
-          {/* TAB: IA Fiscal & Notícias Oficiais */}
-          {activeTab === 'fiscal_ai' && (
-            <FiscalAiNotificationsTab
-              currentUser={
-                user || {
-                  id: 'guest',
-                  name: 'Visitante',
-                  email: 'visitante@nanucloud.com',
-                  role: 'client',
-                  isActive: true,
-                  queriesRemaining: 5,
-                  totalQueriesUsed: 0,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }
-              }
+          {/* TAB: IA Fiscal & Notícias Oficiais (Apenas Administradores nas Definições) */}
+          {activeTab === 'fiscal_ai' && isManager && (
+            <AdminAdvancedSettingsTab
+              currentUser={user || defaultAdminUser}
+              initialSection="fiscal_intelligence"
             />
           )}
 
-          {/* TAB: Multi-Plataformas & Central de Download */}
-          {activeTab === 'multiplatform_hub' && (
-            <MultiplatformHubTab
-              currentUser={
-                user || {
-                  id: 'guest',
-                  name: 'Visitante NANUCLOUD',
-                  email: 'visitante@nanucloud.com',
-                  role: 'client',
-                  isActive: true,
-                  queriesRemaining: 100,
-                  totalQueriesUsed: 0,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }
-              }
+          {/* TAB: Multi-Plataformas & Central de Download (Apenas Administradores nas Definições) */}
+          {activeTab === 'multiplatform_hub' && isManager && (
+            <AdminAdvancedSettingsTab
+              currentUser={user || defaultAdminUser}
+              initialSection="multiplatform"
             />
           )}
 
@@ -522,8 +574,13 @@ export default function App() {
             )
           )}
 
-          {/* TAB: Manuais & Documentação */}
-          {activeTab === 'manuals' && <DocumentationTab />}
+          {/* TAB: Manuais & Documentação (Apenas Administradores nas Definições) */}
+          {activeTab === 'manuals' && isManager && (
+            <AdminAdvancedSettingsTab
+              currentUser={user || defaultAdminUser}
+              initialSection="manuals"
+            />
+          )}
 
           {/* TAB: Painel Administrativo Geral */}
           {activeTab === 'admin' && (
@@ -551,7 +608,7 @@ export default function App() {
       )}
 
       {/* Global Footer */}
-      <Footer />
+      <Footer settings={systemSettings} />
 
       {/* Modals */}
       <AuthModal
@@ -596,9 +653,10 @@ export default function App() {
         onToggle={() => setIsChatOpen(!isChatOpen)}
       />
 
-      {/* Initial Super Admin Setup Wizard on First Application Login */}
+      {/* Optional Super Admin Setup Wizard */}
       <SuperAdminSetupModal
         isOpen={isSuperAdminSetupOpen}
+        onClose={() => setIsSuperAdminSetupOpen(false)}
         onComplete={(superAdminUser) => {
           setUser(superAdminUser);
           localStorage.setItem('nanucloud_session_user', JSON.stringify(superAdminUser));
@@ -623,6 +681,9 @@ export default function App() {
         onLanguageChange={handleLangChange}
         onOpenPlans={() => setIsPlansOpen(true)}
         onOpenSupport={() => setIsChatOpen(true)}
+        isOpen={isMenuDrawerOpen}
+        onClose={() => setIsMenuDrawerOpen(false)}
+        onToggle={() => setIsMenuDrawerOpen((prev) => !prev)}
       />
     </div>
   );

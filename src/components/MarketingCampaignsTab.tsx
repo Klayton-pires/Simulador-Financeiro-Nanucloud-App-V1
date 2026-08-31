@@ -26,7 +26,7 @@ export const MarketingCampaignsTab: React.FC<MarketingCampaignsTabProps> = ({ cu
   const [template, setTemplate] = useState<string>('promo_discount');
   const [customTitle, setCustomTitle] = useState<string>('PROMOÇÃO EXCLUSIVA: 30% DE BÓNUS EM CONSULTAS FISCAIS');
   const [customMessage, setCustomMessage] = useState<string>(
-    'Olá {NOME}! A NANUCLOUD está a oferecer 30% extra de consultas fiscais na recarga do Plano Ouro ou Diamante. Renove hoje e mantenha a sua precificação 100% segura com as novas regras da AGT.'
+    'Olá {NOME}! A NANUCLOUD está a oferecer 30% extra de consultas fiscais na recarga do Plano Ouro ou Diamante. Renove hoje e mantenha a sua precificação 100% segura com as novas normas tributárias.'
   );
   const [sentSuccess, setSentSuccess] = useState<boolean>(false);
   const [campaignHistory, setCampaignHistory] = useState<MarketingCampaign[]>([
@@ -60,9 +60,9 @@ export const MarketingCampaignsTab: React.FC<MarketingCampaignsTabProps> = ({ cu
         );
         break;
       case 'fiscal_update_notice':
-        setCustomTitle('COMUNICADO FISCAL URGENTE: ATUALIZAÇÃO AGT / CÓDIGO DO IVA');
+        setCustomTitle('COMUNICADO FISCAL URGENTE: ATUALIZAÇÃO DO CÓDIGO DO IVA');
         setCustomMessage(
-          'Estimado {NOME}, foram publicadas novas diretrizes fiscais pela AGT. O seu simulador NANUCLOUD já foi atualizado automaticamente para cumprir a legislação.'
+          'Estimado {NOME}, foram publicadas novas diretrizes fiscais e tributárias. O seu simulador NANUCLOUD já foi atualizado automaticamente para cumprir a legislação.'
         );
         break;
       case 'birthday_holiday_greeting':
@@ -133,7 +133,7 @@ export const MarketingCampaignsTab: React.FC<MarketingCampaignsTabProps> = ({ cu
               {[
                 { id: 'promo_discount', label: 'Promoção de Recarga', icon: Sparkles },
                 { id: 'low_credits_alert', label: 'Alerta Saldo Baixo', icon: AlertCircle },
-                { id: 'fiscal_update_notice', label: 'Aviso Fiscal AGT', icon: FileText },
+                { id: 'fiscal_update_notice', label: 'Aviso Fiscal & IVA', icon: FileText },
                 { id: 'birthday_holiday_greeting', label: 'Felicitações / Aniversário', icon: Gift }
               ].map((tpl) => {
                 const Icon = tpl.icon;

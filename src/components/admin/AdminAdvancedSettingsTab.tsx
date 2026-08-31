@@ -39,7 +39,8 @@ import {
   EmisReferencePaymentConfig,
   PaypalPaymentConfig,
   FreeTrialCreditsConfig,
-  ConfigSnapshot
+  ConfigSnapshot,
+  SystemSettings
 } from '../../types';
 import {
   INITIAL_BANK_ACCOUNTS,
@@ -62,14 +63,63 @@ import { MarketingBroadcastSection } from './MarketingBroadcastSection';
 import { UserClientManagementSection } from './UserClientManagementSection';
 import { ConfigHistoryRevertSection, INITIAL_CONFIG_SNAPSHOTS } from './ConfigHistoryRevertSection';
 import { LegalTermsAdminSection } from './LegalTermsAdminSection';
-import { Palette, Megaphone, History, Scale } from 'lucide-react';
+import { DatabaseSettingsSection } from './DatabaseSettingsSection';
+import { Palette, Megaphone, History, Scale, Download, BookOpen, FileCode } from 'lucide-react';
+import { ManualFiscalMatrixTab } from '../ManualFiscalMatrixTab';
+import { FiscalAiNotificationsTab } from '../FiscalAiNotificationsTab';
+import { MultiplatformHubTab } from '../MultiplatformHubTab';
+import { DocumentationTab } from '../DocumentationTab';
+import { DocsAndDeployTab } from '../DocsAndDeployTab';
+import { SystemAuditSection } from './SystemAuditSection';
+import { Activity } from 'lucide-react';
 
 interface AdminAdvancedSettingsTabProps {
-  currentUser: UserSafe;
+  currentUser?: UserSafe;
+  settingsData?: SystemSettings | null;
+  onSaveSettings?: (updated: SystemSettings) => Promise<void> | void;
+  isSuperAdmin?: boolean;
+  initialSection?:
+    | 'banks'
+    | 'databases'
+    | 'adsense'
+    | 'contacts'
+    | 'rbac'
+    | 'payments'
+    | 'credits'
+    | 'countries'
+    | 'themes'
+    | 'marketing'
+    | 'users_clients'
+    | 'history'
+    | 'legal_terms'
+    | 'fiscal_intelligence'
+    | 'multiplatform'
+    | 'manuals'
+    | 'system_audit';
 }
 
-export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> = ({ currentUser }) => {
-  const isSuperAdmin = currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'admin_level1';
+export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> = ({
+  currentUser,
+  settingsData,
+  onSaveSettings,
+  isSuperAdmin: isSuperAdminProp,
+  initialSection
+}) => {
+  const safeUser = currentUser || {
+    id: 'admin',
+    name: 'Administrador do Sistema',
+    email: 'admin@nanucloud.com',
+    role: 'super_admin',
+    credits: 999999,
+    plan: 'enterprise'
+  };
+
+  const isSuperAdmin =
+    isSuperAdminProp ??
+    (safeUser.role === 'superadmin' ||
+      safeUser.role === 'admin' ||
+      safeUser.role === 'super_admin' ||
+      safeUser.role === 'admin_level1');
 
   const [activeSection, setActiveSection] = useState<
     | 'banks'
@@ -85,7 +135,20 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
     | 'users_clients'
     | 'history'
     | 'legal_terms'
-  >('banks');
+    | 'fiscal_intelligence'
+    | 'multiplatform'
+    | 'manuals'
+    | 'system_audit'
+  >(initialSection || 'banks');
+
+  const [fiscalSubTab, setFiscalSubTab] = useState<'ai' | 'matrix'>('ai');
+  const [manualsSubTab, setManualsSubTab] = useState<'system' | 'deploy'>('system');
+
+  React.useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+    }
+  }, [initialSection]);
 
   // Hidden Countries State
   const [hiddenCountries, setHiddenCountriesList] = useState<string[]>(() => getHiddenCountryCodes());
@@ -160,6 +223,16 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
         };
   });
 
+  const [gatewayToggles, setGatewayToggles] = useState({
+    bankTransferEnabled: settingsData?.bankTransferEnabled ?? true,
+    emisEnabled: settingsData?.emisEnabled ?? true,
+    proxyPayEnabled: settingsData?.proxyPayEnabled ?? true,
+    payPayEnabled: settingsData?.payPayEnabled ?? true,
+    alipayEnabled: settingsData?.alipayEnabled ?? true,
+    paypalEnabled: settingsData?.paypalEnabled ?? true,
+    stripeEnabled: settingsData?.stripeEnabled ?? true
+  });
+
   // 7. Free Trial Credits & On-Page Visitors Config
   const [creditsConfig, setCreditsConfig] = useState<FreeTrialCreditsConfig>(() => {
     const saved = localStorage.getItem('nanucloud_credits_config');
@@ -187,6 +260,20 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
     setTimeout(() => setSavedBanner(null), 3000);
   };
 
+  const syncToBackend = async (partial: Partial<SystemSettings>) => {
+    try {
+      if (onSaveSettings && settingsData) {
+        await onSaveSettings({
+          ...settingsData,
+          ...partial
+        });
+      }
+      window.dispatchEvent(new Event('nanucloud_settings_updated'));
+    } catch (err) {
+      console.error('Error syncing settings to backend:', err);
+    }
+  };
+
   // Snapshot recording for Super Admin audit & 1-click rollback
   const recordConfigSnapshot = (section: string, payload: any) => {
     try {
@@ -196,11 +283,11 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
         id: `snap_${Date.now()}`,
         section,
         sectionName: section,
-        authorEmail: currentUser.email,
-        authorName: currentUser.name,
-        authorRole: currentUser.role,
+        authorEmail: safeUser.email,
+        authorName: safeUser.name,
+        authorRole: safeUser.role,
         timestamp: new Date().toISOString(),
-        summary: `Atualização e salvamento da área "${section}" por ${currentUser.name}.`,
+        summary: `Atualização e salvamento da área "${section}" por ${safeUser.name}.`,
         payload
       };
       const updated = [newSnap, ...existing.slice(0, 49)];
@@ -217,20 +304,30 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
       if (Array.isArray(p)) {
         setBankAccounts(p);
         localStorage.setItem('nanucloud_bank_accounts', JSON.stringify(p));
+        syncToBackend({ bankAccounts: p });
       }
     } else if (snapshot.section.includes('Banco') || snapshot.section === 'databases') {
       if (Array.isArray(p)) {
         setDbEngines(p);
         localStorage.setItem('nanucloud_db_engines', JSON.stringify(p));
+        syncToBackend({ dbEngines: p });
       }
     } else if (snapshot.section.includes('AdSense') || snapshot.section === 'adsense') {
       if (Array.isArray(p)) {
         setAdsenseSlots(p);
         localStorage.setItem('nanucloud_adsense_slots', JSON.stringify(p));
+        syncToBackend({ googleAdsenseSlots: p });
       }
     } else if (snapshot.section.includes('Contactos') || snapshot.section === 'contacts') {
       setContacts(p);
       localStorage.setItem('nanucloud_admin_contacts', JSON.stringify(p));
+      syncToBackend({
+        companyPhone1: p.phones?.[0],
+        companyPhone2: p.phones?.[1],
+        whatsappSupport1: p.whatsapps?.[0],
+        whatsappSupport2: p.whatsapps?.[1],
+        supportEmail: p.supportEmail
+      });
     } else if (snapshot.section.includes('RBAC') || snapshot.section === 'rbac') {
       if (Array.isArray(p)) {
         setPermissionGroups(p);
@@ -239,6 +336,10 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
     } else if (snapshot.section.includes('Créditos') || snapshot.section === 'credits') {
       setCreditsConfig(p);
       localStorage.setItem('nanucloud_credits_config', JSON.stringify(p));
+      syncToBackend({
+        freeQueriesOnRegister: p.freeQueriesOnRegister,
+        freeQueriesDaily: p.freeQueriesForVisitors
+      });
     } else if (snapshot.section.includes('Países') || snapshot.section === 'countries') {
       if (Array.isArray(p)) {
         setHiddenCountriesList(p);
@@ -256,6 +357,7 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
 
   const handleSaveBanks = () => {
     localStorage.setItem('nanucloud_bank_accounts', JSON.stringify(bankAccounts));
+    syncToBackend({ bankAccounts });
     recordConfigSnapshot('Coordenadas Bancárias (6)', bankAccounts);
     showSaveNotice('Coordenadas bancárias salvas com sucesso!');
   };
@@ -284,6 +386,7 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
 
   const handleSaveDbEngines = () => {
     localStorage.setItem('nanucloud_db_engines', JSON.stringify(dbEngines));
+    syncToBackend({ dbEngines });
     recordConfigSnapshot('Motores de Banco (MySQL/MSSQL)', dbEngines);
     showSaveNotice('Motores de banco de dados gravados!');
   };
@@ -296,6 +399,7 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
 
   const handleSaveAdsense = () => {
     localStorage.setItem('nanucloud_adsense_slots', JSON.stringify(adsenseSlots));
+    syncToBackend({ googleAdsenseSlots: adsenseSlots });
     recordConfigSnapshot('Google AdSense (3 Posições)', adsenseSlots);
     showSaveNotice('Configurações do Google AdSense salvas!');
   };
@@ -303,21 +407,43 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
   // Contacts Handlers
   const handleSaveContacts = () => {
     localStorage.setItem('nanucloud_admin_contacts', JSON.stringify(contacts));
+    syncToBackend({
+      companyPhone1: contacts.phones?.[0],
+      companyPhone2: contacts.phones?.[1],
+      whatsappSupport1: contacts.whatsapps?.[0],
+      whatsappSupport2: contacts.whatsapps?.[1],
+      supportEmail: contacts.supportEmail
+    });
     recordConfigSnapshot('Contactos & WhatsApp', contacts);
     showSaveNotice('Contactos de telemóvel e WhatsApp salvos!');
   };
 
-  // Electronic Payments Handlers (EMIS & PayPal)
+  // Electronic Payments Handlers (EMIS, PayPal & Gateways)
   const handleSavePayments = () => {
     localStorage.setItem('nanucloud_emis_config', JSON.stringify(emisConfig));
     localStorage.setItem('nanucloud_paypal_config', JSON.stringify(paypalConfig));
-    recordConfigSnapshot('Pagamentos EMIS & PayPal', { emisConfig, paypalConfig });
-    showSaveNotice('Configurações de Pagamento EMIS & PayPal salvas com sucesso!');
+    localStorage.setItem('nanucloud_gateway_toggles', JSON.stringify(gatewayToggles));
+    syncToBackend({
+      ...gatewayToggles,
+      emisEntityId: emisConfig.entityCode,
+      emisTerminalId: emisConfig.terminalId,
+      emisApiKey: emisConfig.apiKey,
+      emisWebhookUrl: emisConfig.webhookSecret,
+      paypalClientId: paypalConfig.clientId,
+      paypalSecret: paypalConfig.clientSecret,
+      paypalReceiverEmail: paypalConfig.receiverEmail
+    });
+    recordConfigSnapshot('Modalidades de Pagamento & Gateways', { gatewayToggles, emisConfig, paypalConfig });
+    showSaveNotice('Configurações de Canais de Pagamento salvas com sucesso!');
   };
 
   // Free Credits Handlers
   const handleSaveCredits = () => {
     localStorage.setItem('nanucloud_credits_config', JSON.stringify(creditsConfig));
+    syncToBackend({
+      freeQueriesOnRegister: creditsConfig.freeQueriesOnRegister,
+      freeQueriesDaily: creditsConfig.freeQueriesForVisitors
+    });
     window.dispatchEvent(new Event('nanucloud_credits_updated'));
     recordConfigSnapshot('Créditos Gratuitos & Pesquisas', creditsConfig);
     showSaveNotice('Configurações de créditos gratuitos atualizadas!');
@@ -434,7 +560,11 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
           { id: 'marketing', label: '10. Notificações & Marketing', icon: Megaphone },
           { id: 'users_clients', label: '11. Utilizadores do Sistema (Staff)', icon: Shield },
           { id: 'history', label: '12. Histórico & Reversão', icon: History },
-          { id: 'legal_terms', label: '13. Termos de Uso & Políticas', icon: Scale }
+          { id: 'legal_terms', label: '13. Termos de Uso & Políticas', icon: Scale },
+          { id: 'fiscal_intelligence', label: '14. Inteligência Fiscal & Taxas', icon: Sparkles },
+          { id: 'multiplatform', label: '15. Ecossistema & Apps (Multi-Plataformas)', icon: Download },
+          { id: 'manuals', label: '16. Manuais Oficiais & Documentação', icon: BookOpen },
+          { id: 'system_audit', label: '17. Auditoria Global do Sistema & Ficheiros', icon: Activity }
         ].map((tab) => {
           const Icon = tab.icon;
           return (
@@ -561,102 +691,106 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
         </div>
       )}
 
-      {/* SECTION 2: MOTORES DE BANCO DE DADOS (MYSQL / MSSQL / POSTGRES) */}
+      {/* SECTION 2: MOTORES DE BANCO DE DADOS (SQLITE 3 / MYSQL / MSSQL / POSTGRES) */}
       {activeSection === 'databases' && (
-        <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-100 font-mono flex items-center gap-2">
-                <Database className="w-4 h-4 text-emerald-400" /> MOTORES DE BANCO DE DADOS (MYSQL, MS SQL SERVER & POSTGRESQL)
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Configuração de instâncias para persistência transacional, auditoria e sincronização com ERPs corporativos.
-              </p>
+        <div className="space-y-6">
+          <DatabaseSettingsSection currentUser={safeUser} isSuperAdmin={isSuperAdmin} />
+
+          <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-100 font-mono flex items-center gap-2">
+                  <Database className="w-4 h-4 text-emerald-400" /> CONEXÕES ADICIONAIS DE BANCO EXTERNO (MYSQL, MS SQL SERVER & POSTGRESQL)
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Configuração de instâncias remotas para sincronização com ERPs corporativos (Primavera, SAP, PHC).
+                </p>
+              </div>
+
+              <button
+                onClick={handleSaveDbEngines}
+                className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-5 rounded-xl text-xs font-mono uppercase tracking-wider flex items-center gap-2 shadow-md transition-all self-start"
+              >
+                <Save className="w-4 h-4" /> Gravar Configuração Externa
+              </button>
             </div>
 
-            <button
-              onClick={handleSaveDbEngines}
-              className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-5 rounded-xl text-xs font-mono uppercase tracking-wider flex items-center gap-2 shadow-md transition-all self-start"
-            >
-              <Save className="w-4 h-4" /> Gravar Configuração de Motores
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {dbEngines.map((db) => (
-              <div key={db.id} className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 text-xs font-mono">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
-                      {db.type.toUpperCase().slice(0, 3)}
+            <div className="space-y-4">
+              {dbEngines.map((db) => (
+                <div key={db.id} className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 text-xs font-mono">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
+                        {db.type.toUpperCase().slice(0, 3)}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-100">{db.name}</h4>
+                        <span className="text-[10px] text-slate-400 uppercase">Engine: {db.type}</span>
+                      </div>
                     </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        db.connectionStatus === 'connected'
+                          ? 'bg-emerald-500/20 text-emerald-300'
+                          : 'bg-rose-500/20 text-rose-300'
+                      }`}>
+                        {db.connectionStatus === 'connected' ? 'Conectado' : 'Desconectado'}
+                      </span>
+
+                      <button
+                        onClick={() => handleTestDbConnection(db.id)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-colors border border-slate-700"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" /> Testar Conexão
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <div>
-                      <h4 className="font-bold text-slate-100">{db.name}</h4>
-                      <span className="text-[10px] text-slate-400 uppercase">Engine: {db.type}</span>
+                      <label className="text-[10px] text-slate-400 block mb-1">HOST / SERVIDOR</label>
+                      <input
+                        type="text"
+                        value={db.host}
+                        onChange={(e) => handleDbChange(db.id, 'host', e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">PORTA TCP</label>
+                      <input
+                        type="number"
+                        value={db.port}
+                        onChange={(e) => handleDbChange(db.id, 'port', Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">NOME DO BANCO DE DADOS</label>
+                      <input
+                        type="text"
+                        value={db.database}
+                        onChange={(e) => handleDbChange(db.id, 'database', e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">UTILIZADOR</label>
+                      <input
+                        type="text"
+                        value={db.username}
+                        onChange={(e) => handleDbChange(db.id, 'username', e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                      />
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                      db.connectionStatus === 'connected'
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-rose-500/20 text-rose-300'
-                    }`}>
-                      {db.connectionStatus === 'connected' ? 'Conectado' : 'Desconectado'}
-                    </span>
-
-                    <button
-                      onClick={() => handleTestDbConnection(db.id)}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-colors border border-slate-700"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" /> Testar Conexão
-                    </button>
-                  </div>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">HOST / SERVIDOR</label>
-                    <input
-                      type="text"
-                      value={db.host}
-                      onChange={(e) => handleDbChange(db.id, 'host', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">PORTA TCP</label>
-                    <input
-                      type="number"
-                      value={db.port}
-                      onChange={(e) => handleDbChange(db.id, 'port', Number(e.target.value))}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">NOME DO BANCO DE DADOS</label>
-                    <input
-                      type="text"
-                      value={db.database}
-                      onChange={(e) => handleDbChange(db.id, 'database', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">UTILIZADOR</label>
-                    <input
-                      type="text"
-                      value={db.username}
-                      onChange={(e) => handleDbChange(db.id, 'username', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -976,10 +1110,10 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
             <div>
               <h3 className="text-sm font-bold text-slate-100 font-mono flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-emerald-400" /> PAGAMENTO POR REFERÊNCIA EMIS (MULTICAIXA) & PAYPAL
+                <CreditCard className="w-4 h-4 text-emerald-400" /> ATIVAÇÃO & GESTÃO DE CANAIS DE PAGAMENTO
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Configure os canais de recebimento automático por Multicaixa Express / Referência Bancária e PayPal Internacional
+                Ative ou desative modalidades de pagamento em tempo real e configure as chaves de integração.
               </p>
             </div>
 
@@ -987,8 +1121,136 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
               onClick={handleSavePayments}
               className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-5 rounded-xl text-xs font-mono uppercase tracking-wider flex items-center gap-2 shadow-md transition-all self-start"
             >
-              <Save className="w-4 h-4" /> Guardar Gateways
+              <Save className="w-4 h-4" /> Guardar Todos os Gateways
             </button>
+          </div>
+
+          {/* Master Toggles: Front-end Immediate Visibility */}
+          <div className="bg-slate-900/90 border border-indigo-500/30 rounded-2xl p-5 space-y-3 font-mono">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-wider">
+                  Controlo de Modalidades Ativas (Efeito Imediato no Checkout)
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Marque ou desmarque para habilitar ou ocultar os métodos de pagamento para os clientes:
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+              <label className="flex items-center justify-between p-3 rounded-xl border bg-slate-950/60 border-slate-800 cursor-pointer hover:border-slate-700">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-indigo-400" />
+                  <div>
+                    <div className="text-xs font-bold text-white">Transferência Bancária</div>
+                    <div className="text-[10px] text-slate-400">IBANs BAI, BFA, BIC...</div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={gatewayToggles.bankTransferEnabled}
+                  onChange={(e) => setGatewayToggles({ ...gatewayToggles, bankTransferEnabled: e.target.checked })}
+                  className="rounded text-indigo-500 w-4 h-4 focus:ring-0"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 rounded-xl border bg-slate-950/60 border-slate-800 cursor-pointer hover:border-slate-700">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-amber-400" />
+                  <div>
+                    <div className="text-xs font-bold text-white">EMIS Multicaixa Express</div>
+                    <div className="text-[10px] text-slate-400">Referência MCX / ATM</div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={gatewayToggles.emisEnabled}
+                  onChange={(e) => setGatewayToggles({ ...gatewayToggles, emisEnabled: e.target.checked })}
+                  className="rounded text-amber-500 w-4 h-4 focus:ring-0"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 rounded-xl border bg-slate-950/60 border-slate-800 cursor-pointer hover:border-slate-700">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-purple-400" />
+                  <div>
+                    <div className="text-xs font-bold text-white">ProxyPay Angola</div>
+                    <div className="text-[10px] text-slate-400">Ref. Automática</div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={gatewayToggles.proxyPayEnabled}
+                  onChange={(e) => setGatewayToggles({ ...gatewayToggles, proxyPayEnabled: e.target.checked })}
+                  className="rounded text-purple-500 w-4 h-4 focus:ring-0"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 rounded-xl border bg-slate-950/60 border-slate-800 cursor-pointer hover:border-slate-700">
+                <div className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-orange-400" />
+                  <div>
+                    <div className="text-xs font-bold text-white">PayPay África</div>
+                    <div className="text-[10px] text-slate-400">Carteira Digital</div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={gatewayToggles.payPayEnabled}
+                  onChange={(e) => setGatewayToggles({ ...gatewayToggles, payPayEnabled: e.target.checked })}
+                  className="rounded text-orange-500 w-4 h-4 focus:ring-0"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 rounded-xl border bg-slate-950/60 border-slate-800 cursor-pointer hover:border-slate-700">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-blue-400" />
+                  <div>
+                    <div className="text-xs font-bold text-white">Alipay Global</div>
+                    <div className="text-[10px] text-slate-400">China / Yuan (RMB)</div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={gatewayToggles.alipayEnabled}
+                  onChange={(e) => setGatewayToggles({ ...gatewayToggles, alipayEnabled: e.target.checked })}
+                  className="rounded text-blue-500 w-4 h-4 focus:ring-0"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 rounded-xl border bg-slate-950/60 border-slate-800 cursor-pointer hover:border-slate-700">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-sky-400" />
+                  <div>
+                    <div className="text-xs font-bold text-white">PayPal & Visa</div>
+                    <div className="text-[10px] text-slate-400">Mastercard Internacional</div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={gatewayToggles.paypalEnabled}
+                  onChange={(e) => setGatewayToggles({ ...gatewayToggles, paypalEnabled: e.target.checked })}
+                  className="rounded text-sky-500 w-4 h-4 focus:ring-0"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 rounded-xl border bg-slate-950/60 border-slate-800 cursor-pointer hover:border-slate-700">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-emerald-400" />
+                  <div>
+                    <div className="text-xs font-bold text-white">Stripe Direct</div>
+                    <div className="text-[10px] text-slate-400">Apple / Google Pay</div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={gatewayToggles.stripeEnabled}
+                  onChange={(e) => setGatewayToggles({ ...gatewayToggles, stripeEnabled: e.target.checked })}
+                  className="rounded text-emerald-500 w-4 h-4 focus:ring-0"
+                />
+              </label>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1419,6 +1681,136 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
           onSaveSnapshot={recordConfigSnapshot}
           showSaveNotice={showSaveNotice}
         />
+      )}
+
+      {/* SECTION 14: INTELIGÊNCIA FISCAL & MATRIZ DE TAXAS (EXCLUSIVO ADMINS) */}
+      {activeSection === 'fiscal_intelligence' && (
+        <div className="space-y-4">
+          <div className="bg-[#1E293B] border border-indigo-500/30 rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div>
+              <div className="flex items-center gap-2 text-indigo-400 font-mono text-xs font-bold uppercase tracking-wider mb-1">
+                <Sparkles className="w-4 h-4" />
+                <span>Módulo de Definições Fiscais Administrativas</span>
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-slate-100 font-mono">
+                Inteligência Fiscal & Governança de Taxas
+              </h2>
+              <p className="text-xs text-slate-400 font-mono">
+                Controlo reservado à administração para regulação tributária, IA de notícias fiscais e matriz aduaneira.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 bg-[#0F172A] p-1 rounded-xl border border-slate-800 shrink-0">
+              <button
+                type="button"
+                onClick={() => setFiscalSubTab('ai')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-colors flex items-center gap-1.5 ${
+                  fiscalSubTab === 'ai'
+                    ? 'bg-indigo-500 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>IA Fiscal & Alertas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiscalSubTab('matrix')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-colors flex items-center gap-1.5 ${
+                  fiscalSubTab === 'matrix'
+                    ? 'bg-indigo-500 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Matriz Global de Taxas</span>
+              </button>
+            </div>
+          </div>
+
+          {fiscalSubTab === 'ai' ? (
+            <FiscalAiNotificationsTab currentUser={currentUser} />
+          ) : (
+            <ManualFiscalMatrixTab currentUser={currentUser} />
+          )}
+        </div>
+      )}
+
+      {/* SECTION 15: ECOSSISTEMA & APPS (MULTI-PLATAFORMAS) (EXCLUSIVO ADMINS) */}
+      {activeSection === 'multiplatform' && (
+        <div className="space-y-4">
+          <div className="bg-[#1E293B] border border-indigo-500/30 rounded-2xl p-4 sm:p-6 shadow-sm">
+            <div className="flex items-center gap-2 text-indigo-400 font-mono text-xs font-bold uppercase tracking-wider mb-1">
+              <Download className="w-4 h-4" />
+              <span>Gestão de Ecossistema & Apps Administrativo</span>
+            </div>
+            <h2 className="text-base sm:text-lg font-bold text-slate-100 font-mono">
+              Downloads Multi-Plataformas & SDKs Oficiais
+            </h2>
+            <p className="text-xs text-slate-400 font-mono">
+              Acesso administrativo aos binários portáteis Windows .exe, instaladores locais, gerador de esquemas SQL e integrações em 8 linguagens de programação.
+            </p>
+          </div>
+          <MultiplatformHubTab currentUser={currentUser} />
+        </div>
+      )}
+
+      {/* SECTION 16: MANUAIS OFICIAIS & DOCUMENTAÇÃO (EXCLUSIVO ADMINS) */}
+      {activeSection === 'manuals' && (
+        <div className="space-y-4">
+          <div className="bg-[#1E293B] border border-indigo-500/30 rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div>
+              <div className="flex items-center gap-2 text-indigo-400 font-mono text-xs font-bold uppercase tracking-wider mb-1">
+                <BookOpen className="w-4 h-4" />
+                <span>Documentação e Manuais Administrativos</span>
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-slate-100 font-mono">
+                Manuais Oficiais, Guias de Servidor & PDF
+              </h2>
+              <p className="text-xs text-slate-400 font-mono">
+                Manuais operacionais de clientes, equipa comercial, administradores e guias de implantação de servidor.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 bg-[#0F172A] p-1 rounded-xl border border-slate-800 shrink-0">
+              <button
+                type="button"
+                onClick={() => setManualsSubTab('system')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-colors flex items-center gap-1.5 ${
+                  manualsSubTab === 'system'
+                    ? 'bg-indigo-500 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Manuais do Sistema & PDF</span>
+              </button>
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setManualsSubTab('deploy')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-colors flex items-center gap-1.5 ${
+                    manualsSubTab === 'deploy'
+                      ? 'bg-rose-500 text-white shadow'
+                      : 'text-rose-400 hover:text-rose-200'
+                  }`}
+                >
+                  <FileCode className="w-3.5 h-3.5" />
+                  <span>Docs & Deploy Servidor</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {manualsSubTab === 'deploy' && isSuperAdmin ? (
+            <DocsAndDeployTab currentUser={currentUser} />
+          ) : (
+            <DocumentationTab />
+          )}
+        </div>
+      )}
+
+      {/* SECTION 17: AUDITORIA COMPLETA DO SISTEMA, BASE DE DADOS & FICHEIROS */}
+      {activeSection === 'system_audit' && (
+        <SystemAuditSection currentUser={currentUser} />
       )}
 
     </div>

@@ -496,7 +496,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>IA Fiscal & AGT</span>
+                <span>IA Fiscal & Tributária</span>
               </button>
 
               <button
@@ -739,7 +739,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
         />
       )}
 
-      {/* TAB: INTELIGÊNCIA ARTIFICIAL FISCAL & AGT */}
+      {/* TAB: INTELIGÊNCIA ARTIFICIAL FISCAL & TRIBUTÁRIA */}
       {activeTab === 'fiscal_ai' && isSuperAdmin && (
         <AdminFiscalAiTab isSuperAdmin={isSuperAdmin} />
       )}
@@ -1595,8 +1595,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
       )}
 
       {/* 7. TAB: CONFIGURAÇÕES GLOBAIS DA EMPRESA & SISTEMA (Super Admin) */}
-      {activeTab === 'settings' && isSuperAdmin && settingsData && (
+      {activeTab === 'settings' && isSuperAdmin && (
         <AdminAdvancedSettingsTab
+          currentUser={user}
           settingsData={settingsData}
           onSaveSettings={handleSaveAdvancedSettings}
           isSuperAdmin={isSuperAdmin}

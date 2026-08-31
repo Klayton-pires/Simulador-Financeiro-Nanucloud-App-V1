@@ -133,27 +133,39 @@ export const MANUALS_DATA: ManualDoc[] = [
     category: 'Governança & Segurança',
     targetRole: 'admin_level1',
     targetRoleLabel: 'Super Administrador (Nível 1 Master)',
-    description: 'Governança total, controlo de permissões RBAC, motores de base de dados (MySQL/MSSQL), chaves de API, AdSense, backups e reversão de alterações (Rollback).',
+    description: 'Governança total, controlo de permissões RBAC, matriz fiscal personalizada, definições do sistema em tempo real, motores de base de dados (MySQL/MSSQL), chaves de API, AdSense, backups e reversão de alterações (Rollback).',
     contentSections: [
       {
-        heading: '1. Gestão de Administradores & RBAC',
+        heading: '1. Gestão de Administradores & Controlo de Acesso RBAC',
         text: 'Criação e edição de administradores com garantia de segurança estrita: Super Administradores só podem ser criados ou alterados por outros Super Administradores.',
         bullets: [
           'Criação de grupos de permissões personalizados e atribuição por departamento',
-          'Regras de restrição de acessos e auditoria de alterações'
+          'Regras de restrição de acessos e auditoria de alterações em tempo real',
+          'Acesso integral a todas as rotas administrativas (/api/admin/*) sem restrições'
         ]
       },
       {
-        heading: '2. Motores de Banco de Dados & Sincronização',
+        heading: '2. Definições do Sistema & Propagação em Tempo Real',
+        text: 'Qualquer alteração efetuada nas Definições do Sistema propaga instantaneamente a toda a aplicação web, móvel e desktop sem necessidade de reinicialização:',
+        bullets: [
+          'Coordenadas Bancárias & Códigos SWIFT: Ativação/ocultação de até 6 contas com sincronização no rodapé e faturas',
+          'Contactos Oficiais & WhatsApp: Atualização de números de apoio e botões diretos de atendimento 24/7',
+          'Gateways de Pagamento Eletrónico: Configuração de credenciais EMIS (GPO / Multicaixa Express) e PayPal',
+          'Créditos Gratuitos & Modos de Pesquisa: Gestão de cotas de registo e cotas para visitantes',
+          'Matriz Fiscal Dinâmica: Modificação em direto de alíquotas de IVA, Retenções na Fonte e Taxas Aduaneiras com impacto imediato em todos os simuladores'
+        ]
+      },
+      {
+        heading: '3. Motores de Banco de Dados & Sincronização',
         text: 'Configuração de até 4 conexões externas (MySQL, Microsoft SQL Server, PostgreSQL, SQLite) com teste de conectividade em tempo real.'
       },
       {
-        heading: '3. Chaves de API & Integrações Externas',
+        heading: '4. Chaves de API & Integrações Externas',
         text: 'Geração de tokens criptográficos de API REST para integração com PHC, Primavera, SAP, Odoo e lojas online.'
       },
       {
-        heading: '4. Histórico de Alterações & Reversão (Rollback)',
-        text: 'Todas as áreas de configurações guardam snapshots de versões anteriores. Em caso de erro na configuração, o Super Administrador pode reverter imediatamente para o estado funcional anterior.'
+        heading: '5. Histórico de Alterações & Reversão (Rollback)',
+        text: 'Todas as áreas de configurações guardam snapshots de versões anteriores. Em caso de erro na configuração, o Super Administrador pode reverter imediatamente para o estado funcional anterior com 1 clique.'
       }
     ]
   },

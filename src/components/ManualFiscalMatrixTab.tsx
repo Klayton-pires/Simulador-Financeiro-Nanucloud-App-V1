@@ -11,7 +11,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { UserSafe } from '../types';
-import { COUNTRIES_DB, CountryFiscalConfig } from '../data/countries';
+import { COUNTRIES_DB, CountryFiscalConfig, getActiveCountriesDb, saveCustomFiscalMatrix } from '../data/countries';
 import { hasUserPermission } from '../data/permissions';
 
 interface ManualFiscalMatrixTabProps {
@@ -21,12 +21,13 @@ interface ManualFiscalMatrixTabProps {
 export const ManualFiscalMatrixTab: React.FC<ManualFiscalMatrixTabProps> = ({ currentUser }) => {
   const canEditMatrix =
     currentUser.role === 'super_admin' ||
+    currentUser.role === 'superadmin' ||
+    currentUser.role === 'admin' ||
     currentUser.role === 'admin_level1' ||
     hasUserPermission(currentUser, 'can_edit_fiscal_rates');
 
   const [matrixData, setMatrixData] = useState<Record<string, CountryFiscalConfig>>(() => {
-    const saved = localStorage.getItem('nanucloud_custom_fiscal_matrix');
-    return saved ? JSON.parse(saved) : COUNTRIES_DB;
+    return getActiveCountriesDb();
   });
 
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
@@ -45,7 +46,7 @@ export const ManualFiscalMatrixTab: React.FC<ManualFiscalMatrixTabProps> = ({ cu
 
   const handleSaveMatrix = () => {
     if (!canEditMatrix) return;
-    localStorage.setItem('nanucloud_custom_fiscal_matrix', JSON.stringify(matrixData));
+    saveCustomFiscalMatrix(matrixData);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
@@ -55,6 +56,8 @@ export const ManualFiscalMatrixTab: React.FC<ManualFiscalMatrixTabProps> = ({ cu
     if (window.confirm('Tem a certeza que deseja restaurar as taxas oficiais padrão do sistema?')) {
       setMatrixData(COUNTRIES_DB);
       localStorage.removeItem('nanucloud_custom_fiscal_matrix');
+      window.dispatchEvent(new Event('nanucloud_custom_fiscal_matrix_updated'));
+      window.dispatchEvent(new Event('nanucloud_countries_updated'));
     }
   };
 

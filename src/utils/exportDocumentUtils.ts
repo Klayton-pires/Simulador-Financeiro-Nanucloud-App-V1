@@ -84,30 +84,41 @@ export function exportSimulationDossierPDF(params: DossierExportParams) {
   const accentColor: [number, number, number] = [79, 70, 229]; // Indigo-600
   const emeraldColor: [number, number, number] = [16, 185, 129]; // Emerald-500
 
-  // 1. CABEÇALHO CORPORATIVO
-  doc.setFillColor(...primaryColor);
-  doc.rect(0, 0, 210, 28, 'F');
+  // 1. CABEÇALHO CORPORATIVO (Fundo Branco com Logo da Aplicação)
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, 210, 30, 'F');
 
-  // Barra de acento
-  doc.setFillColor(...accentColor);
-  doc.rect(0, 26, 210, 2, 'F');
+  // Linha de acento verde oficial Nanucloud
+  doc.setDrawColor(0, 168, 89);
+  doc.setLineWidth(0.8);
+  doc.line(14, 28, 196, 28);
 
-  doc.setTextColor(255, 255, 255);
+  // Logo Nanucloud desenhado em vetor de alta precisão
+  // Ícone da Nuvem Verde
+  doc.setDrawColor(0, 168, 89);
+  doc.setFillColor(0, 168, 89);
+  doc.roundedRect(14, 8, 8, 8, 2, 2, 'FD');
+  doc.setFillColor(255, 255, 255);
+  doc.circle(18, 12, 2.2, 'F');
+
+  // Nome da Aplicação: Apenas Nanucloud
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text('NANUCLOUD ENTERPRISE', 14, 12);
+  doc.setFontSize(18);
+  doc.setTextColor(24, 24, 27); // #18181B
+  doc.text('Nanu', 25, 15);
+  const nanuWidth = doc.getTextWidth('Nanu');
+  doc.setTextColor(0, 168, 89); // #00A859
+  doc.text('cloud', 25 + nanuWidth, 15);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text('SUITE DE SIMULAÇÃO TRIBUTÁRIA, FISCALIDADE & FORMAÇÃO DE PREÇOS', 14, 18);
-
+  // Referência e Data à Direita
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
   doc.text(`REF: ${dossierNumber}`, 196, 12, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
   doc.text(`Data: ${new Date().toLocaleDateString('pt-PT')} ${new Date().toLocaleTimeString('pt-PT')}`, 196, 18, { align: 'right' });
-  doc.text(`Jurisdição: ${country.name} (${country.agency})`, 196, 23, { align: 'right' });
 
   let currentY = 36;
 
@@ -121,10 +132,10 @@ export function exportSimulationDossierPDF(params: DossierExportParams) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(100, 116, 139);
-  doc.text(`Módulo: ${moduleName} • Moeda Oficial: ${country.curr} • Fisco: ${country.agency}`, 14, currentY);
+  doc.text(`Módulo: ${moduleName} • Moeda Oficial: ${country.curr}`, 14, currentY);
   currentY += 8;
 
-  // 3. SECÇÃO 1: DADOS DO UTILIZADOR & CLIENTE (ORGANIZADOS EM TABELA DE ALTA FIDELIDADE)
+  // 3. SECÇÃO 1: DADOS DO UTILIZADOR & CLIENTE
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(...primaryColor);
@@ -134,18 +145,18 @@ export function exportSimulationDossierPDF(params: DossierExportParams) {
   const userDataRows = [
     [
       'Utilizador / Emitente:',
-      user ? `${user.name} (${user.email})` : 'Utilizador Autorizado NANUCLOUD',
+      user ? `${user.name} (${user.email})` : 'Utilizador Autorizado Nanucloud',
       'Cliente / Destinatário:',
       clientInfo?.name || 'Cliente Geral / Consumidor Final'
     ],
     [
       'Empresa / Organização:',
-      user?.company || 'NANUCLOUD Client Workspace',
+      user?.company || 'Nanucloud Client Workspace',
       'Empresa do Cliente:',
       clientInfo?.company || clientInfo?.name || 'Não especificado'
     ],
     [
-      'NIF / Doc. Fiscal:',
+      'NIF do Utilizador:',
       user?.nif || 'Não Registado',
       'NIF do Cliente:',
       clientInfo?.nif || 'Consumidor Final'
@@ -159,7 +170,7 @@ export function exportSimulationDossierPDF(params: DossierExportParams) {
     [
       'Plano de Subscrição:',
       user?.activePlanName || 'Plano Profissional Ativo',
-      'País / Jurisdição:',
+      'País / Localização:',
       country.name
     ]
   ];
@@ -321,27 +332,29 @@ export function exportSimulationDossierPDF(params: DossierExportParams) {
     currentY += 4;
   }
 
-  // 8. RODAPÉ DE AUDITORIA & CONTACTOS
+  // 8. RODAPÉ DE AUDITORIA & AVISO LEGAL
   const pageCount = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
 
     doc.setDrawColor(226, 232, 240);
-    doc.line(14, 282, 196, 282);
+    doc.line(14, 281, 196, 281);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(148, 163, 184);
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
     doc.text(
-      'NANUCLOUD Enterprise • Suporte Técnico: +244 955 581 862 / +244 955 580 653 • suporte@nanucloud.com',
+      'Aviso Legal Nanucloud: A utilização deste aplicativo tem caráter meramente informativo e estimativo, não dispensando a consulta de um profissional de contas ou contabilista certificado.',
       14,
-      287
+      285,
+      { maxWidth: 155 }
     );
-    doc.text(`Página ${i} de ${pageCount}`, 196, 287, { align: 'right' });
+    doc.setFontSize(7);
+    doc.text(`Página ${i} de ${pageCount}`, 196, 285, { align: 'right' });
   }
 
   // Fazer o download do arquivo PDF
-  const safeFilename = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_${dossierNumber}.pdf`;
+  const safeFilename = `Nanucloud_${title.replace(/[^a-zA-Z0-9]/g, '_')}_${dossierNumber}.pdf`;
   doc.save(safeFilename);
 }
 
@@ -370,17 +383,16 @@ export function exportSimulationDossierExcel(params: DossierExportParams) {
   // FOLHA 1: Dossiê e Resumo Executivo
   // ==========================================
   const dossierRows: (string | number)[][] = [
-    ['NANUCLOUD ENTERPRISE - DOSSIÊ DE SIMULAÇÃO TRIBUTÁRIA'],
+    ['Nanucloud - Dossiê de Simulação'],
     [`Módulo Oficial: ${moduleName}`],
     [`Número de Referência: ${dossierNumber}`],
     [`Data de Emissão: ${new Date().toLocaleDateString('pt-PT')} ${new Date().toLocaleTimeString('pt-PT')}`],
-    [`País / Jurisdição Fiscal: ${country.name} (${country.agency})`],
     [`Moeda Oficial: ${country.curr}`],
     [''],
     ['1. DADOS DO UTILIZADOR & CLIENTE (IDENTIFICAÇÃO)'],
     ['Campo', 'Informação do Utilizador', 'Informação do Cliente'],
-    ['Nome / Razão Social', user?.name || 'Utilizador Autorizado NANUCLOUD', clientInfo?.name || 'Cliente Geral / Consumidor Final'],
-    ['Empresa / Entidade', user?.company || 'NANUCLOUD Client Workspace', clientInfo?.company || clientInfo?.name || 'Não especificado'],
+    ['Nome / Razão Social', user?.name || 'Utilizador Autorizado Nanucloud', clientInfo?.name || 'Cliente Geral / Consumidor Final'],
+    ['Empresa / Entidade', user?.company || 'Nanucloud Client Workspace', clientInfo?.company || clientInfo?.name || 'Não especificado'],
     ['NIF / Identificação Fiscal', user?.nif || 'Não Registado', clientInfo?.nif || 'Consumidor Final'],
     ['Email de Contacto', user?.email || 'suporte@nanucloud.com', clientInfo?.email || 'Registo Interno'],
     ['Telefone / WhatsApp', user?.phone || '+244 955 581 862', clientInfo?.phone || 'Não especificado'],
@@ -414,11 +426,11 @@ export function exportSimulationDossierExcel(params: DossierExportParams) {
   });
 
   dossierRows.push(['']);
-  dossierRows.push(['4. ANEXO FISCAL, ENQUADRAMENTO LEGAL E AUDITORIA']);
+  dossierRows.push(['4. ENQUADRAMENTO FISCAL E OBSERVAÇÕES']);
   const activeLegalNotes = legalNotes && legalNotes.length > 0 ? legalNotes : [
-    `Conformidade com o Código do IVA e Legislação Tributária vigente de ${country.name} (${country.agency}).`,
+    `Conformidade com o Código do IVA e Legislação Tributária vigente de ${country.name}.`,
     `A retenção na fonte (se aplicável) constitui adiantamento dedutível ou crédito de imposto conforme as normas fiscais aplicáveis.`,
-    `Cálculos e valores estáticos computados via algoritmo NANUCLOUD para estrita conformidade legal e auditoria fiscal.`
+    `Cálculos e valores estáticos computados via algoritmo Nanucloud.`
   ];
 
   activeLegalNotes.forEach((n) => {
@@ -430,6 +442,7 @@ export function exportSimulationDossierExcel(params: DossierExportParams) {
   }
 
   dossierRows.push(['']);
+  dossierRows.push(['Aviso Legal Nanucloud:', 'A utilização deste aplicativo tem caráter meramente informativo e estimativo, não dispensando a consulta de um profissional de contas ou contabilista certificado.']);
   dossierRows.push(['Contactos de Suporte:', '+244 955 581 862 / +244 955 580 653 • suporte@nanucloud.com']);
 
   const wsDossier = XLSX.utils.aoa_to_sheet(dossierRows);
