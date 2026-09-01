@@ -114,21 +114,18 @@ export const CornerMenu: React.FC<CornerMenuProps> = ({
     { id: 'excel', label: 'Lotes Excel (.xlsx)', category: 'Simuladores', icon: FileSpreadsheet, unlocked: !!(user?.isBatchUnlocked || isManager) },
     { id: 'api_integration', label: 'API REST ERP & Lojas', category: 'Simuladores', icon: Code, unlocked: !!(user?.isApiUnlocked || isManager) },
 
-    // Gestão CRM, Definições & Governança (Apenas Administradores)
-    ...(isManager
-      ? [
-          { id: 'admin_settings', label: 'Definições Gerais & Parâmetros', category: 'Definições & Staff', icon: Settings, unlocked: true },
-          { id: 'fiscal_ai', label: 'Inteligência Fiscal & Notícias', category: 'Definições & Staff', icon: Sparkles, unlocked: true },
-          { id: 'fiscal_matrix', label: 'Matriz Fiscal de Taxas', category: 'Definições & Staff', icon: Table, unlocked: true },
-          { id: 'multiplatform_hub', label: 'Ecossistema & Apps (Multi-Plataformas)', category: 'Definições & Staff', icon: Download, unlocked: true, badge: 'NOVO' },
-          { id: 'manuals', label: 'Manuais Oficiais & Documentação', category: 'Definições & Staff', icon: BookOpen, unlocked: true },
-          { id: 'clients_management', label: 'Gestão de Clientes & CRM', category: 'Definições & Staff', icon: Building, unlocked: true },
-          { id: 'users_management', label: 'Utilizadores & Staff (RBAC)', category: 'Definições & Staff', icon: ShieldCheck, unlocked: true },
-          { id: 'tickets', label: 'Tickets & Atendimento', category: 'Definições & Staff', icon: LifeBuoy, unlocked: true },
-          { id: 'marketing', label: 'Marketing, SMS & E-mail', category: 'Definições & Staff', icon: MessageSquare, unlocked: true },
-          { id: 'reports_metrics', label: 'Métricas & Auditoria', category: 'Definições & Staff', icon: BarChart3, unlocked: true }
-        ]
-      : []),
+    // Gestão CRM, Definições & Governança (Back Office Aberto Sem Senha)
+    { id: 'admin_settings', label: 'Definições Gerais & Parâmetros (Back Office)', category: 'Definições & Staff', icon: Settings, unlocked: true },
+    { id: 'fiscal_ai', label: 'Inteligência Fiscal & Notícias', category: 'Definições & Staff', icon: Sparkles, unlocked: true },
+    { id: 'fiscal_matrix', label: 'Matriz Fiscal de Taxas', category: 'Definições & Staff', icon: Table, unlocked: true },
+    { id: 'multiplatform_hub', label: 'Ecossistema & Apps (Multi-Plataformas)', category: 'Definições & Staff', icon: Download, unlocked: true, badge: 'NOVO' },
+    { id: 'manuals', label: 'Manuais Oficiais & Documentação', category: 'Definições & Staff', icon: BookOpen, unlocked: true },
+    { id: 'clients_management', label: 'Gestão de Clientes & CRM', category: 'Definições & Staff', icon: Building, unlocked: true },
+    { id: 'users_management', label: 'Utilizadores & Staff (RBAC)', category: 'Definições & Staff', icon: ShieldCheck, unlocked: true },
+    { id: 'tickets', label: 'Tickets & Atendimento', category: 'Definições & Staff', icon: LifeBuoy, unlocked: true },
+    { id: 'marketing', label: 'Marketing, SMS & E-mail', category: 'Definições & Staff', icon: MessageSquare, unlocked: true },
+    { id: 'reports_metrics', label: 'Métricas & Auditoria', category: 'Definições & Staff', icon: BarChart3, unlocked: true },
+    { id: 'docs_deploy', label: 'Docs & Deploy (Root)', category: 'Definições & Staff', icon: Code, unlocked: true },
 
     // Minha Conta
     { id: 'history', label: 'Histórico & Faturas', category: 'Minha Conta', icon: History, unlocked: true }

@@ -178,6 +178,46 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsLoading(false);
   };
 
+  const handleDirectBackOffice = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/auth/backoffice-direct', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('nanucloud_session_user', JSON.stringify(data.user));
+        onSuccess(data.user);
+        onClose();
+        return;
+      }
+    } catch {
+      // offline fallback
+    }
+
+    const fallbackAdmin: UserSafe = {
+      id: 'usr_admin_nanuhost',
+      name: 'Super Administrador (nanuhost)',
+      email: 'nanuhost',
+      role: 'admin_level1',
+      isActive: true,
+      activePlanId: 'plan_diamante',
+      activePlanName: 'Diamante Ilimitado (Super Admin)',
+      planExpiresAt: null,
+      queriesRemaining: 999999,
+      totalQueriesUsed: 0,
+      isImportUnlocked: true,
+      isBatchUnlocked: true,
+      company: 'NANUCLOUD Lda',
+      country: 'AO',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString()
+    };
+    localStorage.setItem('nanucloud_session_user', JSON.stringify(fallbackAdmin));
+    onSuccess(fallbackAdmin);
+    onClose();
+    setIsLoading(false);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-[#1E293B] border border-slate-800 rounded-xl w-full max-w-md shadow-2xl p-6 relative my-8">
@@ -190,7 +230,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </button>
 
         {/* Title & Tabs */}
-        <div className="text-center mb-6">
+        <div className="text-center mb-4">
           <div className="flex justify-center mb-3">
             <NanuCloudLogo className="h-10" isDarkTheme={true} />
           </div>
@@ -199,11 +239,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </h2>
           <p className="text-xs text-slate-400 mt-1 font-mono">
             {mode === 'login'
-              ? 'Aceda com as suas credenciais para continuar'
+              ? 'Aceda com as suas credenciais ou entre diretamente no Back Office'
               : 'Preencha os seus dados para criar uma conta profissional'}
           </p>
 
-          <div className="flex bg-[#0F172A] p-1 rounded-lg border border-slate-800 mt-4">
+          {/* Direct Back Office Access Button */}
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={handleDirectBackOffice}
+              className="w-full py-2.5 px-3 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-mono font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer active:scale-98"
+            >
+              <Key className="w-4 h-4 text-amber-400" />
+              <span>Aceder ao Back Office Direto (Sem Senha)</span>
+            </button>
+          </div>
+
+          <div className="flex bg-[#0F172A] p-1 rounded-lg border border-slate-800 mt-3">
             <button
               type="button"
               onClick={() => {

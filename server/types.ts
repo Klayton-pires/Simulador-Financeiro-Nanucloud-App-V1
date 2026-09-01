@@ -269,6 +269,7 @@ export interface SystemSettings {
 
   // Database Engines & Themes
   dbEngines?: DatabaseEngineConfig[];
+  activeDatabaseEngine?: string;
   defaultTheme?: string;
   allowedDomains?: string[];
   paypalSecret?: string;
@@ -303,6 +304,7 @@ export interface ChatMessage {
   sessionId: string;
   userId?: string;
   userEmail?: string;
+  senderEmail?: string;
   senderType: 'user' | 'admin' | 'bot';
   senderName: string;
   text: string;

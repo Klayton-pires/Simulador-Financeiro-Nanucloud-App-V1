@@ -112,16 +112,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   ];
 
-  const managementItems = isManager
-    ? [
-        { id: 'clients_management', label: t.mClients || 'Gestão de Clientes & CRM', icon: Building },
-        { id: 'users_management', label: t.mUsers || 'Utilizadores & Staff (RBAC)', icon: ShieldCheck },
-        { id: 'tickets', label: t.mTickets || 'Tickets & Atendimento', icon: LifeBuoy },
-        { id: 'marketing', label: t.mMarketing || 'Marketing, SMS & E-mail', icon: MessageSquare },
-        { id: 'reports_metrics', label: t.mReports || 'Métricas & Auditoria', icon: BarChart3 },
-        { id: 'admin_settings', label: t.mAdminSettings || 'Definições & Governança', icon: Settings }
-      ]
-    : [];
+  const managementItems = [
+    { id: 'admin_settings', label: t.mAdminSettings || 'Definições & Governança', icon: Settings },
+    { id: 'clients_management', label: t.mClients || 'Gestão de Clientes & CRM', icon: Building },
+    { id: 'users_management', label: t.mUsers || 'Utilizadores & Staff (RBAC)', icon: ShieldCheck },
+    { id: 'tickets', label: t.mTickets || 'Tickets & Atendimento', icon: LifeBuoy },
+    { id: 'marketing', label: t.mMarketing || 'Marketing, SMS & E-mail', icon: MessageSquare },
+    { id: 'reports_metrics', label: t.mReports || 'Métricas & Auditoria', icon: BarChart3 },
+    { id: 'docs_deploy', label: 'Docs & Deploy (Root)', icon: FileCode }
+  ];
 
   const userItems = [
     { id: 'plans', label: t.mPlans || 'Planos & Consultas', icon: Gem, unlocked: true, highlight: true },

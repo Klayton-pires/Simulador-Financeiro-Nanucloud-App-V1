@@ -181,6 +181,28 @@ export default function App() {
     setIsAuthOpen(true);
   };
 
+  const handleDirectBackOfficeAccess = async (targetTab: ActiveTab = 'admin_settings') => {
+    try {
+      const res = await fetch('/api/auth/backoffice-direct', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          setUser(data.user);
+          localStorage.setItem('nanucloud_session_user', JSON.stringify(data.user));
+        }
+      } else if (!user || (user.role !== 'admin_level1' && user.role !== 'super_admin' && user.role !== 'admin')) {
+        setUser(defaultAdminUser);
+        localStorage.setItem('nanucloud_session_user', JSON.stringify(defaultAdminUser));
+      }
+    } catch {
+      if (!user || (user.role !== 'admin_level1' && user.role !== 'super_admin' && user.role !== 'admin')) {
+        setUser(defaultAdminUser);
+        localStorage.setItem('nanucloud_session_user', JSON.stringify(defaultAdminUser));
+      }
+    }
+    setActiveTab(targetTab);
+  };
+
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
@@ -212,8 +234,8 @@ export default function App() {
         onOpenPlans={() => setIsPlansOpen(true)}
         onLogout={handleLogout}
         onOpenProfile={() => setActiveTab('history')}
-        onOpenAdmin={() => setActiveTab('admin_settings')}
-        onOpenDocs={() => setActiveTab('manuals')}
+        onOpenAdmin={() => handleDirectBackOfficeAccess('admin_settings')}
+        onOpenDocs={() => handleDirectBackOfficeAccess('manuals')}
         onToggleMenu={() => setIsMenuDrawerOpen((prev) => !prev)}
         onNavigateHome={() => setActiveTab('local')}
       />
@@ -260,6 +282,23 @@ export default function App() {
             onTabChange={(tab) => {
               if (tab === 'plans') {
                 setIsPlansOpen(true);
+              } else if (
+                [
+                  'admin_settings',
+                  'clients_management',
+                  'users_management',
+                  'tickets',
+                  'marketing',
+                  'reports_metrics',
+                  'docs_deploy',
+                  'admin',
+                  'fiscal_matrix',
+                  'fiscal_ai',
+                  'multiplatform_hub',
+                  'manuals'
+                ].includes(tab)
+              ) {
+                handleDirectBackOfficeAccess(tab);
               } else {
                 setActiveTab(tab);
               }
@@ -364,53 +403,24 @@ export default function App() {
             />
           )}
 
-          {/* Módulos Restritos para Administradores (Inteligência Fiscal, Ecossistema & Apps, Manuais Oficiais) */}
-          {(activeTab === 'fiscal_matrix' || activeTab === 'fiscal_ai' || activeTab === 'multiplatform_hub' || activeTab === 'manuals') && !isManager && (
-            <div className="bg-[#1E293B] border border-amber-500/30 rounded-2xl p-8 sm:p-12 text-center max-w-xl mx-auto my-8 shadow-2xl space-y-4">
-              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto">
-                <Lock className="w-8 h-8" />
-              </div>
-              <h2 className="text-lg font-bold text-slate-100 font-mono">
-                MÓDULO EXCLUSIVO PARA ADMINISTRADORES
-              </h2>
-              <p className="text-xs text-slate-300 font-mono leading-relaxed">
-                As opções de <span className="text-amber-300 font-bold">Inteligência Fiscal</span>, <span className="text-amber-300 font-bold">Ecossistema & Apps</span> e <span className="text-amber-300 font-bold">Manuais Oficiais</span> foram integradas exclusivamente no menu de <strong>Definições do Sistema</strong>, acessível unicamente por administradores.
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-                <button
-                  onClick={() => setActiveTab('local')}
-                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-mono font-bold transition border border-slate-700"
-                >
-                  Voltar ao Simulador
-                </button>
-                <button
-                  onClick={() => handleOpenAuth('login')}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-mono font-bold transition shadow-lg"
-                >
-                  Iniciar Sessão como Administrador
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* TAB: Matriz Fiscal de Taxas (Apenas Administradores nas Definições) */}
-          {activeTab === 'fiscal_matrix' && isManager && (
+          {/* TAB: Matriz Fiscal de Taxas */}
+          {activeTab === 'fiscal_matrix' && (
             <AdminAdvancedSettingsTab
               currentUser={user || defaultAdminUser}
               initialSection="fiscal_intelligence"
             />
           )}
 
-          {/* TAB: IA Fiscal & Notícias Oficiais (Apenas Administradores nas Definições) */}
-          {activeTab === 'fiscal_ai' && isManager && (
+          {/* TAB: IA Fiscal & Notícias Oficiais */}
+          {activeTab === 'fiscal_ai' && (
             <AdminAdvancedSettingsTab
               currentUser={user || defaultAdminUser}
               initialSection="fiscal_intelligence"
             />
           )}
 
-          {/* TAB: Multi-Plataformas & Central de Download (Apenas Administradores nas Definições) */}
-          {activeTab === 'multiplatform_hub' && isManager && (
+          {/* TAB: Multi-Plataformas & Central de Download */}
+          {activeTab === 'multiplatform_hub' && (
             <AdminAdvancedSettingsTab
               currentUser={user || defaultAdminUser}
               initialSection="multiplatform"
@@ -574,8 +584,8 @@ export default function App() {
             )
           )}
 
-          {/* TAB: Manuais & Documentação (Apenas Administradores nas Definições) */}
-          {activeTab === 'manuals' && isManager && (
+          {/* TAB: Manuais & Documentação */}
+          {activeTab === 'manuals' && (
             <AdminAdvancedSettingsTab
               currentUser={user || defaultAdminUser}
               initialSection="manuals"
@@ -584,15 +594,7 @@ export default function App() {
 
           {/* TAB: Painel Administrativo Geral */}
           {activeTab === 'admin' && (
-            user ? (
-              <AdminPanel user={user} onRefreshUser={checkAuth} />
-            ) : (
-              <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-8 text-center max-w-lg mx-auto shadow-sm">
-                <p className="text-xs text-rose-400 font-mono font-bold">
-                  ACESSO RESTRITO: Permissão de Administrador necessária.
-                </p>
-              </div>
-            )
+            <AdminPanel user={user || defaultAdminUser} onRefreshUser={checkAuth} />
           )}
 
         </div>

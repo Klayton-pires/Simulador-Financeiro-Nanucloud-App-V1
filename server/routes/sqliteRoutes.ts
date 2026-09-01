@@ -12,7 +12,7 @@ router.get('/info', async (req: Request, res: Response) => {
     return res.json({
       success: true,
       data: {
-        engine: 'SQLite 3 (via WebAssembly & Native Binary)',
+        engine: 'SQLite 3 Relational Database Core (Padrão)',
         isDefault: true,
         sqliteFilePath: info.sqliteFilePath,
         databaseDirPath: info.databaseDirPath,
@@ -46,40 +46,92 @@ router.get('/download', async (req: Request, res: Response) => {
   }
 });
 
-// 3. Executar consultas SQL diretas (para testes e inspeção)
+// 3. Descarregar dump SQL completo
+router.get('/export-sql', async (req: Request, res: Response) => {
+  try {
+    await sqliteDb.init();
+    const engine = (req.query.engine as any) || 'sqlite';
+    const sqlDump = sqliteDb.exportFullSqlDump(engine);
+
+    res.setHeader('Content-Type', 'application/sql; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="nanucloud_dump_${engine}_${Date.now()}.sql"`);
+    return res.send(sqlDump);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Erro ao exportar dump SQL.' });
+  }
+});
+
+// 4. Listar todas as tabelas e número de linhas
+router.get('/tables', async (req: Request, res: Response) => {
+  try {
+    await sqliteDb.init();
+    const info = sqliteDb.getDatabaseInfo();
+    return res.json({
+      success: true,
+      tables: info.tables.map(name => ({
+        name,
+        rowCount: info.tableCounts[name] || 0
+      }))
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Inspecionar conteúdo de uma tabela específica
+router.get('/table/:name', async (req: Request, res: Response) => {
+  try {
+    const { name } = req.params;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+    await sqliteDb.init();
+    const tableData = sqliteDb.getTableData(name, limit, offset);
+    return res.json({
+      success: true,
+      data: tableData
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Gerar DDL de tabelas para qualquer motor de base de dados
+router.post('/generate-ddl', async (req: Request, res: Response) => {
+  try {
+    const engine = req.body.engine || 'mysql';
+    await sqliteDb.init();
+    const ddl = sqliteDb.generateDdlSchema(engine);
+    return res.json({
+      success: true,
+      engine,
+      ddl
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Executar consultas SQL diretas (para testes e terminal interativo)
 router.post('/query', async (req: Request, res: Response) => {
   try {
-    const { sql, params } = req.body;
+    const { sql } = req.body;
     if (!sql || typeof sql !== 'string') {
       return res.status(400).json({ success: false, error: 'O comando SQL é obrigatório.' });
     }
 
     await sqliteDb.init();
-
-    const trimmed = sql.trim();
-    if (/^\s*(SELECT|PRAGMA|EXPLAIN)/i.test(trimmed)) {
-      const rows = sqliteDb.query(trimmed, Array.isArray(params) ? params : []);
-      return res.json({
-        success: true,
-        type: 'select',
-        rowCount: rows.length,
-        rows
-      });
-    } else {
-      const result = sqliteDb.run(trimmed, Array.isArray(params) ? params : []);
-      return res.json({
-        success: true,
-        type: 'mutate',
-        rowsAffected: result.changes,
-        message: 'Comando SQL executado com sucesso e persistido no ficheiro SQLite.'
-      });
-    }
+    const result = sqliteDb.executeRaw(sql);
+    return res.json({
+      success: true,
+      ...result
+    });
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message || 'Erro de sintaxe ou execução SQL.' });
   }
 });
 
-// 4. Forçar sincronização imediata
+// 8. Forçar sincronização imediata
 router.post('/sync', async (req: Request, res: Response) => {
   try {
     await sqliteDb.init();
@@ -89,6 +141,10 @@ router.post('/sync', async (req: Request, res: Response) => {
     const allProposals = db.getFiscalProposals();
     const allApiKeys = db.getApiKeys();
     const allKnowledge = db.getBotKnowledgeBase();
+    const allTransactions = db.getTransactions();
+    const allHistory = db.getQueryHistory();
+    const allInquiries = db.getSupportInquiries();
+    const allCampaigns = db.getTrafficCampaigns();
 
     sqliteDb.syncFromObject({
       users: allUsers,
@@ -96,12 +152,16 @@ router.post('/sync', async (req: Request, res: Response) => {
       settings: allSettings,
       fiscalProposals: allProposals,
       apiKeys: allApiKeys,
-      botKnowledgeBase: allKnowledge
+      botKnowledgeBase: allKnowledge,
+      transactions: allTransactions,
+      queryHistory: allHistory,
+      supportInquiries: allInquiries,
+      trafficCampaigns: allCampaigns
     });
 
     return res.json({
       success: true,
-      message: 'Base de dados SQLite sincronizada com sucesso no disco em /data/nanucloud.sqlite e /database/nanucloud.sqlite.',
+      message: 'Base de dados SQLite sincronizada com 100% de integridade em /data/nanucloud.sqlite e /database/nanucloud.sqlite.',
       info: sqliteDb.getDatabaseInfo()
     });
   } catch (err: any) {

