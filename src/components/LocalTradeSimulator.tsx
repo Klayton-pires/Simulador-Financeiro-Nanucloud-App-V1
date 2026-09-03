@@ -25,13 +25,17 @@ import {
   Hotel,
   RotateCcw,
   Receipt,
-  Info
+  Info,
+  CheckCircle2
 } from 'lucide-react';
 import {
   exportSimulationDossierPDF,
   exportSimulationDossierExcel
 } from '../utils/exportDocumentUtils';
 import { useLayoutMode } from '../data/layoutMode';
+import { ClientCreditNoticeBanner } from './ClientCreditNoticeBanner';
+import { canUserSimulate } from '../utils/accessControl';
+import { ConfirmSimulationModal, SimulationSummaryItem } from './ConfirmSimulationModal';
 
 interface LocalTradeSimulatorProps {
   user: UserSafe | null;
@@ -64,6 +68,7 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
   const [calculationResults, setCalculationResults] = useState<any[] | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -157,6 +162,8 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
     setCostNet(val);
     clearFieldError('costNet');
     clearFieldError('pricing');
+    setCalculationResults(null);
+    setSuccessMessage(null);
     if (!val || parseFloat(val) <= 0) {
       setCostGross('');
       return;
@@ -169,6 +176,8 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
     setCostGross(val);
     clearFieldError('costGross');
     clearFieldError('pricing');
+    setCalculationResults(null);
+    setSuccessMessage(null);
     if (!val || parseFloat(val) <= 0) {
       setCostNet('');
       return;
@@ -181,6 +190,8 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
   const handleVatChange = (newVat: number) => {
     setVatRate(newVat);
     clearFieldError('vatRate');
+    setCalculationResults(null);
+    setSuccessMessage(null);
     if (costNet) {
       const net = parseFloat(costNet) || 0;
       recalcGrossFromNet(net, newVat);
@@ -377,14 +388,13 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
     return saved !== null ? parseInt(saved, 10) : 3;
   });
 
-  const handleCalculate = async () => {
+  const handleRequestCalculate = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
 
     const errors: Record<string, string> = {};
     const net = parseFloat(costNet) || 0;
     const fPrice = parseFloat(fixedPrice) || 0;
-    const mPct = parseFloat(marginPct) || 0;
 
     if (!costNet || costNet.trim() === '') {
       errors.costNet = 'Campo obrigatório: introduza o Preço de Custo Base (SEM IVA).';
@@ -408,70 +418,35 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
 
     setFieldErrors({});
 
-    // GUEST FLOW
+    // AUTH & RBAC SIMULATION CHECK
     if (!user) {
-      if (guestQueriesLeft <= 0) {
-        setShowExhaustedModal(true);
-        return;
-      }
-
-      setIsCalculating(true);
-
-      setTimeout(() => {
-        const scenarios = [];
-
-        if (marginPct !== '' || fPrice > 0) {
-          const customCalc = processMathScenario(
-            net,
-            mPct,
-            fPrice,
-            vatRate,
-            tpaRate,
-            country.ii
-          );
-          scenarios.push({
-            title: `Cenário Personalizado (Produto)`,
-            calc: customCalc,
-            isCustom: true
-          });
-        }
-
-        country.margins.forEach((m) => {
-          const stdCalc = processMathScenario(net, m, 0, vatRate, tpaRate, country.ii);
-          scenarios.push({
-            title: `Margem Padrão (${m}%)`,
-            calc: stdCalc,
-            isCustom: false
-          });
-        });
-
-        const newRemaining = guestQueriesLeft - 1;
-        setGuestQueriesLeft(newRemaining);
-        localStorage.setItem('nanucloud_guest_queries_left', newRemaining.toString());
-
-        setCalculationResults(scenarios);
-        setSuccessMessage(
-          newRemaining > 0
-            ? `Simulação concluída com sucesso! Restam ${newRemaining} consultas gratuitas.`
-            : `Esta foi a sua última consulta gratuita (0 restantes). Para continuar, adira a um plano!`
-        );
-        setIsCalculating(false);
-      }, 250);
-
+      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
+      onOpenAuth();
       return;
     }
 
-    // LOGGED IN USER FLOW
-    if (user.queriesRemaining <= 0) {
-      setErrorMessage('As suas consultas esgotaram. Adquira um dos nossos planos para continuar.');
+    const simCheck = canUserSimulate(user);
+    if (!simCheck.allowed) {
+      setErrorMessage(simCheck.message);
       onOpenPlans();
       return;
     }
 
+    // Open confirmation modal to confirm simulation before processing results
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmAndExecute = async () => {
+    setShowConfirmModal(false);
     setIsCalculating(true);
+    setErrorMessage(null);
+
+    const net = parseFloat(costNet) || 0;
+    const fPrice = parseFloat(fixedPrice) || 0;
+    const mPct = parseFloat(marginPct) || 0;
 
     try {
-      let remaining = user.queriesRemaining;
+      let remaining = user?.queriesRemaining ?? 0;
       try {
         const res = await fetch('/api/simulator/calculate-local', {
           method: 'POST',
@@ -513,10 +488,10 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
           setIsCalculating(false);
           return;
         } else {
-          remaining = Math.max(0, user.queriesRemaining - 1);
+          remaining = Math.max(0, (user?.queriesRemaining || 0) - 1);
         }
       } catch (err) {
-        remaining = Math.max(0, user.queriesRemaining - 1);
+        remaining = Math.max(0, (user?.queriesRemaining || 0) - 1);
       }
 
       const scenarios = [];
@@ -530,8 +505,15 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
           country.ii
         );
         scenarios.push({
-          title: `Cenário Personalizado (Produto)`,
+          title: `Cenário Personalizado (${productName || 'Artigo'})`,
           calc: customCalc,
+          isCustom: true
+        });
+      } else {
+        const defaultCustom = processMathScenario(net, 25, 0, vatRate, tpaRate, country.ii);
+        scenarios.push({
+          title: `Cenário Recomendado (Margem 25%)`,
+          calc: defaultCustom,
           isCustom: true
         });
       }
@@ -546,7 +528,7 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
       });
 
       setCalculationResults(scenarios);
-      setSuccessMessage('Simulação calculada com sucesso e guardada no seu histórico!');
+      setSuccessMessage('Simulação confirmada e calculada com sucesso!');
       onCalculationDone(remaining);
     } catch (err) {
       console.error(err);
@@ -556,74 +538,50 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
     }
   };
 
-  const liveScenarios = React.useMemo(() => {
-    const net = parseFloat(costNet) || 0;
-    const fPrice = parseFloat(fixedPrice) || 0;
-    const mPct = parseFloat(marginPct) || 0;
-
-    if (net <= 0) return null;
-
-    const scenarios = [];
-    if (marginPct !== '' || fPrice > 0) {
-      const customCalc = processMathScenario(
-        net,
-        mPct,
-        fPrice,
-        vatRate,
-        tpaRate,
-        country.ii
-      );
-      scenarios.push({
-        title: `Cenário Personalizado (${productName || 'Artigo'})`,
-        calc: customCalc,
-        isCustom: true
-      });
-    } else {
-      const defaultCustom = processMathScenario(net, 25, 0, vatRate, tpaRate, country.ii);
-      scenarios.push({
-        title: `Cenário Recomendado (Margem 25%)`,
-        calc: defaultCustom,
-        isCustom: true
-      });
-    }
-
-    country.margins.forEach((m) => {
-      const stdCalc = processMathScenario(net, m, 0, vatRate, tpaRate, country.ii);
-      scenarios.push({
-        title: `Margem Padrão (${m}%)`,
-        calc: stdCalc,
-        isCustom: false
-      });
-    });
-
-    return scenarios;
-  }, [
-    costNet,
-    marginPct,
-    fixedPrice,
-    vatRate,
-    tpaRate,
-    country,
-    productName,
-    layoutMode,
-    transportCost,
-    transportRoundTrip,
-    transportTaxMode,
-    transportVatRate,
-    mealsCost,
-    mealsTaxMode,
-    mealsVatRate,
-    lodgingCost,
-    lodgingTaxMode,
-    lodgingVatRate,
-    otherExtrasCost,
-    otherExtrasLabel,
-    otherExtrasTaxMode,
-    otherExtrasVatRate
-  ]);
-
-  const activeResults = calculationResults || liveScenarios;
+  // Results are strictly shown ONLY after user clicks the button and confirms the simulation
+  const activeResults = calculationResults;
   const currentExtras = getEffectiveExtraCosts();
+
+  const netNum = parseFloat(costNet) || 0;
+  const fPriceNum = parseFloat(fixedPrice) || 0;
+  const grossNum = parseFloat(costGross) || 0;
+
+  const simulationSummaryItems: SimulationSummaryItem[] = [
+    {
+      label: 'Artigo / Mercadoria',
+      value: productName || 'Artigo Comercial'
+    },
+    {
+      label: 'Preço de Custo Líquido (Base)',
+      value: formatMoney(netNum),
+      detail: `Com IVA (${vatRate}%): ${formatMoney(grossNum)}`
+    },
+    {
+      label: fPriceNum > 0 ? 'Preço de Venda Fixo (PVP pretendido)' : 'Margem de Lucro Desejada',
+      value: fPriceNum > 0 ? formatMoney(fPriceNum) : `+${marginPct}%`,
+      isHighlight: true
+    },
+    {
+      label: 'País & Enquadramento Fiscal',
+      value: `${country.name} (${country.curr})`,
+      detail: `IVA: ${vatRate}% | TPA: ${tpaRate}% | Imposto Industrial: ${country.ii}%`
+    }
+  ];
+
+  if (currentExtras.hasExtras && currentExtras.totalGross > 0) {
+    simulationSummaryItems.push({
+      label: 'Custos Adicionais (Transporte/Refeições/Extras)',
+      value: formatMoney(currentExtras.totalGross),
+      detail: 'Custos logísticos incorporados na formação de preço'
+    });
+  }
+
+  if (enableBulkRetail && parseFloat(bulkQuantity) > 0) {
+    simulationSummaryItems.push({
+      label: 'Desdobramento Grosso vs Retalho',
+      value: `${bulkQuantity} ${bulkUnit} (${retailUnitsPerBulk} ${retailUnit}/lote)`
+    });
+  }
 
   const handleExportPDF = () => {
     if (!activeResults || activeResults.length === 0) return;
@@ -880,6 +838,13 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
           </button>
         </div>
       )}
+
+      {/* Aviso e Estado de Crédito / Acesso RBAC */}
+      <ClientCreditNoticeBanner
+        user={user}
+        onOpenPlans={onOpenPlans}
+        onOpenAuth={onOpenAuth}
+      />
 
       {/* Main Form Box */}
       <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm">
@@ -1456,6 +1421,8 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
                     setMarginPct(preset.toString());
                     setFixedPrice('');
                     clearFieldError('pricing');
+                    setCalculationResults(null);
+                    setSuccessMessage(null);
                   }}
                   className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
                     marginPct === preset.toString() && !fixedPrice
@@ -1481,6 +1448,8 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
                       setMarginPct(e.target.value);
                       setFixedPrice('');
                       clearFieldError('pricing');
+                      setCalculationResults(null);
+                      setSuccessMessage(null);
                     }}
                     placeholder="Ex: 25 (%)"
                     step="any"
@@ -1503,6 +1472,8 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
                     onChange={(e) => {
                       setTpaRate(parseFloat(e.target.value) || 0);
                       clearFieldError('tpaRate');
+                      setCalculationResults(null);
+                      setSuccessMessage(null);
                     }}
                     placeholder="Ex: 1.0 (%)"
                     step="0.1"
@@ -1524,6 +1495,8 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
                       setFixedPrice(e.target.value);
                       setMarginPct('');
                       clearFieldError('pricing');
+                      setCalculationResults(null);
+                      setSuccessMessage(null);
                     }}
                     placeholder={`Ex: 15000 (${country.curr})`}
                     step="any"
@@ -1647,22 +1620,35 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
           </div>
         </div>
 
-        {/* Calculate Action (Optional manual refresh & store) */}
+        {/* Calculate & Confirm Action Button */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <button
-            onClick={handleCalculate}
+            onClick={handleRequestCalculate}
             disabled={isCalculating}
-            className="w-full sm:flex-1 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg text-xs font-mono uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+            className="w-full sm:flex-1 bg-gradient-to-r from-indigo-600 via-indigo-500 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold py-3.5 px-6 rounded-xl text-xs font-mono uppercase tracking-wider transition-all shadow-lg shadow-indigo-950/40 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
           >
             <Calculator className="w-4 h-4" />
-            <span>{isCalculating ? 'A PROCESSAR...' : t.btnRecalculate || 'Recalcular / Atualizar Simulação Manual'}</span>
+            <span>{isCalculating ? 'A PROCESSAR SIMULAÇÃO...' : 'CALCULAR & CONFIRMAR SIMULAÇÃO'}</span>
           </button>
         </div>
       </div>
 
-      {/* Results Scenarios (Live & Reactive) */}
-      {activeResults && (
-        <div className="space-y-4">
+      {/* Results Scenarios (Strictly rendered ONLY after clicking button and confirming) */}
+      {!activeResults ? (
+        <div className="bg-[#1E293B]/70 border border-dashed border-slate-700 rounded-2xl p-8 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
+            <Calculator className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-200 font-mono uppercase tracking-wide">
+            Aguardando Confirmação da Simulação
+          </h3>
+          <p className="text-xs text-slate-400 font-mono max-w-md mx-auto leading-relaxed">
+            Preencha os valores de custo e margem comercial da mercadoria e clique no botão{' '}
+            <strong className="text-indigo-300 font-bold">"CALCULAR & CONFIRMAR SIMULAÇÃO"</strong> acima para visualizar os cenários oficiais de formação de preço de venda e margens líquidas.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#1E293B] border border-slate-800 p-4 rounded-xl">
             <div>
               <div className="flex items-center gap-2">
@@ -1671,8 +1657,8 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
                   {t.resultsTitle || 'Cenários de Formação de Preço e Lucratividade (Produtos)'}
                 </h3>
                 <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  {t.badgeLive || 'EM DIRETO'}
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  SIMULAÇÃO CONFIRMADA
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 font-mono mt-0.5">
@@ -1912,6 +1898,20 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal before calculating results */}
+      <ConfirmSimulationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={handleConfirmAndExecute}
+        moduleName="Comércio Local / Venda de Bens"
+        title="Confirmar Simulação de Preços"
+        subtitle="Reveja a composição de custo, taxas e margem antes de processar os cenários oficiais."
+        summaryItems={simulationSummaryItems}
+        userQueriesRemaining={user?.queriesRemaining || 0}
+        isStaffOrAdmin={user?.role === 'staff' || user?.role === 'admin' || user?.role === 'admin_level1' || user?.role === 'admin_level2' || user?.role === 'super_admin'}
+        isProcessing={isCalculating}
+      />
     </div>
   );
 };

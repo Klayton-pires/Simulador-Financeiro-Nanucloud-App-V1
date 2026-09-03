@@ -77,6 +77,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (res.ok) {
         const data = await res.json();
         localStorage.setItem('nanucloud_session_user', JSON.stringify(data.user));
+        if (data.token) {
+          localStorage.setItem('nanucloud_token', data.token);
+        }
         onSuccess(data.user);
         onClose();
         return;
@@ -178,46 +181,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsLoading(false);
   };
 
-  const handleDirectBackOffice = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/backoffice-direct', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem('nanucloud_session_user', JSON.stringify(data.user));
-        onSuccess(data.user);
-        onClose();
-        return;
-      }
-    } catch {
-      // offline fallback
-    }
-
-    const fallbackAdmin: UserSafe = {
-      id: 'usr_admin_nanuhost',
-      name: 'Super Administrador (nanuhost)',
-      email: 'nanuhost',
-      role: 'admin_level1',
-      isActive: true,
-      activePlanId: 'plan_diamante',
-      activePlanName: 'Diamante Ilimitado (Super Admin)',
-      planExpiresAt: null,
-      queriesRemaining: 999999,
-      totalQueriesUsed: 0,
-      isImportUnlocked: true,
-      isBatchUnlocked: true,
-      company: 'NANUCLOUD Lda',
-      country: 'AO',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      lastLoginAt: new Date().toISOString()
-    };
-    localStorage.setItem('nanucloud_session_user', JSON.stringify(fallbackAdmin));
-    onSuccess(fallbackAdmin);
-    onClose();
-    setIsLoading(false);
-  };
-
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-[#1E293B] border border-slate-800 rounded-xl w-full max-w-md shadow-2xl p-6 relative my-8">
@@ -235,27 +198,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <NanuCloudLogo className="h-10" isDarkTheme={true} />
           </div>
           <h2 className="text-base font-bold text-slate-100 font-mono uppercase tracking-tight">
-            {mode === 'login' ? t.loginTitle : t.registerTitle}
+            {mode === 'login' ? t.loginTitle : 'Registo de Cliente Final'}
           </h2>
           <p className="text-xs text-slate-400 mt-1 font-mono">
             {mode === 'login'
-              ? 'Aceda com as suas credenciais ou entre diretamente no Back Office'
-              : 'Preencha os seus dados para criar uma conta profissional'}
+              ? 'Aceda com as suas credenciais (E-mail e Palavra-passe)'
+              : 'Registo de conta de cliente para acesso ao simulador no Front-End'}
           </p>
 
-          {/* Direct Back Office Access Button */}
-          <div className="mt-3">
-            <button
-              type="button"
-              onClick={handleDirectBackOffice}
-              className="w-full py-2.5 px-3 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-mono font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer active:scale-98"
-            >
-              <Key className="w-4 h-4 text-amber-400" />
-              <span>Aceder ao Back Office Direto (Sem Senha)</span>
-            </button>
-          </div>
-
-          <div className="flex bg-[#0F172A] p-1 rounded-lg border border-slate-800 mt-3">
+          <div className="flex bg-[#0F172A] p-1 rounded-lg border border-slate-800 mt-4">
             <button
               type="button"
               onClick={() => {
@@ -278,7 +229,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 mode === 'register' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'text-slate-400 hover:text-white'
               }`}
             >
-              {t.tabRegister}
+              Criar Conta Cliente
             </button>
           </div>
         </div>
@@ -293,6 +244,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs font-mono">
           {mode === 'register' && (
             <>
+              <div className="p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-xl flex items-start gap-2.5 text-[11px] text-indigo-300">
+                <User className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block text-indigo-200">Apenas Clientes Finais (Front-End)</strong>
+                  <span>O registo público destina-se a clientes que utilizam os simuladores no Front-End. O acesso Staff é criado exclusivamente pela administração no Backoffice.</span>
+                </div>
+              </div>
               <div>
                 <label className="text-slate-400 font-bold block mb-1">{t.lblName} *</label>
                 <div className="relative">

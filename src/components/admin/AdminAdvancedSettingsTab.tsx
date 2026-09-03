@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Building2,
@@ -259,6 +259,24 @@ export const AdminAdvancedSettingsTab: React.FC<AdminAdvancedSettingsTabProps> =
     setSavedBanner(msg);
     setTimeout(() => setSavedBanner(null), 3000);
   };
+
+  useEffect(() => {
+    if (settingsData) {
+      if (settingsData.companyPhone1 || settingsData.whatsappSupport1 || settingsData.supportEmail || settingsData.companyEmail1) {
+        setContacts(prev => ({
+          phones: [
+            settingsData.companyPhone1 || prev.phones[0] || '+244 955 581 862',
+            settingsData.companyPhone2 || prev.phones[1] || '+244 955 580 653'
+          ].filter(Boolean),
+          whatsapps: [
+            settingsData.whatsappSupport1 || prev.whatsapps[0] || '+244 944 935 617',
+            settingsData.whatsappSupport2 || prev.whatsapps[1] || '+244 944 935 618'
+          ].filter(Boolean),
+          supportEmail: settingsData.supportEmail || settingsData.companyEmail1 || prev.supportEmail || 'suporte.simulador@nanucloud.com'
+        }));
+      }
+    }
+  }, [settingsData]);
 
   const syncToBackend = async (partial: Partial<SystemSettings>) => {
     try {

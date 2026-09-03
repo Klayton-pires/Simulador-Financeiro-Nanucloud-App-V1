@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import { downloadOfficialExcelTemplate } from '../utils/excelTemplate';
 import { exportSimulationDossierPDF } from '../utils/exportDocumentUtils';
+import { isStaffOrAdmin, canUserSimulate } from '../utils/accessControl';
+import { ClientCreditNoticeBanner } from './ClientCreditNoticeBanner';
 
 interface ExcelBatchSimulatorProps {
   user: UserSafe | null;
@@ -46,7 +48,8 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
 }) => {
   const t = TRANSLATIONS[currentLang] || TRANSLATIONS.pt;
 
-  const isUnlocked = user ? (user.isBatchUnlocked || user.role !== 'user') : false;
+  const isStaff = isStaffOrAdmin(user?.role);
+  const isUnlocked = isStaff || (user ? Boolean(user.isBatchUnlocked || user.activePlanId) : false);
 
   const [countryCode, setCountryCode] = useState<string>('AO');
   const [vatRate, setVatRate] = useState<number>(14);
@@ -188,6 +191,20 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
 
     if (!selectedCostColumn) {
       setErrorMessage('Por favor, selecione a coluna correspondente ao Preço de Custo.');
+      return;
+    }
+
+    // AUTH & RBAC SIMULATION CHECK
+    if (!user) {
+      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
+      onOpenAuth();
+      return;
+    }
+
+    const simCheck = canUserSimulate(user);
+    if (!simCheck.allowed) {
+      setErrorMessage(simCheck.message);
+      onOpenPlans();
       return;
     }
 
@@ -369,6 +386,13 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Aviso de Créditos e Estado de Acesso RBAC */}
+      <ClientCreditNoticeBanner
+        user={user}
+        onOpenPlans={onOpenPlans}
+        onOpenAuth={onOpenAuth}
+      />
+
       {/* Header & Template Download Bar */}
       <div className="bg-slate-850 border border-slate-700/80 rounded-3xl p-5 md:p-6 shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/80 pb-5 mb-5">

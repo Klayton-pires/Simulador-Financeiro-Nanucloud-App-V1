@@ -248,9 +248,9 @@ router.post('/support/:id/reply', requireAdminLevel2, (req: AuthRequest, res: Re
 });
 
 // =========================================================================
-// 5. GESTÃO DE UTILIZADORES E ADMINISTRADORES (Nível 1 - Super Admin)
+// 5. GESTÃO DE UTILIZADORES E STAFF (CRIAÇÃO EXCLUSIVA NO BACKOFFICE)
 // =========================================================================
-router.get('/users', requireAdminLevel1, (req: AuthRequest, res: Response) => {
+router.get('/users', requireAdminLevel2, (req: AuthRequest, res: Response) => {
   const users = db.getUsers().map(u => {
     const { passwordHash: _, ...safe } = u;
     return safe;
@@ -258,13 +258,17 @@ router.get('/users', requireAdminLevel1, (req: AuthRequest, res: Response) => {
   return res.json({ users });
 });
 
-router.post('/users', requireAdminLevel1, (req: AuthRequest, res: Response) => {
+router.post('/users', requireAdminLevel2, (req: AuthRequest, res: Response) => {
   try {
     const admin = req.user!;
     const { name, email, password, phone, company, role, queriesRemaining, isImportUnlocked, isBatchUnlocked } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Nome, e-mail e palavra-passe são obrigatórios.' });
+      return res.status(400).json({ error: 'Nome, e-mail e palavra-passe são obrigatórios para registar um membro Staff/Utilizador.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'A palavra-passe deve ter pelo menos 6 caracteres.' });
     }
 
     const cleanEmail = email.trim().toLowerCase();
@@ -272,26 +276,36 @@ router.post('/users', requireAdminLevel1, (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Já existe um utilizador com este endereço de e-mail.' });
     }
 
+    // Apenas Super Administradores podem criar outros Super Administradores
+    const isAssigningSuper = ['super_admin', 'superadmin', 'admin_level1'].includes(role);
+    const isCreatorSuper = ['super_admin', 'superadmin', 'admin_level1'].includes(admin.role);
+    if (isAssigningSuper && !isCreatorSuper) {
+      return res.status(403).json({ error: 'Não tem permissão para criar contas com perfil de Super Administrador.' });
+    }
+
     const salt = bcrypt.genSaltSync(10);
     const passwordHash = bcrypt.hashSync(password, salt);
 
+    const targetRole: UserRole = (role as UserRole) || 'staff';
+    const isStaffRole = ['staff', 'manager', 'admin_level2', 'admin_level1', 'super_admin', 'superadmin'].includes(targetRole);
+
     const newUser: User = {
-      id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: isStaffRole ? `staff_${Date.now()}_${Math.random().toString(36).substring(2, 6)}` : `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: name.trim(),
       email: cleanEmail,
       phone: phone ? phone.trim() : undefined,
-      company: company ? company.trim() : undefined,
+      company: company ? company.trim() : 'NANUCLOUD',
       country: 'AO',
       passwordHash,
-      role: (role as UserRole) || 'user',
+      role: targetRole,
       isActive: true,
-      queriesRemaining: Number(queriesRemaining) || 10,
+      queriesRemaining: isStaffRole ? 99999 : (Number(queriesRemaining) || 10),
       totalQueriesUsed: 0,
-      activePlanId: null,
-      activePlanName: 'Criado pela Administração',
+      activePlanId: isStaffRole ? 'plan_staff_internal' : null,
+      activePlanName: isStaffRole ? `Staff Nanucloud (${targetRole.toUpperCase()})` : 'Criado pela Administração',
       planExpiresAt: null,
-      isImportUnlocked: Boolean(isImportUnlocked),
-      isBatchUnlocked: Boolean(isBatchUnlocked),
+      isImportUnlocked: isStaffRole ? true : Boolean(isImportUnlocked),
+      isBatchUnlocked: isStaffRole ? true : Boolean(isBatchUnlocked),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       lastLoginAt: null
@@ -307,18 +321,18 @@ router.post('/users', requireAdminLevel1, (req: AuthRequest, res: Response) => {
       entityType: 'user',
       entityId: newUser.id,
       ipAddress: req.ip || req.socket.remoteAddress,
-      details: `Novo utilizador/administrador criado manualmente (${newUser.email}, função: ${newUser.role}) por ${admin.name}.`
+      details: `Novo membro Staff/Administrador (${newUser.email}, perfil: ${newUser.role}) criado exclusivamente no Backoffice por ${admin.name}.`
     });
 
     const { passwordHash: _, ...safeUser } = newUser;
-    return res.status(201).json({ message: 'Utilizador criado com sucesso!', user: safeUser });
+    return res.status(201).json({ message: 'Membro Staff criado com sucesso!', user: safeUser });
   } catch (err: any) {
     console.error('Error creating user by admin:', err);
     return res.status(500).json({ error: 'Erro ao criar utilizador.' });
   }
 });
 
-router.put('/users/:id', requireAdminLevel1, (req: AuthRequest, res: Response) => {
+router.put('/users/:id', requireAdminLevel2, (req: AuthRequest, res: Response) => {
   try {
     const admin = req.user!;
     const { id } = req.params;
@@ -329,11 +343,25 @@ router.put('/users/:id', requireAdminLevel1, (req: AuthRequest, res: Response) =
       return res.status(404).json({ error: 'Utilizador não encontrado.' });
     }
 
+    const isTargetSuper = ['super_admin', 'superadmin', 'admin_level1'].includes(user.role);
+    const isCreatorSuper = ['super_admin', 'superadmin', 'admin_level1'].includes(admin.role);
+
+    if (isTargetSuper && !isCreatorSuper) {
+      return res.status(403).json({ error: 'Apenas Super Administradores podem editar contas de Super Administrador.' });
+    }
+
     const updates: Partial<User> = {};
     if (name) updates.name = name.trim();
     if (phone !== undefined) updates.phone = phone.trim();
     if (company !== undefined) updates.company = company.trim();
-    if (role && ['user', 'admin_level2', 'admin_level1'].includes(role)) updates.role = role as UserRole;
+    
+    if (role && ['user', 'client', 'staff', 'manager', 'admin_level2', 'admin_level1', 'super_admin'].includes(role)) {
+      if (['super_admin', 'admin_level1'].includes(role) && !isCreatorSuper) {
+        return res.status(403).json({ error: 'Não tem permissão para elevar utilizadores a Super Administrador.' });
+      }
+      updates.role = role as UserRole;
+    }
+
     if (isActive !== undefined) updates.isActive = Boolean(isActive);
     if (queriesRemaining !== undefined) updates.queriesRemaining = Number(queriesRemaining);
     if (isImportUnlocked !== undefined) updates.isImportUnlocked = Boolean(isImportUnlocked);
@@ -362,6 +390,57 @@ router.put('/users/:id', requireAdminLevel1, (req: AuthRequest, res: Response) =
   } catch (err: any) {
     console.error('Error updating user:', err);
     return res.status(500).json({ error: 'Erro ao atualizar dados do utilizador.' });
+  }
+});
+
+// 5b. ALTERAR PALAVRA-PASSE DE UTILIZADOR (Administração - Controlo de Senhas)
+router.put('/users/:id/password', requireAdminLevel2, (req: AuthRequest, res: Response) => {
+  try {
+    const admin = req.user!;
+    const { id } = req.params;
+    const newPassword = req.body.newPassword || req.body.password;
+
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.trim().length < 6) {
+      return res.status(400).json({ error: 'A nova palavra-passe é obrigatória e deve ter pelo menos 6 caracteres.' });
+    }
+
+    const targetUser = db.findUserById(id) || db.findUserByEmail(id);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Utilizador não encontrado no sistema.' });
+    }
+
+    const isTargetSuper = ['super_admin', 'superadmin', 'admin_level1'].includes(targetUser.role);
+    const isCreatorSuper = ['super_admin', 'superadmin', 'admin_level1'].includes(admin.role);
+
+    if (isTargetSuper && !isCreatorSuper) {
+      return res.status(403).json({ error: 'Apenas Super Administradores podem redefinir a palavra-passe de contas Super Admin.' });
+    }
+
+    const updated = db.updateUserPassword(targetUser.id, newPassword.trim());
+    if (!updated) {
+      return res.status(500).json({ error: 'Falha ao gravar nova palavra-passe na base de dados.' });
+    }
+
+    db.addAuditLog({
+      userId: admin.id,
+      userName: admin.name,
+      userRole: admin.role,
+      action: 'ADMIN_CHANGED_PASSWORD',
+      entityType: 'user',
+      entityId: targetUser.id,
+      ipAddress: req.ip || req.socket.remoteAddress,
+      details: `Palavra-passe do utilizador ${targetUser.email} (${targetUser.name}) redefinida pelo administrador ${admin.name}.`
+    });
+
+    const { passwordHash: _, ...safeUser } = updated;
+    return res.json({
+      success: true,
+      message: `Palavra-passe do utilizador ${targetUser.name} (${targetUser.email}) alterada com sucesso!`,
+      user: safeUser
+    });
+  } catch (err: any) {
+    console.error('Error changing user password by admin:', err);
+    return res.status(500).json({ error: 'Erro ao alterar a palavra-passe do utilizador.' });
   }
 });
 

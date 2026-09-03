@@ -4,6 +4,7 @@ import { SupportedLang, TRANSLATIONS } from '../i18n/translations';
 import { Sparkles, Shield, User as UserIcon, LogOut, FileText, CreditCard, ChevronDown, CheckCircle2, LayoutTemplate, SlidersHorizontal, Zap, Menu } from 'lucide-react';
 import { NanuCloudLogo } from './NanuCloudLogo';
 import { useLayoutMode } from '../data/layoutMode';
+import { isStaffOrAdmin, getRoleDisplayLabel } from '../utils/accessControl';
 
 interface NavbarProps {
   user: UserSafe | null;
@@ -121,28 +122,32 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Botão de Acesso Rápido ao Back Office (1 Clique / Sem Senha) */}
-          <button
-            onClick={onOpenAdmin}
-            className="flex items-center gap-2 bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 border border-amber-500/50 px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all shadow-md shadow-amber-500/10 cursor-pointer active:scale-95"
-            title="Acesso Rápido ao Back Office e Painel de Gestão"
-          >
-            <Shield className="w-4 h-4 text-amber-400" />
-            <span>Acesso Rápido Back Office</span>
-            <span className="text-[9px] bg-amber-400/25 text-amber-200 px-1.5 py-0.5 rounded font-mono uppercase font-black">
-              Livre
-            </span>
-          </button>
+          {/* Botão de Acesso ao Back Office - Exclusivo para Staff e Administradores */}
+          {user && isStaffOrAdmin(user.role) && (
+            <button
+              onClick={onOpenAdmin}
+              className="flex items-center gap-2 bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 border border-amber-500/50 px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all shadow-md shadow-amber-500/10 cursor-pointer active:scale-95"
+              title="Acesso ao Back Office e Painel de Gestão"
+            >
+              <Shield className="w-4 h-4 text-amber-400" />
+              <span>Back Office</span>
+              <span className="text-[9px] bg-amber-400/25 text-amber-200 px-1.5 py-0.5 rounded font-mono uppercase font-black">
+                STAFF
+              </span>
+            </button>
+          )}
 
-          {/* Docs & Manuals Button */}
-          <button
-            onClick={onOpenDocs}
-            className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/80 px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer"
-            title="Manuais e Documentação"
-          >
-            <FileText className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden md:inline">Docs & Deploy</span>
-          </button>
+          {/* Docs & Manuals Button - Para Staff ou Usuários */}
+          {user && isStaffOrAdmin(user.role) && (
+            <button
+              onClick={onOpenDocs}
+              className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/80 px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer"
+              title="Manuais e Documentação de Deploy"
+            >
+              <FileText className="w-3.5 h-3.5 text-sky-400" />
+              <span className="hidden md:inline">Docs & Deploy</span>
+            </button>
+          )}
 
           {/* Language Selector */}
           <select
@@ -177,7 +182,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     {user.name.split(' ')[0]}
                   </span>
                   <span className="text-[9px] text-amber-400 uppercase tracking-widest font-mono font-bold">
-                    Super Admin
+                    {getRoleDisplayLabel(user.role)}
                   </span>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -193,19 +198,25 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <p className="text-xs font-bold text-slate-100 truncate mt-0.5">{user.name}</p>
                     <p className="text-[11px] font-mono text-indigo-400 truncate">{user.email}</p>
                     <div className="mt-2 flex items-center justify-between text-[10px] font-mono bg-[#0F172A] p-2 rounded-lg border border-slate-800">
+                      <span className="text-slate-400">Perfil / Nível:</span>
+                      <span className="text-amber-400 font-bold">{getRoleDisplayLabel(user.role)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-[10px] font-mono bg-[#0F172A] p-2 rounded-lg border border-slate-800">
                       <span className="text-slate-400">Plano:</span>
-                      <span className="text-emerald-400 font-bold">{user.activePlanName || 'Diamante Ilimitado'}</span>
+                      <span className="text-emerald-400 font-bold">{user.activePlanName || 'Plano Básico'}</span>
                     </div>
                   </div>
 
                   <div className="py-1 text-xs">
-                    <button
-                      onClick={onOpenAdmin}
-                      className="w-full text-left px-4 py-2 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-2.5 font-bold transition border-t border-b border-amber-500/20 my-1 font-mono text-xs"
-                    >
-                      <Shield className="w-4 h-4 text-amber-400" />
-                      Back Office & Definições
-                    </button>
+                    {isStaffOrAdmin(user.role) && (
+                      <button
+                        onClick={onOpenAdmin}
+                        className="w-full text-left px-4 py-2 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-2.5 font-bold transition border-t border-b border-amber-500/20 my-1 font-mono text-xs"
+                      >
+                        <Shield className="w-4 h-4 text-amber-400" />
+                        Back Office & Definições
+                      </button>
+                    )}
                     <button
                       onClick={onOpenProfile}
                       className="w-full text-left px-4 py-2 text-slate-300 hover:bg-slate-800 flex items-center gap-2.5 transition"
@@ -235,12 +246,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           ) : (
             <div className="flex items-center gap-2">
               <button
-                onClick={onOpenAdmin}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-sm"
-                title="Acesso Direto"
+                onClick={() => onOpenAuth('login')}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 font-mono"
+                title="Iniciar Sessão"
               >
-                <UserIcon className="w-3.5 h-3.5 text-amber-400" />
-                <span>Entrar (Direto)</span>
+                <UserIcon className="w-3.5 h-3.5" />
+                <span>Iniciar Sessão</span>
               </button>
             </div>
           )}

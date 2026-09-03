@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Smartphone, Calculator, RotateCcw, Check, Sparkles, AlertCircle, ArrowDownRight, TrendingUp, ShieldCheck } from 'lucide-react';
 import { UserSafe } from '../types';
 import { COUNTRIES_DB, getEffectiveCountryFiscal, getAvailableCountryList } from '../data/countries';
+import { canUserSimulate } from '../utils/accessControl';
 
 interface BasicPhoneMobileModeProps {
   user: UserSafe | null;
@@ -81,9 +82,16 @@ export const BasicPhoneMobileMode: React.FC<BasicPhoneMobileModeProps> = ({
       return;
     }
 
-    // Guest vs Logged-in credit check
-    if (user && user.queriesRemaining <= 0) {
-      setErrorMessage('As suas consultas esgotaram. Adquira um plano para continuar.');
+    // AUTH & RBAC SIMULATION CHECK
+    if (!user) {
+      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
+      if (onOpenAuth) onOpenAuth();
+      return;
+    }
+
+    const simCheck = canUserSimulate(user);
+    if (!simCheck.allowed) {
+      setErrorMessage(simCheck.message);
       if (onOpenPlans) onOpenPlans();
       return;
     }

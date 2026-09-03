@@ -259,16 +259,53 @@ class DatabaseEngine {
         u.email !== 'gerente@nanucloud.com'
     );
 
-    // 1. Ensure default Admin account is named 'nanuhost' (user: nanuhost / password: admin)
-    let defaultAdmin = this.data.users.find(
-      (u) =>
-        u.email.toLowerCase() === 'nanuhost' ||
-        u.email.toLowerCase() === 'admin' ||
-        u.id === 'usr_admin_default' ||
-        u.id === 'usr_admin_nanuhost'
-    );
+    // 1. Ensure default Admin account (admin and nanuhost) have password *Angola@2030*
+    const angolaHash = bcrypt.hashSync('*Angola@2030*', salt);
 
-    if (!defaultAdmin) {
+    // 1a. Ensure user 'admin' exists explicitly with password *Angola@2030*
+    let adminAccount = this.data.users.find(
+      (u) => u.email.toLowerCase() === 'admin' || u.id === 'usr_admin_default'
+    );
+    if (!adminAccount) {
+      adminAccount = {
+        id: 'usr_admin_default',
+        name: 'Administrador (admin)',
+        email: 'admin',
+        phone: '+244954269353',
+        company: 'NANUCLOUD Lda',
+        address: 'Angola, Luanda',
+        nif: '5001294819',
+        country: 'AO',
+        passwordHash: angolaHash,
+        role: 'admin_level1',
+        isActive: true,
+        queriesRemaining: 999999,
+        totalQueriesUsed: 0,
+        activePlanId: 'plan_diamante',
+        activePlanName: 'Diamante Ilimitado (Super Admin)',
+        planExpiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000).toISOString(),
+        isImportUnlocked: true,
+        isBatchUnlocked: true,
+        twoFactorEnabled: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString()
+      };
+      this.data.users.unshift(adminAccount);
+    } else {
+      adminAccount.passwordHash = angolaHash;
+      adminAccount.role = 'admin_level1';
+      adminAccount.isActive = true;
+      adminAccount.queriesRemaining = 999999;
+      adminAccount.isImportUnlocked = true;
+      adminAccount.isBatchUnlocked = true;
+    }
+
+    // 1b. Ensure user 'nanuhost' exists with password *Angola@2030*
+    let nanuhostAccount = this.data.users.find(
+      (u) => u.email.toLowerCase() === 'nanuhost' || u.id === 'usr_admin_nanuhost'
+    );
+    if (!nanuhostAccount) {
       const superAdminDefault: User = {
         id: 'usr_admin_nanuhost',
         name: 'nanuhost',
@@ -278,7 +315,7 @@ class DatabaseEngine {
         address: 'Angola, Luanda',
         nif: '5001294819',
         country: 'AO',
-        passwordHash: bcrypt.hashSync('admin', salt),
+        passwordHash: angolaHash,
         role: 'admin_level1',
         isActive: true,
         queriesRemaining: 999999,
@@ -295,15 +332,15 @@ class DatabaseEngine {
       };
       this.data.users.unshift(superAdminDefault);
     } else {
-      defaultAdmin.id = 'usr_admin_nanuhost';
-      defaultAdmin.name = 'nanuhost';
-      defaultAdmin.email = 'nanuhost';
-      defaultAdmin.role = 'admin_level1';
-      defaultAdmin.isActive = true;
-      defaultAdmin.passwordHash = bcrypt.hashSync('admin', salt);
-      defaultAdmin.isImportUnlocked = true;
-      defaultAdmin.isBatchUnlocked = true;
-      defaultAdmin.queriesRemaining = 999999;
+      nanuhostAccount.id = 'usr_admin_nanuhost';
+      nanuhostAccount.name = 'nanuhost';
+      nanuhostAccount.email = 'nanuhost';
+      nanuhostAccount.role = 'admin_level1';
+      nanuhostAccount.isActive = true;
+      nanuhostAccount.passwordHash = angolaHash;
+      nanuhostAccount.isImportUnlocked = true;
+      nanuhostAccount.isBatchUnlocked = true;
+      nanuhostAccount.queriesRemaining = 999999;
     }
 
     // 2. Ensure Klayton Pires account is maintained (klayton.pires.monteiro@gmail.com / Super Admin)
@@ -343,6 +380,73 @@ class DatabaseEngine {
       klayton.isBatchUnlocked = true;
       klayton.queriesRemaining = 999999;
       klayton.passwordHash = bcrypt.hashSync('admin123', salt);
+    }
+
+    // 3. Ensure a designated Staff member exists (Staff Utilizador - Backoffice access, no credit limits)
+    let staffAccount = this.data.users.find(
+      (u) => u.email.toLowerCase() === 'staff' || u.email.toLowerCase() === 'staff@nanucloud.com'
+    );
+    if (!staffAccount) {
+      const staffDefault: User = {
+        id: 'usr_staff_default',
+        name: 'Técnico de Suporte (Staff)',
+        email: 'staff@nanucloud.com',
+        phone: '+244923000999',
+        company: 'NANUCLOUD Lda',
+        address: 'Angola, Luanda',
+        nif: '5001294819',
+        country: 'AO',
+        passwordHash: angolaHash,
+        role: 'staff',
+        isActive: true,
+        queriesRemaining: 999999,
+        totalQueriesUsed: 0,
+        activePlanId: 'plan_diamante',
+        activePlanName: 'Plano Staff Operacional',
+        planExpiresAt: null,
+        isImportUnlocked: true,
+        isBatchUnlocked: true,
+        twoFactorEnabled: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString()
+      };
+      this.data.users.push(staffDefault);
+    } else {
+      staffAccount.role = 'staff';
+      staffAccount.isActive = true;
+    }
+
+    // 4. Ensure a demonstration Client account exists (Cliente - Front-End only, must have credits)
+    let clientAccount = this.data.users.find(
+      (u) => u.email.toLowerCase() === 'cliente@nanucloud.com' || u.email.toLowerCase() === 'cliente'
+    );
+    if (!clientAccount) {
+      const clientDefault: User = {
+        id: 'usr_client_default',
+        name: 'Cliente Comercial Nanucloud',
+        email: 'cliente@nanucloud.com',
+        phone: '+244923111222',
+        company: 'Empresa Cliente Lda',
+        address: 'Angola, Luanda, Talatona',
+        nif: '5401928374',
+        country: 'AO',
+        passwordHash: bcrypt.hashSync('cliente123', salt),
+        role: 'client',
+        isActive: true,
+        queriesRemaining: 10,
+        totalQueriesUsed: 2,
+        activePlanId: 'plan_bronze',
+        activePlanName: 'Bronze Inicial (10 Consultas)',
+        planExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        isImportUnlocked: false,
+        isBatchUnlocked: false,
+        twoFactorEnabled: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString()
+      };
+      this.data.users.push(clientDefault);
     }
 
     if (!this.data.botKnowledgeBase || this.data.botKnowledgeBase.length === 0) {
@@ -1159,6 +1263,20 @@ class DatabaseEngine {
     };
     this.save();
     return this.data.users[idx];
+  }
+
+  public updateUserPassword(userIdOrEmail: string, newPlainTextPassword: string): User | undefined {
+    const user = this.data.users.find(u => 
+      u.id === userIdOrEmail || 
+      u.email.toLowerCase() === userIdOrEmail.trim().toLowerCase()
+    );
+    if (!user) return undefined;
+
+    const salt = bcrypt.genSaltSync(10);
+    user.passwordHash = bcrypt.hashSync(newPlainTextPassword.trim(), salt);
+    user.updatedAt = new Date().toISOString();
+    this.save();
+    return user;
   }
 
   public grantBonusQueries(userId: string, bonusCount: number, reason: string, adminUser: User): User | undefined {

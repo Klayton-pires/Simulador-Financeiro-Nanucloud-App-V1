@@ -8,13 +8,28 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ settings }) => {
+  // Read from settings prop or synchronized localStorage admin contacts
+  const localContacts = (() => {
+    try {
+      const saved = localStorage.getItem('nanucloud_admin_contacts');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  })();
+
   const companyName = settings?.companyName || 'NANUCLOUD';
   const address = settings?.companyAddress || 'Angola, Luanda, Viana, Capalanca';
-  const email = settings?.companyEmail1 || settings?.supportEmail || 'suporte.simulador@nanucloud.com';
-  const phone1 = settings?.companyPhone1 || '+244 955 581 862';
-  const phone2 = settings?.companyPhone2 || '+244 955 580 653';
-  const whatsapp1 = settings?.whatsappSupport1 || '244944935617';
-  const whatsapp2 = settings?.whatsappSupport2 || '244944935618';
+  const email = settings?.supportEmail || settings?.companyEmail1 || localContacts?.supportEmail || 'suporte.simulador@nanucloud.com';
+
+  const rawPhone1 = settings?.companyPhone1 || localContacts?.phones?.[0] || '+244 955 581 862';
+  const rawPhone2 = settings?.companyPhone2 || localContacts?.phones?.[1] || '+244 955 580 653';
+  const phonesList = [rawPhone1, rawPhone2].filter((p, i, arr) => Boolean(p) && arr.indexOf(p) === i);
+
+  const rawWhatsapp1 = settings?.whatsappSupport1 || localContacts?.whatsapps?.[0] || '+244 944 935 617';
+  const rawWhatsapp2 = settings?.whatsappSupport2 || localContacts?.whatsapps?.[1] || '+244 944 935 618';
+  const whatsappsList = [rawWhatsapp1, rawWhatsapp2].filter((w, i, arr) => Boolean(w) && arr.indexOf(w) === i);
+
   const currentYear = new Date().getFullYear();
   const defaultCopyright = `${currentYear} Nanucloud. Todos os direitos reservados.`;
   const copyright = settings?.footerCopyrightText && !settings.footerCopyrightText.includes('Klayton Pires')
@@ -47,36 +62,39 @@ export const Footer: React.FC<FooterProps> = ({ settings }) => {
           <span className="hidden sm:inline text-slate-700">|</span>
           <p className="flex items-center gap-1.5 text-xs text-slate-400">
             <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-            <span>{email}</span>
+            <a href={`mailto:${email}`} className="hover:text-sky-300 transition-colors">{email}</a>
           </p>
           <span className="hidden sm:inline text-slate-700">|</span>
           <p className="flex items-center gap-1.5 text-xs text-slate-400">
             <Phone className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            <span>{phone1} / {phone2}</span>
+            <span>{phonesList.join(' / ')}</span>
           </p>
+          {settings?.companyNif && (
+            <>
+              <span className="hidden sm:inline text-slate-700">|</span>
+              <p className="text-xs text-slate-400">
+                <span className="font-semibold text-slate-300">NIF:</span> {settings.companyNif}
+              </p>
+            </>
+          )}
         </div>
 
         {/* WhatsApp Support & Social Links */}
         <div className="flex flex-wrap items-center gap-2">
           {/* WhatsApp Direct Support buttons */}
-          <a
-            href={`https://wa.me/${whatsapp1.replace(/\D/g, '')}?text=Ola%2C%20preciso%20de%20ajuda%20com%20o%20Simulador%20Nanucloud`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 px-3 py-1 rounded-lg text-xs font-mono transition-colors"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span>{whatsapp1}</span>
-          </a>
-          <a
-            href={`https://wa.me/${whatsapp2.replace(/\D/g, '')}?text=Ola%2C%20preciso%20de%20ajuda%20com%20o%20Simulador%20Nanucloud`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 px-3 py-1 rounded-lg text-xs font-mono transition-colors"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span>{whatsapp2}</span>
-          </a>
+          {whatsappsList.map((waNum, idx) => (
+            <a
+              key={idx}
+              href={`https://wa.me/${waNum.replace(/\D/g, '')}?text=Ola%2C%20preciso%20de%20ajuda%20com%20o%20Simulador%20Nanucloud`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 px-3 py-1 rounded-lg text-xs font-mono transition-colors"
+              title={`Suporte WhatsApp: ${waNum}`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>{waNum}</span>
+            </a>
+          ))}
 
           {/* Optional Social Buttons - Only shown if configured by Super Admin */}
           {settings?.socialFacebook && (

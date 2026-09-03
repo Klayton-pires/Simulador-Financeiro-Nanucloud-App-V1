@@ -22,6 +22,20 @@ export function generateToken(user: User): string {
   );
 }
 
+export function isStaffOrAdminRole(role?: string | null): boolean {
+  if (!role) return false;
+  const normalized = role.toLowerCase().trim();
+  return [
+    'super_admin',
+    'superadmin',
+    'admin_level1',
+    'admin_level2',
+    'admin',
+    'manager',
+    'staff'
+  ].includes(normalized);
+}
+
 export function authenticateUser(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     let token = req.cookies?.nanucloud_token;
@@ -43,24 +57,14 @@ export function authenticateUser(req: AuthRequest, res: Response, next: NextFunc
       }
     }
   } catch (err) {
-    // Token invalid or expired - continue to fallback
+    // Token invalid or expired
   }
 
-  // Passwordless Back Office Access: Provide Super Admin fallback
-  const superAdmin = db.findUserByEmail('nanuhost') || db.findUserByEmail('klayton.pires.monteiro@gmail.com') || db.getUsers().find(u => u.role === 'admin_level1' || (u.role as string) === 'super_admin');
-  if (superAdmin) {
-    req.user = superAdmin;
-  }
   next();
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.user) {
-    const superAdmin = db.findUserByEmail('nanuhost') || db.getUsers()[0];
-    if (superAdmin) {
-      req.user = superAdmin;
-      return next();
-    }
     return res.status(401).json({
       error: 'Autenticação necessária. Por favor, inicie sessão para aceder.',
       code: 'UNAUTHORIZED'
@@ -79,24 +83,26 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
 
 export function requireAdminLevel2(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.user) {
-    const superAdmin = db.findUserByEmail('nanuhost') || db.getUsers().find(u => u.role === 'admin_level1' || (u.role as string) === 'super_admin');
-    if (superAdmin) {
-      req.user = superAdmin;
-      return next();
-    }
-    return res.status(401).json({ error: 'Autenticação necessária.', code: 'UNAUTHORIZED' });
+    return res.status(401).json({
+      error: 'Autenticação necessária para aceder ao Backoffice.',
+      code: 'UNAUTHORIZED'
+    });
   }
 
-  const role = req.user.role as string;
-  const isAuthorized = ['admin_level2', 'admin_level1', 'super_admin', 'superadmin', 'admin', 'manager'].includes(role);
+  if (!req.user.isActive) {
+    return res.status(403).json({
+      error: 'A sua conta foi desativada pela administração.',
+      code: 'ACCOUNT_DISABLED'
+    });
+  }
+
+  const isAuthorized = isStaffOrAdminRole(req.user.role);
 
   if (!isAuthorized) {
-    // Elevate to super admin for open back office access
-    const superAdmin = db.findUserByEmail('nanuhost');
-    if (superAdmin) {
-      req.user = superAdmin;
-      return next();
-    }
+    return res.status(403).json({
+      error: 'Acesso negado ao Backoffice. A sua conta de cliente tem acesso exclusivo ao Front-End. O Backoffice é restrito a Staff Utilizadores e Administradores.',
+      code: 'FORBIDDEN_CLIENT_ONLY'
+    });
   }
 
   next();
@@ -104,24 +110,27 @@ export function requireAdminLevel2(req: AuthRequest, res: Response, next: NextFu
 
 export function requireAdminLevel1(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.user) {
-    const superAdmin = db.findUserByEmail('nanuhost') || db.getUsers().find(u => u.role === 'admin_level1' || (u.role as string) === 'super_admin');
-    if (superAdmin) {
-      req.user = superAdmin;
-      return next();
-    }
-    return res.status(401).json({ error: 'Autenticação necessária.', code: 'UNAUTHORIZED' });
+    return res.status(401).json({
+      error: 'Autenticação de Super Administrador necessária.',
+      code: 'UNAUTHORIZED'
+    });
   }
 
-  const role = req.user.role as string;
-  const isAuthorized = ['admin_level1', 'super_admin', 'superadmin', 'admin'].includes(role);
+  if (!req.user.isActive) {
+    return res.status(403).json({
+      error: 'A sua conta foi desativada pela administração.',
+      code: 'ACCOUNT_DISABLED'
+    });
+  }
+
+  const role = (req.user.role as string || '').toLowerCase().trim();
+  const isAuthorized = ['admin_level1', 'super_admin', 'superadmin'].includes(role);
 
   if (!isAuthorized) {
-    // Elevate to super admin for open back office access
-    const superAdmin = db.findUserByEmail('nanuhost');
-    if (superAdmin) {
-      req.user = superAdmin;
-      return next();
-    }
+    return res.status(403).json({
+      error: 'Acesso negado. Ação restrita a Super Administradores do sistema.',
+      code: 'FORBIDDEN_SUPER_ADMIN_ONLY'
+    });
   }
 
   next();

@@ -29,6 +29,8 @@ import { DocsAndDeployTab } from './components/DocsAndDeployTab';
 import { LegalTermsModal } from './components/LegalTermsModal';
 import { SuperAdminSetupModal } from './components/SuperAdminSetupModal';
 import { CornerMenu } from './components/CornerMenu';
+import { BackofficeAccessDenied } from './components/BackofficeAccessDenied';
+import { isStaffOrAdmin } from './utils/accessControl';
 
 // Themes and Greetings logic
 import { checkSpecialGreetings, SYSTEM_THEMES } from './data/themes';
@@ -40,29 +42,11 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [currentLang, setCurrentLang] = useState<SupportedLang>(language || 'pt');
 
+  const isStaff = isStaffOrAdmin(user?.role);
   const isSuperAdmin = user?.role === 'super_admin' || user?.role === 'admin_level1' || user?.role === 'superadmin';
   const isAdmin = isSuperAdmin || user?.role === 'admin' || user?.role === 'admin_level2';
   const isManager = isAdmin || user?.role === 'manager';
 
-  const defaultAdminUser: UserSafe = {
-    id: 'usr_admin_1',
-    name: 'Super Administrador NANUCLOUD',
-    email: 'admin@nanucloud.com',
-    role: 'super_admin',
-    country: 'AO',
-    isActive: true,
-    queriesRemaining: 999999,
-    totalQueriesUsed: 0,
-    activePlanId: 'plan_unlimited_corp',
-    activePlanName: 'Corporativo Vitalício',
-    planExpiresAt: null,
-    isImportUnlocked: true,
-    isBatchUnlocked: true,
-    isApiUnlocked: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    lastLoginAt: new Date().toISOString()
-  };
   const [activeTab, setActiveTab] = useState<ActiveTab>('local');
   const [isSidebarHidden, setIsSidebarHidden] = useState<boolean>(() => {
     return localStorage.getItem('nanucloud_sidebar_hidden') === 'true';
@@ -181,24 +165,10 @@ export default function App() {
     setIsAuthOpen(true);
   };
 
-  const handleDirectBackOfficeAccess = async (targetTab: ActiveTab = 'admin_settings') => {
-    try {
-      const res = await fetch('/api/auth/backoffice-direct', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.user) {
-          setUser(data.user);
-          localStorage.setItem('nanucloud_session_user', JSON.stringify(data.user));
-        }
-      } else if (!user || (user.role !== 'admin_level1' && user.role !== 'super_admin' && user.role !== 'admin')) {
-        setUser(defaultAdminUser);
-        localStorage.setItem('nanucloud_session_user', JSON.stringify(defaultAdminUser));
-      }
-    } catch {
-      if (!user || (user.role !== 'admin_level1' && user.role !== 'super_admin' && user.role !== 'admin')) {
-        setUser(defaultAdminUser);
-        localStorage.setItem('nanucloud_session_user', JSON.stringify(defaultAdminUser));
-      }
+  const handleDirectBackOfficeAccess = (targetTab: ActiveTab = 'admin_settings') => {
+    if (!user) {
+      handleOpenAuth('login');
+      return;
     }
     setActiveTab(targetTab);
   };
@@ -403,161 +373,86 @@ export default function App() {
             />
           )}
 
-          {/* TAB: Matriz Fiscal de Taxas */}
-          {activeTab === 'fiscal_matrix' && (
+          {/* TAB: Matriz Fiscal de Taxas (Exclusivo Staff) */}
+          {activeTab === 'fiscal_matrix' && isStaff && user && (
             <AdminAdvancedSettingsTab
-              currentUser={user || defaultAdminUser}
+              currentUser={user}
               initialSection="fiscal_intelligence"
             />
           )}
 
-          {/* TAB: IA Fiscal & Notícias Oficiais */}
-          {activeTab === 'fiscal_ai' && (
+          {/* TAB: IA Fiscal & Notícias Oficiais (Exclusivo Staff) */}
+          {activeTab === 'fiscal_ai' && isStaff && user && (
             <AdminAdvancedSettingsTab
-              currentUser={user || defaultAdminUser}
+              currentUser={user}
               initialSection="fiscal_intelligence"
             />
           )}
 
-          {/* TAB: Multi-Plataformas & Central de Download */}
-          {activeTab === 'multiplatform_hub' && (
+          {/* TAB: Multi-Plataformas & Central de Download (Exclusivo Staff) */}
+          {activeTab === 'multiplatform_hub' && isStaff && user && (
             <AdminAdvancedSettingsTab
-              currentUser={user || defaultAdminUser}
+              currentUser={user}
               initialSection="multiplatform"
             />
           )}
 
-          {/* TAB: Gestão de Clientes */}
-          {activeTab === 'clients_management' && (
-            <ClientsManagementTab
-              currentUser={
-                user || {
-                  id: 'admin_demo',
-                  name: 'Super Administrador NANUCLOUD',
-                  email: 'admin@nanucloud.com',
-                  role: 'super_admin',
-                  isActive: true,
-                  queriesRemaining: 999999,
-                  totalQueriesUsed: 0,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }
-              }
+          {/* Backoffice Security Gate: Bloqueio para Visitantes e Clientes */}
+          {[
+            'clients_management',
+            'users_management',
+            'tickets',
+            'marketing',
+            'reports_metrics',
+            'admin_settings',
+            'docs_deploy',
+            'admin',
+            'manuals',
+            'fiscal_matrix',
+            'fiscal_ai',
+            'multiplatform_hub'
+          ].includes(activeTab) && !isStaff && (
+            <BackofficeAccessDenied
+              user={user}
+              onGoToFrontEnd={() => setActiveTab('local')}
+              onOpenLogin={() => handleOpenAuth('login')}
+              onOpenPlans={() => setIsPlansOpen(true)}
             />
+          )}
+
+          {/* TAB: Gestão de Clientes */}
+          {activeTab === 'clients_management' && isStaff && user && (
+            <ClientsManagementTab currentUser={user} />
           )}
 
           {/* TAB: Gestão de Utilizadores (Staff) */}
-          {activeTab === 'users_management' && (
-            <UsersManagementTab
-              currentUser={
-                user || {
-                  id: 'admin_demo',
-                  name: 'Super Administrador NANUCLOUD',
-                  email: 'admin@nanucloud.com',
-                  role: 'super_admin',
-                  isActive: true,
-                  queriesRemaining: 999999,
-                  totalQueriesUsed: 0,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }
-              }
-            />
+          {activeTab === 'users_management' && isStaff && user && (
+            <UsersManagementTab currentUser={user} />
           )}
 
           {/* TAB: Tickets & Atendimento */}
-          {activeTab === 'tickets' && (
-            <TicketsManagementTab
-              currentUser={
-                user || {
-                  id: 'usr_admin_1',
-                  name: 'Super Administrador NANUCLOUD',
-                  email: 'admin@nanucloud.com',
-                  role: 'super_admin',
-                  isActive: true,
-                  queriesRemaining: 999999,
-                  totalQueriesUsed: 0,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }
-              }
-            />
+          {activeTab === 'tickets' && isStaff && user && (
+            <TicketsManagementTab currentUser={user} />
           )}
 
           {/* TAB: Marketing, SMS & E-mail */}
-          {activeTab === 'marketing' && (
-            <MarketingCampaignsTab
-              currentUser={
-                user || {
-                  id: 'usr_admin_1',
-                  name: 'Super Administrador NANUCLOUD',
-                  email: 'admin@nanucloud.com',
-                  role: 'super_admin',
-                  isActive: true,
-                  queriesRemaining: 999999,
-                  totalQueriesUsed: 0,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }
-              }
-            />
+          {activeTab === 'marketing' && isStaff && user && (
+            <MarketingCampaignsTab currentUser={user} />
           )}
 
           {/* TAB: Métricas, Vendas & Auditoria */}
-          {activeTab === 'reports_metrics' && (
-            <ReportsAndMetricsTab
-              currentUser={
-                user || {
-                  id: 'usr_admin_1',
-                  name: 'Super Administrador NANUCLOUD',
-                  email: 'admin@nanucloud.com',
-                  role: 'super_admin',
-                  isActive: true,
-                  queriesRemaining: 999999,
-                  totalQueriesUsed: 0,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }
-              }
-            />
+          {activeTab === 'reports_metrics' && isStaff && user && (
+            <ReportsAndMetricsTab currentUser={user} />
           )}
 
           {/* TAB: Definições Avançadas & RBAC */}
-          {activeTab === 'admin_settings' && (
-            <AdminAdvancedSettingsTab
-              currentUser={
-                user || {
-                  id: 'usr_admin_1',
-                  name: 'Super Administrador NANUCLOUD',
-                  email: 'admin@nanucloud.com',
-                  role: 'super_admin',
-                  isActive: true,
-                  queriesRemaining: 999999,
-                  totalQueriesUsed: 0,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }
-              }
-            />
+          {activeTab === 'admin_settings' && isStaff && user && (
+            <AdminAdvancedSettingsTab currentUser={user} />
           )}
 
           {/* TAB: Docs & Deploy (Exclusivo Super Admin) */}
-          {activeTab === 'docs_deploy' && (
-            <DocsAndDeployTab
-              currentUser={
-                user || {
-                  id: 'usr_admin_1',
-                  name: 'Super Administrador NANUCLOUD',
-                  email: 'admin@nanucloud.com',
-                  role: 'super_admin',
-                  isActive: true,
-                  queriesRemaining: 999999,
-                  totalQueriesUsed: 0,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                }
-              }
-            />
+          {activeTab === 'docs_deploy' && isStaff && user && (
+            <DocsAndDeployTab currentUser={user} />
           )}
 
           {/* TAB: Perfil & Histórico */}
@@ -585,16 +480,16 @@ export default function App() {
           )}
 
           {/* TAB: Manuais & Documentação */}
-          {activeTab === 'manuals' && (
+          {activeTab === 'manuals' && isStaff && user && (
             <AdminAdvancedSettingsTab
-              currentUser={user || defaultAdminUser}
+              currentUser={user}
               initialSection="manuals"
             />
           )}
 
           {/* TAB: Painel Administrativo Geral */}
-          {activeTab === 'admin' && (
-            <AdminPanel user={user || defaultAdminUser} onRefreshUser={checkAuth} />
+          {activeTab === 'admin' && isStaff && user && (
+            <AdminPanel user={user} onRefreshUser={checkAuth} />
           )}
 
         </div>

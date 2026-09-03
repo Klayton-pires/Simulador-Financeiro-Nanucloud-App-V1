@@ -25,6 +25,8 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ClientCreditNoticeBanner } from './ClientCreditNoticeBanner';
+import { canUserSimulate } from '../utils/accessControl';
 
 interface ServicesConsultingSimulatorProps {
   user: UserSafe | null;
@@ -188,15 +190,23 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
       return;
     }
 
-    if (user && user.queriesRemaining <= 0) {
-      setErrorMessage('As suas consultas esgotaram. Adquira um plano para continuar.');
+    // AUTH & RBAC SIMULATION CHECK
+    if (!user) {
+      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
+      onOpenAuth();
+      return;
+    }
+
+    const simCheck = canUserSimulate(user);
+    if (!simCheck.allowed) {
+      setErrorMessage(simCheck.message);
       onOpenPlans();
       return;
     }
 
     setIsCalculating(true);
     try {
-      if (user && user.queriesRemaining > 0) {
+      if (user && user.queriesRemaining > 0 && user.role !== 'staff' && user.role !== 'admin' && user.role !== 'admin_level1' && user.role !== 'super_admin') {
         const newQueries = Math.max(0, user.queriesRemaining - 1);
         onCalculationDone(newQueries);
       }
@@ -457,6 +467,13 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
           Simulação guardada com sucesso no histórico local!
         </div>
       )}
+
+      {/* Aviso de Créditos e Estado de Acesso RBAC */}
+      <ClientCreditNoticeBanner
+        user={user}
+        onOpenPlans={onOpenPlans}
+        onOpenAuth={onOpenAuth}
+      />
 
       {/* Main Grid: Form Inputs (Left 7 cols) & Live Results (Right 5 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

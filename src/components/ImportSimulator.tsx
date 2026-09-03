@@ -20,6 +20,8 @@ import {
   exportSimulationDossierPDF,
   exportSimulationDossierExcel
 } from '../utils/exportDocumentUtils';
+import { isStaffOrAdmin, canUserSimulate } from '../utils/accessControl';
+import { ClientCreditNoticeBanner } from './ClientCreditNoticeBanner';
 
 interface ImportSimulatorProps {
   user: UserSafe | null;
@@ -38,7 +40,8 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
 }) => {
   const t = TRANSLATIONS[currentLang] || TRANSLATIONS.pt;
 
-  const isUnlocked = user ? (user.isImportUnlocked || user.role !== 'user') : false;
+  const isStaff = isStaffOrAdmin(user?.role);
+  const isUnlocked = isStaff || (user ? Boolean(user.isImportUnlocked || user.activePlanId) : false);
 
   const [originCountry, setOriginCountry] = useState<string>('CN');
   const [destCountry, setDestCountry] = useState<string>('AO');
@@ -83,18 +86,22 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
       return;
     }
 
+    // AUTH & RBAC SIMULATION CHECK
     if (!user) {
+      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
       onOpenAuth();
       return;
     }
 
     if (!isUnlocked) {
+      setErrorMessage('O módulo de importação requer um plano compatível ou desbloqueio de créditos.');
       onOpenPlans();
       return;
     }
 
-    if (user.queriesRemaining <= 0) {
-      setErrorMessage('As suas consultas esgotaram. Por favor recarregue os seus créditos.');
+    const simCheck = canUserSimulate(user);
+    if (!simCheck.allowed) {
+      setErrorMessage(simCheck.message);
       onOpenPlans();
       return;
     }
@@ -309,6 +316,13 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Aviso de Créditos e Estado de Acesso RBAC */}
+      <ClientCreditNoticeBanner
+        user={user}
+        onOpenPlans={onOpenPlans}
+        onOpenAuth={onOpenAuth}
+      />
+
       {/* Import Form Card */}
       <div className="bg-slate-850 border border-slate-700/80 rounded-3xl p-5 md:p-8 shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-700/80 pb-4 mb-6">

@@ -1,6 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { Plan, UserSafe, BankAccount } from '../types';
-import { Gem, Check, Sparkles, X, CreditCard, Send, ShieldCheck, ArrowRight, Clock, HelpCircle, PhoneCall, Copy, Building, MessageSquare, AlertCircle, Smartphone, Hash, QrCode, Globe } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plan, UserSafe, BankAccount, Transaction } from '../types';
+import {
+  Gem,
+  Check,
+  Sparkles,
+  X,
+  CreditCard,
+  Send,
+  ShieldCheck,
+  ArrowRight,
+  Clock,
+  HelpCircle,
+  PhoneCall,
+  Copy,
+  Building,
+  MessageSquare,
+  AlertCircle,
+  Smartphone,
+  Hash,
+  QrCode,
+  Globe,
+  Paperclip,
+  UploadCloud,
+  FileText,
+  Image as ImageIcon,
+  Trash2,
+  CheckCircle2,
+  ExternalLink,
+  Eye
+} from 'lucide-react';
 import { NanuCloudLogo } from './NanuCloudLogo';
 
 interface PlansModalProps {
@@ -51,6 +79,85 @@ export const PlansModal: React.FC<PlansModalProps> = ({
   const [authPromptOpen, setAuthPromptOpen] = useState<boolean>(false);
   const [pendingSelectedPlan, setPendingSelectedPlan] = useState<Plan | null>(null);
   const [pendingIsCustom, setPendingIsCustom] = useState<boolean>(false);
+
+  // Attachment state for initial checkout
+  const [proofFile, setProofFile] = useState<{
+    name: string;
+    size: number;
+    type: string;
+    dataUrl: string;
+  } | null>(null);
+  const [isDraggingProof, setIsDraggingProof] = useState<boolean>(false);
+  const proofFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Created Transaction after order submission (for post-payment proof upload)
+  const [createdTransaction, setCreatedTransaction] = useState<Transaction | null>(null);
+
+  // Post-payment proof submission state
+  const [postProofFile, setPostProofFile] = useState<{
+    name: string;
+    size: number;
+    type: string;
+    dataUrl: string;
+  } | null>(null);
+  const [postProofRef, setPostProofRef] = useState<string>('');
+  const [postProofNotes, setPostProofNotes] = useState<string>('');
+  const [isSubmittingPostProof, setIsSubmittingPostProof] = useState<boolean>(false);
+  const [postProofSuccess, setPostProofSuccess] = useState<boolean>(false);
+  const [postProofError, setPostProofError] = useState<string | null>(null);
+  const [isDraggingPostProof, setIsDraggingPostProof] = useState<boolean>(false);
+  const postProofFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleProcessProofFile = (file: File, isPost: boolean = false) => {
+    setErrorMsg(null);
+    if (isPost) setPostProofError(null);
+
+    if (file.size > 15 * 1024 * 1024) {
+      const msg = 'O ficheiro selecionado é demasiado grande (limite máximo de 15 MB).';
+      if (isPost) setPostProofError(msg);
+      else setErrorMsg(msg);
+      return;
+    }
+
+    const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name);
+
+    if (!isPdf && !isImage) {
+      const msg = 'Formato inválido. Por favor anexe uma imagem (PNG, JPG, JPEG, WEBP) ou documento PDF.';
+      if (isPost) setPostProofError(msg);
+      else setErrorMsg(msg);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const fileData = {
+        name: file.name,
+        size: file.size,
+        type: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
+        dataUrl
+      };
+      if (isPost) {
+        setPostProofFile(fileData);
+      } else {
+        setProofFile(fileData);
+      }
+    };
+    reader.onerror = () => {
+      const msg = 'Erro ao processar ficheiro. Tente novamente.';
+      if (isPost) setPostProofError(msg);
+      else setErrorMsg(msg);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return 'N/D';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
   const [paymentToggles, setPaymentToggles] = useState({
     bankTransfer: true,
     emis: true,
@@ -184,8 +291,8 @@ export const PlansModal: React.FC<PlansModalProps> = ({
       return;
     }
 
-    if (paymentTab === 'bank_transfer' && !paymentReference.trim()) {
-      setErrorMsg('Por favor, informe a referência do comprovativo ou o número de talão bancário.');
+    if (paymentTab === 'bank_transfer' && !paymentReference.trim() && !proofFile) {
+      setErrorMsg('Por favor, anexe o ficheiro do comprovativo bancário (PDF ou imagem) ou informe o número do talão / referência.');
       return;
     }
 
@@ -205,6 +312,9 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
       if (paymentTab === 'bank_transfer') {
         reference = paymentReference.trim();
+        if (!reference && proofFile) {
+          reference = `TALÃO-${Date.now().toString().slice(-6)}`;
+        }
         notes = `[Transferência Bancária - Banco ID: ${selectedBankId}] ${proofNotes}`;
       } else if (paymentTab === 'express_ref') {
         reference = `MCX-REF-${Math.floor(100000000 + Math.random() * 900000000)}`;
@@ -239,6 +349,9 @@ export const PlansModal: React.FC<PlansModalProps> = ({
           customAmountKz: isCustomCheckout ? customAmountKz : undefined,
           paymentMethod: paymentTab,
           paymentReference: reference,
+          paymentProofUrl: proofFile?.dataUrl,
+          paymentProofName: proofFile?.name,
+          paymentProofSize: proofFile?.size,
           notes,
           userId: activeUser.id,
           userEmail: activeUser.email,
@@ -252,6 +365,9 @@ export const PlansModal: React.FC<PlansModalProps> = ({
         setErrorMsg(data.error || 'Erro ao processar pedido.');
       } else {
         setOrderSuccess(true);
+        if (data.transaction) {
+          setCreatedTransaction(data.transaction);
+        }
         if (paymentTab === 'paypal_visa' || paymentTab === 'stripe_card') {
           setSuccessDetails(`Pagamento digital validado com sucesso! As suas consultas (${data.transaction?.queriesCount || ''}) e acesso aos módulos foram imediatamente ativados na sua conta.`);
         } else {
@@ -263,6 +379,53 @@ export const PlansModal: React.FC<PlansModalProps> = ({
       setErrorMsg('Erro de comunicação com o servidor.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleUploadProofPostPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createdTransaction?.id) return;
+    if (!postProofFile && !postProofRef.trim()) {
+      setPostProofError('Por favor anexe o ficheiro do comprovativo (PDF ou imagem) ou indique o número de referência.');
+      return;
+    }
+
+    setIsSubmittingPostProof(true);
+    setPostProofError(null);
+    setPostProofSuccess(false);
+
+    try {
+      const token = localStorage.getItem('nanucloud_token');
+      const res = await fetch('/api/plans/upload-proof', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          transactionId: createdTransaction.id,
+          paymentProofUrl: postProofFile?.dataUrl || createdTransaction.paymentProofUrl,
+          paymentProofName: postProofFile?.name || createdTransaction.paymentProofName,
+          paymentProofSize: postProofFile?.size || createdTransaction.paymentProofSize,
+          paymentReference: postProofRef.trim() || createdTransaction.paymentReference,
+          notes: postProofNotes.trim() || createdTransaction.notes
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setPostProofError(data.error || 'Erro ao submeter comprovativo.');
+      } else {
+        setPostProofSuccess(true);
+        if (data.transaction) {
+          setCreatedTransaction(data.transaction);
+        }
+        onPurchaseSuccess();
+      }
+    } catch (err) {
+      setPostProofError('Erro de conexão com o servidor.');
+    } finally {
+      setIsSubmittingPostProof(false);
     }
   };
 
@@ -476,24 +639,247 @@ export const PlansModal: React.FC<PlansModalProps> = ({
             </div>
 
             {orderSuccess ? (
-              <div className="text-center py-10 space-y-4 font-mono">
-                <div className="w-12 h-12 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto">
-                  <ShieldCheck className="w-6 h-6" />
+              <div className="py-6 space-y-5 font-mono">
+                <div className="text-center space-y-2">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-sm">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-100 uppercase tracking-tight">
+                    {paymentTab === 'paypal_visa' || paymentTab === 'stripe_card'
+                      ? 'Pagamento Confirmado & Plano Ativado!'
+                      : 'Pedido Registado com Sucesso!'}
+                  </h3>
+                  <p className="text-xs text-slate-300 max-w-lg mx-auto leading-relaxed">
+                    {successDetails || 'A nossa equipa de administração irá verificar o pagamento e creditar as suas consultas de imediato.'}
+                  </p>
                 </div>
-                <h3 className="text-base font-bold text-slate-100 uppercase tracking-tight">
-                  {paymentTab === 'paypal_visa' || paymentTab === 'stripe_card'
-                    ? 'Pagamento Confirmado & Plano Ativado!'
-                    : 'Pedido Registado com Sucesso!'}
-                </h3>
-                <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
-                  {successDetails || 'A nossa equipa de administração irá verificar o pagamento e creditar as suas consultas de imediato.'}
-                </p>
-                <button
-                  onClick={onClose}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold py-2 px-5 rounded-lg text-xs uppercase tracking-tight transition cursor-pointer shadow"
-                >
-                  Concluir & Começar a Utilizar
-                </button>
+
+                {/* Transaction details card */}
+                {createdTransaction && (
+                  <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-4 max-w-xl mx-auto text-xs space-y-2.5">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                      <span className="text-slate-400 text-[11px]">Identificador do Pedido:</span>
+                      <span className="font-bold text-indigo-400 font-mono">{createdTransaction.id}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400">Plano Solicitado:</span>
+                      <span className="font-semibold text-slate-200">{createdTransaction.planName}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400">Montante:</span>
+                      <span className="font-bold text-emerald-400 font-mono text-sm">{createdTransaction.amountKz.toLocaleString('pt-PT')} Kz</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400">Estado Atual:</span>
+                      <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Pendente de Conferência
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* OPTION: SUBMETER COMPROVATIVO APÓS O PAGAMENTO */}
+                {paymentTab !== 'paypal_visa' && paymentTab !== 'stripe_card' && (
+                  <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 max-w-xl mx-auto space-y-4 text-xs">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <Paperclip className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-100 uppercase tracking-tight text-xs">
+                            Opção: Submeter Comprovativo com Anexo
+                          </h4>
+                          <p className="text-[10px] text-slate-400">
+                            Anexe o talão da transferência ou documento PDF para acelerar a aprovação.
+                          </p>
+                        </div>
+                      </div>
+                      {createdTransaction?.paymentProofUrl && (
+                        <span className="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded font-bold border border-emerald-500/30 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Anexado
+                        </span>
+                      )}
+                    </div>
+
+                    {/* If proof is already attached */}
+                    {createdTransaction?.paymentProofUrl && !postProofFile && (
+                      <div className="bg-[#0F172A] p-3 rounded-lg border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 truncate">
+                            <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span className="font-bold text-slate-200 text-xs truncate">
+                              {createdTransaction.paymentProofName || 'Comprovativo de Pagamento'}
+                            </span>
+                          </div>
+                          <a
+                            href={createdTransaction.paymentProofUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-indigo-400 hover:text-indigo-300 text-[11px] flex items-center gap-1 font-bold ml-2 shrink-0"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Ver Ficheiro
+                          </a>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-sans">
+                          Comprovativo registado no sistema. Se pretende alterar o ficheiro ou enviar outro comprovativo, utilize o formulário abaixo.
+                        </p>
+                      </div>
+                    )}
+
+                    {postProofSuccess && (
+                      <div className="p-3 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Comprovativo com anexo submetido com sucesso! A nossa equipa irá conferir e ativar as pesquisas.</span>
+                      </div>
+                    )}
+
+                    {postProofError && (
+                      <div className="p-3 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{postProofError}</span>
+                      </div>
+                    )}
+
+                    {/* Post payment upload form */}
+                    <form onSubmit={handleUploadProofPostPayment} className="space-y-3">
+                      <div>
+                        <label className="text-slate-300 font-bold block mb-1 flex justify-between">
+                          <span>Anexo do Documento (PDF, Imagem PNG, JPG, WEBP) *:</span>
+                          <span className="text-[10px] text-slate-500">Máx. 15 MB</span>
+                        </label>
+
+                        <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDraggingPostProof(true);
+                          }}
+                          onDragLeave={() => setIsDraggingPostProof(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDraggingPostProof(false);
+                            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                              handleProcessProofFile(e.dataTransfer.files[0], true);
+                            }
+                          }}
+                          onClick={() => postProofFileInputRef.current?.click()}
+                          className={`border-2 border-dashed rounded-lg p-4 text-center transition cursor-pointer ${
+                            isDraggingPostProof
+                              ? 'border-emerald-500 bg-emerald-500/10'
+                              : postProofFile
+                              ? 'border-emerald-500/60 bg-emerald-950/20'
+                              : 'border-slate-700 hover:border-emerald-500/50 bg-[#0F172A]'
+                          }`}
+                        >
+                          <input
+                            type="file"
+                            ref={postProofFileInputRef}
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                handleProcessProofFile(e.target.files[0], true);
+                              }
+                            }}
+                            accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                            className="hidden"
+                          />
+
+                          {postProofFile ? (
+                            <div className="flex items-center justify-between text-left gap-2">
+                              <div className="flex items-center gap-2.5 overflow-hidden">
+                                {postProofFile.type === 'application/pdf' ? (
+                                  <FileText className="w-7 h-7 text-rose-400 shrink-0" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded border border-slate-700 overflow-hidden bg-slate-950 shrink-0">
+                                    <img src={postProofFile.dataUrl} alt="Preview" className="w-full h-full object-cover" />
+                                  </div>
+                                )}
+                                <div className="truncate">
+                                  <span className="font-bold text-slate-100 text-xs block truncate">{postProofFile.name}</span>
+                                  <span className="text-[10px] text-emerald-400 font-mono">
+                                    {formatFileSize(postProofFile.size)} • Pronto para envio
+                                  </span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPostProofFile(null);
+                                }}
+                                className="p-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition"
+                                title="Remover anexo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-1 py-1">
+                              <div className="flex items-center justify-center gap-1.5 text-emerald-400">
+                                <UploadCloud className="w-4 h-4" />
+                                <span className="font-bold text-slate-200 text-xs">
+                                  {createdTransaction?.paymentProofUrl ? 'Substituir / Carregar Novo Anexo' : 'Clique para Anexar Comprovativo'}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400">
+                                Arraste ou clique para selecionar foto do talão ou ficheiro PDF
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-slate-400 font-bold block mb-1">
+                            N.º de Referência / Talão:
+                          </label>
+                          <input
+                            type="text"
+                            value={postProofRef}
+                            onChange={(e) => setPostProofRef(e.target.value)}
+                            placeholder={createdTransaction?.paymentReference || 'Ex: TALÃO BAI-9284'}
+                            className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-slate-400 font-bold block mb-1">
+                            Notas / Titular da Conta:
+                          </label>
+                          <input
+                            type="text"
+                            value={postProofNotes}
+                            onChange={(e) => setPostProofNotes(e.target.value)}
+                            placeholder="Ex: Titular Manuel Silva..."
+                            className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 font-sans"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSubmittingPostProof || (!postProofFile && !postProofRef.trim())}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-lg text-xs uppercase tracking-tight flex items-center justify-center gap-2 cursor-pointer shadow transition"
+                      >
+                        <Paperclip className="w-4 h-4" />
+                        <span>{isSubmittingPostProof ? 'A Enviar Comprovativo...' : 'Submeter Comprovativo com Anexo'}</span>
+                      </button>
+                    </form>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    onClick={onClose}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono font-bold py-2 px-6 rounded-lg text-xs uppercase tracking-tight transition cursor-pointer shadow border border-slate-700"
+                  >
+                    Concluir & Fechar
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-6">
@@ -786,6 +1172,91 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                       )}
 
                       <form onSubmit={handleSubmitOrder} className="space-y-3">
+                        {/* Anexo do Comprovativo */}
+                        <div>
+                          <label className="text-slate-400 font-bold block mb-1 flex items-center justify-between">
+                            <span>Anexo do Comprovativo (PDF, PNG, JPG, WEBP):</span>
+                            <span className="text-[10px] text-slate-500 font-normal">Máx. 15 MB</span>
+                          </label>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setIsDraggingProof(true);
+                            }}
+                            onDragLeave={() => setIsDraggingProof(false)}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setIsDraggingProof(false);
+                              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                handleProcessProofFile(e.dataTransfer.files[0], false);
+                              }
+                            }}
+                            onClick={() => proofFileInputRef.current?.click()}
+                            className={`border-2 border-dashed rounded-lg p-3 text-center transition cursor-pointer ${
+                              isDraggingProof
+                                ? 'border-emerald-500 bg-emerald-500/10'
+                                : proofFile
+                                ? 'border-emerald-500/60 bg-emerald-950/20'
+                                : 'border-slate-800 hover:border-emerald-500/50 bg-[#0F172A]'
+                            }`}
+                          >
+                            <input
+                              type="file"
+                              ref={proofFileInputRef}
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                handleProcessProofFile(e.target.files[0], false);
+                                }
+                              }}
+                              accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                              className="hidden"
+                            />
+
+                            {proofFile ? (
+                              <div className="flex items-center justify-between text-left gap-2">
+                                <div className="flex items-center gap-2.5 overflow-hidden">
+                                  {proofFile.type === 'application/pdf' ? (
+                                    <FileText className="w-6 h-6 text-rose-400 shrink-0" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded border border-slate-700 overflow-hidden bg-slate-950 shrink-0">
+                                      <img src={proofFile.dataUrl} alt="Preview" className="w-full h-full object-cover" />
+                                    </div>
+                                  )}
+                                  <div className="truncate">
+                                    <span className="font-bold text-slate-100 text-xs block truncate">{proofFile.name}</span>
+                                    <span className="text-[10px] text-emerald-400 font-mono">
+                                      {formatFileSize(proofFile.size)} • Anexo pronto
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setProofFile(null);
+                                  }}
+                                  className="p-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition"
+                                  title="Remover anexo"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="space-y-1 py-1">
+                                <div className="flex items-center justify-center gap-1.5 text-emerald-400">
+                                  <Paperclip className="w-4 h-4" />
+                                  <span className="font-bold text-slate-200 text-xs">Anexar Comprovativo</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400">
+                                  Clique ou arraste o ficheiro do talão bancário ou PDF aqui
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
                         <div>
                           <label className="text-slate-400 font-bold block mb-1">
                             N.º de Referência do Talão / ID da Transação *:

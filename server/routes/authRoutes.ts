@@ -1,51 +1,30 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { db } from '../db.js';
-import { generateToken, AuthRequest, requireAuth } from '../auth.js';
+import { generateToken, AuthRequest, requireAuth, isStaffOrAdminRole } from '../auth.js';
 import { User } from '../types.js';
 
 const router = Router();
 
-// 0. ACESSO DIRETO AO BACK OFFICE (SEM SENHA)
+// 0. VERIFICAÇÃO DE ACESSO AO BACK OFFICE (EXCLUSIVO STAFF E ADMINISTRAÇÃO COM SENHA)
 router.all('/backoffice-direct', (req: AuthRequest, res: Response) => {
-  const superAdmin = db.findUserByEmail('nanuhost') || db.findUserByEmail('klayton.pires.monteiro@gmail.com') || db.getUsers().find(u => u.role === 'admin_level1' || (u.role as string) === 'super_admin') || ({
-    id: 'usr_admin_nanuhost',
-    name: 'Super Administrador (nanuhost)',
-    email: 'nanuhost',
-    role: 'admin_level1',
-    passwordHash: '',
-    isActive: true,
-    country: 'AO',
-    queriesRemaining: 999999,
-    totalQueriesUsed: 0,
-    activePlanId: 'plan_diamante',
-    activePlanName: 'Diamante Ilimitado (Super Admin)',
-    planExpiresAt: null,
-    isImportUnlocked: true,
-    isBatchUnlocked: true,
-    isApiUnlocked: true,
-    lastLoginAt: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  } as unknown as User);
+  // Apenas utilizadores com sessão autenticada com palavra-passe válida e com perfil de Staff/Admin
+  if (req.user && isStaffOrAdminRole(req.user.role)) {
+    const { passwordHash: _, ...userSafe } = req.user;
+    return res.json({
+      message: 'Sessão de Back Office validada com sucesso.',
+      user: userSafe
+    });
+  }
 
-  const token = generateToken(superAdmin);
-  res.cookie('nanucloud_token', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 30 * 24 * 60 * 60 * 1000
-  });
-
-  const { passwordHash: _, ...userSafe } = superAdmin;
-  return res.json({
-    message: 'Acesso ao Back Office concedido sem senha com privilégios de Super Administrador.',
-    user: userSafe,
-    token
+  // Não é permitido aceder ao Backoffice sem palavra-passe
+  return res.status(401).json({
+    error: 'Acesso restrito ao Backoffice. É obrigatório iniciar sessão com e-mail e palavra-passe de Staff ou Administrador.',
+    requiresStaffLogin: true
   });
 });
 
-// 1. REGISTO DE UTILIZADOR
+// 1. REGISTO DE UTILIZADOR (EXCLUSIVO CLIENTES FINAIS PARA O FRONT-END)
 router.post('/register', async (req: AuthRequest, res: Response) => {
   try {
     const { name, email, phone, company, address, nif, country, password, confirmPassword, acceptTerms, otpCode } = req.body;
@@ -101,6 +80,8 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
     const passwordHash = bcrypt.hashSync(password, salt);
     const freeQueries = settings.freeQueriesOnRegister || 3;
 
+    // REGRA DE OURO: A criação pública pelo login é ESTRITAMENTE para clientes finais usarem o Front-End
+    // Contas de Staff, Gerentes ou Administradores só podem ser criadas por administradores dentro do Backoffice
     const newUser: User = {
       id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: name.trim(),
@@ -111,7 +92,7 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
       nif: nif ? nif.trim() : undefined,
       country: country || 'AO',
       passwordHash,
-      role: 'user',
+      role: 'user', // Estritamente 'user' (cliente final de Front-End)
       isActive: true,
       queriesRemaining: freeQueries,
       totalQueriesUsed: 0,

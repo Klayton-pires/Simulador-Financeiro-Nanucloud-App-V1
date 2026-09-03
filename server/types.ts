@@ -1,4 +1,13 @@
-export type UserRole = 'user' | 'admin_level2' | 'admin_level1';
+export type UserRole =
+  | 'super_admin'
+  | 'superadmin'
+  | 'admin_level1'
+  | 'admin_level2'
+  | 'admin'
+  | 'manager'
+  | 'staff'
+  | 'user'
+  | 'client';
 
 export interface User {
   id: string;
@@ -92,6 +101,8 @@ export interface Transaction {
   validityDays: number;
   paymentMethod: string; // 'multicaixa_express' | 'bank_transfer' | 'express_ref' | 'express_phone'
   paymentProofUrl?: string;
+  paymentProofName?: string;
+  paymentProofSize?: number;
   paymentReference?: string;
   notes?: string;
   status: TransactionStatus;

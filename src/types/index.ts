@@ -1,4 +1,13 @@
-export type UserRole = 'super_admin' | 'admin' | 'manager' | 'user' | 'client' | 'admin_level1' | 'admin_level2';
+export type UserRole =
+  | 'super_admin'
+  | 'superadmin'
+  | 'admin_level1'
+  | 'admin_level2'
+  | 'admin'
+  | 'manager'
+  | 'staff'
+  | 'user'
+  | 'client';
 
 export interface PermissionGroup {
   id: string;
@@ -233,6 +242,8 @@ export interface Transaction {
   validityDays: number;
   paymentMethod: string;
   paymentProofUrl?: string;
+  paymentProofName?: string;
+  paymentProofSize?: number;
   paymentReference?: string;
   notes?: string;
   status: TransactionStatus;

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { UserSafe, Plan, Transaction, AuditLog, SystemSettings, SupportInquiry, BankAccount, ChatMessage } from '../types';
-import { Shield, ShieldAlert, CheckCircle2, XCircle, Users, Gem, Activity, Settings, Database, MessageSquare, Download, Edit3, Plus, Search, Check, Trash2, Key, RefreshCw, Building, Bot, Send, FileText, Sparkles, HardDrive } from 'lucide-react';
+import { Shield, ShieldAlert, CheckCircle2, XCircle, Users, Gem, Activity, Settings, Database, MessageSquare, Download, Edit3, Plus, Search, Check, Trash2, Key, RefreshCw, Building, Bot, Send, FileText, Sparkles, HardDrive, Eye, EyeOff, Paperclip, Clock, ExternalLink } from 'lucide-react';
 import { ScrollableRibbon } from './common/ScrollableRibbon';
+import { ProofAttachmentModal } from './ProofAttachmentModal';
 import { AdminStatementsTab } from './admin/AdminStatementsTab';
 import { AdminFiscalAiTab } from './admin/AdminFiscalAiTab';
 import { AdminSecurityApiTab } from './admin/AdminSecurityApiTab';
@@ -51,6 +52,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
 
   // User modal / edit state
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<UserSafe | null>(null);
+  const [userPasswordModal, setUserPasswordModal] = useState<{ user: UserSafe; newPassword: string; showPlain: boolean } | null>(null);
   const [userFormData, setUserFormData] = useState({
     name: '',
     email: '',
@@ -75,6 +77,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
   // Search & Filter
   const [userSearchTerm, setUserSearchTerm] = useState<string>('');
   const [logFilterTerm, setLogFilterTerm] = useState<string>('');
+  const [txSearchTerm, setTxSearchTerm] = useState<string>('');
+  const [txStatusFilter, setTxStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [selectedProofTx, setSelectedProofTx] = useState<Transaction | null>(null);
+  const [proofModalMode, setProofModalMode] = useState<'view' | 'upload'>('view');
 
   useEffect(() => {
     loadAllData();
@@ -249,12 +255,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
     }
   };
 
-  const handleValidateTransaction = async (id: string, action: 'approve' | 'reject') => {
+  const handleValidateTransaction = async (id: string, action: 'approve' | 'reject', notes?: string) => {
     try {
+      const token = localStorage.getItem('nanucloud_token');
       const res = await fetch(`/api/admin/transactions/${id}/validate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ action, notes })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -307,6 +317,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleUpdateUserPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userPasswordModal) return;
+    if (!userPasswordModal.newPassword || userPasswordModal.newPassword.trim().length < 4) {
+      setAlertMsg({ text: 'A palavra-passe deve ter pelo menos 4 caracteres.', type: 'error' });
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/users/${userPasswordModal.user.id}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: userPasswordModal.newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAlertMsg({ text: data.error || 'Erro ao alterar palavra-passe.', type: 'error' });
+      } else {
+        setAlertMsg({ text: data.message || `Palavra-passe de ${userPasswordModal.user.name} atualizada com sucesso!`, type: 'success' });
+        setUserPasswordModal(null);
+        loadAllData();
+      }
+    } catch (err) {
+      setAlertMsg({ text: 'Falha na comunicação com o servidor ao redefinir a palavra-passe.', type: 'error' });
     }
   };
 
@@ -643,92 +680,288 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
       )}
 
       {/* 2. TAB: VALIDAÇÃO DE PAGAMENTOS */}
-      {activeTab === 'payments' && (
-        <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 md:p-6 shadow-sm space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-800 pb-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-100 font-mono uppercase tracking-tight">Validação e Ativação de Pagamentos</h3>
-              <p className="text-xs text-slate-400">Aprovar adiciona automaticamente os créditos e desbloqueia os módulos do cliente</p>
-            </div>
-          </div>
+      {activeTab === 'payments' && (() => {
+        const pendingTxs = transactions.filter(t => t.status === 'pending');
+        const approvedTxs = transactions.filter(t => t.status === 'approved');
+        const rejectedTxs = transactions.filter(t => t.status === 'rejected');
+        const totalPendingKz = pendingTxs.reduce((sum, t) => sum + (t.amountKz || 0), 0);
 
-          {transactions.length === 0 ? (
-            <p className="text-xs text-slate-400 py-6 text-center font-mono">Nenhum pagamento registado.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900/60 text-slate-400 font-mono font-bold uppercase tracking-wider text-[10px]">
-                  <tr>
-                    <th className="p-3">Data</th>
-                    <th className="p-3">Cliente</th>
-                    <th className="p-3">Plano</th>
-                    <th className="p-3">Valor</th>
-                    <th className="p-3">Pesquisas</th>
-                    <th className="p-3">Ref / Comprovativo</th>
-                    <th className="p-3">Estado</th>
-                    <th className="p-3 text-right">Ação</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800 text-slate-200">
-                  {transactions.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 text-slate-400 font-mono whitespace-nowrap">
-                        {new Date(tx.createdAt).toLocaleDateString('pt-PT')}
-                      </td>
-                      <td className="p-3">
-                        <p className="font-bold text-slate-100">{tx.userName}</p>
-                        <p className="text-[10px] text-indigo-400 font-mono">{tx.userEmail}</p>
-                      </td>
-                      <td className="p-3 font-semibold">{tx.planName}</td>
-                      <td className="p-3 font-bold font-mono text-slate-100 whitespace-nowrap">
-                        {tx.amountKz.toLocaleString('pt-PT')} Kz
-                      </td>
-                      <td className="p-3 font-bold font-mono text-amber-400">+{tx.queriesGranted}</td>
-                      <td className="p-3 text-slate-300 font-mono text-[11px]">
-                        {tx.paymentReference || 'Sem referência'}
-                        {tx.notes && <p className="text-[10px] text-slate-400 font-sans">{tx.notes}</p>}
-                      </td>
-                      <td className="p-3 whitespace-nowrap">
-                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                          tx.status === 'approved'
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                            : tx.status === 'pending'
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse'
-                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                        }`}>
-                          {tx.status === 'approved' ? 'Aprovado' : (tx.status === 'pending' ? 'Pendente' : 'Rejeitado')}
-                        </span>
-                      </td>
-                      <td className="p-3 whitespace-nowrap text-right space-x-1 font-mono">
-                        {tx.status === 'pending' ? (
-                          <>
-                            <button
-                              onClick={() => handleValidateTransaction(tx.id, 'approve')}
-                              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-2.5 py-1 rounded text-xs transition"
-                              title="Aprovar e Ativar"
-                            >
-                              Aprovar
-                            </button>
-                            <button
-                              onClick={() => handleValidateTransaction(tx.id, 'reject')}
-                              className="bg-rose-950 hover:bg-rose-900 text-rose-300 font-bold px-2.5 py-1 rounded text-xs transition border border-rose-800"
-                              title="Rejeitar"
-                            >
-                              Rejeitar
-                            </button>
-                          </>
-                        ) : (
-                          <span className="text-[10px] text-slate-500">Processado</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        const filteredTransactions = transactions.filter(tx => {
+          if (txStatusFilter !== 'all' && tx.status !== txStatusFilter) return false;
+          if (txSearchTerm.trim()) {
+            const query = txSearchTerm.toLowerCase();
+            const matchName = tx.userName?.toLowerCase().includes(query);
+            const matchEmail = tx.userEmail?.toLowerCase().includes(query);
+            const matchPlan = tx.planName?.toLowerCase().includes(query);
+            const matchRef = tx.paymentReference?.toLowerCase().includes(query);
+            const matchNotes = tx.notes?.toLowerCase().includes(query);
+            if (!matchName && !matchEmail && !matchPlan && !matchRef && !matchNotes) {
+              return false;
+            }
+          }
+          return true;
+        });
+
+        return (
+          <div className="bg-[#1E293B] border border-slate-800 rounded-xl p-5 md:p-6 shadow-sm space-y-5">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-100 font-mono uppercase tracking-tight">
+                    Validação Financeira e Ativação de Planos
+                  </h3>
+                  {pendingTxs.length > 0 && (
+                    <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                      {pendingTxs.length} pendente{pendingTxs.length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  O cliente adere ao plano e fornece o comprovativo da transferência. A equipa da área financeira confere o anexo e valida manualmente a ativação creditando as pesquisas na conta do cliente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadAllData}
+                className="self-start sm:self-auto p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition flex items-center gap-1.5 text-xs font-mono cursor-pointer"
+                title="Atualizar lista"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Atualizar</span>
+              </button>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Financial Status Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                <span className="text-[10px] uppercase font-mono text-slate-400 font-bold block">Total Pedidos</span>
+                <span className="text-xl font-bold font-mono text-white">{transactions.length}</span>
+              </div>
+              <div className="bg-amber-950/20 p-3 rounded-xl border border-amber-500/30">
+                <span className="text-[10px] uppercase font-mono text-amber-400 font-bold block">Aguardando Validação</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-amber-300">{pendingTxs.length}</span>
+                  <span className="text-[10px] text-amber-400/80 font-mono">({totalPendingKz.toLocaleString('pt-PT')} Kz)</span>
+                </div>
+              </div>
+              <div className="bg-emerald-950/20 p-3 rounded-xl border border-emerald-500/30">
+                <span className="text-[10px] uppercase font-mono text-emerald-400 font-bold block">Aprovados / Creditados</span>
+                <span className="text-xl font-bold font-mono text-emerald-300">{approvedTxs.length}</span>
+              </div>
+              <div className="bg-rose-950/20 p-3 rounded-xl border border-rose-500/30">
+                <span className="text-[10px] uppercase font-mono text-rose-400 font-bold block">Rejeitados</span>
+                <span className="text-xl font-bold font-mono text-rose-300">{rejectedTxs.length}</span>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-1">
+              <div className="relative w-full md:w-80">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar por cliente, email, ref ou plano..."
+                  value={txSearchTerm}
+                  onChange={(e) => setTxSearchTerm(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setTxStatusFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+                    txStatusFilter === 'all'
+                      ? 'bg-indigo-600 text-white shadow'
+                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Todos ({transactions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTxStatusFilter('pending')}
+                  className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1 ${
+                    txStatusFilter === 'pending'
+                      ? 'bg-amber-600 text-white shadow'
+                      : 'bg-slate-800 text-amber-300 hover:bg-slate-700'
+                  }`}
+                >
+                  <Clock className="w-3 h-3" />
+                  <span>Pendentes ({pendingTxs.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTxStatusFilter('approved')}
+                  className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+                    txStatusFilter === 'approved'
+                      ? 'bg-emerald-600 text-white shadow'
+                      : 'bg-slate-800 text-emerald-300 hover:bg-slate-700'
+                  }`}
+                >
+                  Aprovados ({approvedTxs.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTxStatusFilter('rejected')}
+                  className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+                    txStatusFilter === 'rejected'
+                      ? 'bg-rose-600 text-white shadow'
+                      : 'bg-slate-800 text-rose-300 hover:bg-slate-700'
+                  }`}
+                >
+                  Rejeitados ({rejectedTxs.length})
+                </button>
+              </div>
+            </div>
+
+            {filteredTransactions.length === 0 ? (
+              <p className="text-xs text-slate-400 py-8 text-center font-mono bg-slate-900/30 rounded-xl border border-slate-800/80">
+                Nenhum pedido de adesão encontrado para o filtro selecionado.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900/60 text-slate-400 font-mono font-bold uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="p-3">Data</th>
+                      <th className="p-3">Cliente</th>
+                      <th className="p-3">Plano Solicitado</th>
+                      <th className="p-3">Valor</th>
+                      <th className="p-3">Créditos</th>
+                      <th className="p-3">Referência / Notas</th>
+                      <th className="p-3">Comprovativo Anexo</th>
+                      <th className="p-3">Estado</th>
+                      <th className="p-3 text-right">Validação Financeira</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800 text-slate-200">
+                    {filteredTransactions.map((tx) => (
+                      <tr key={tx.id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="p-3 text-slate-400 font-mono whitespace-nowrap">
+                          {new Date(tx.createdAt).toLocaleDateString('pt-PT')}
+                          <span className="block text-[10px] text-slate-500">
+                            {new Date(tx.createdAt).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <p className="font-bold text-slate-100">{tx.userName || 'Utilizador'}</p>
+                          <p className="text-[10px] text-indigo-400 font-mono">{tx.userEmail}</p>
+                        </td>
+                        <td className="p-3">
+                          <span className="font-semibold text-slate-200 block">{tx.planName}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">{tx.paymentMethod}</span>
+                        </td>
+                        <td className="p-3 font-bold font-mono text-slate-100 whitespace-nowrap">
+                          {tx.amountKz.toLocaleString('pt-PT')} Kz
+                        </td>
+                        <td className="p-3 font-bold font-mono text-amber-400 whitespace-nowrap">
+                          +{tx.queriesGranted} pesquisas
+                        </td>
+                        <td className="p-3 text-slate-300 font-mono text-[11px] max-w-xs">
+                          {tx.paymentReference ? (
+                            <span className="font-bold text-indigo-300">{tx.paymentReference}</span>
+                          ) : (
+                            <span className="text-slate-500 italic">Sem ref.</span>
+                          )}
+                          {tx.notes && <p className="text-[10px] text-slate-400 font-sans truncate" title={tx.notes}>{tx.notes}</p>}
+                        </td>
+                        <td className="p-3 whitespace-nowrap">
+                          {tx.paymentProofUrl ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedProofTx(tx);
+                                setProofModalMode('view');
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-500/40 text-[11px] font-mono transition cursor-pointer shadow-sm"
+                              title="Clique para abrir e conferir o anexo"
+                            >
+                              <Paperclip className="w-3 h-3 text-indigo-400 shrink-0" />
+                              <span className="truncate max-w-[120px]">{tx.paymentProofName || 'Ver Comprovativo'}</span>
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-1 text-[11px] text-slate-500 font-mono">
+                              <span>Sem anexo</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedProofTx(tx);
+                                  setProofModalMode('upload');
+                                }}
+                                className="text-indigo-400 hover:text-indigo-300 underline cursor-pointer ml-1"
+                              >
+                                + Anexar
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 whitespace-nowrap">
+                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded inline-flex items-center gap-1 ${
+                            tx.status === 'approved'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : tx.status === 'pending'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse'
+                              : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          }`}>
+                            {tx.status === 'approved' && <CheckCircle2 className="w-3 h-3" />}
+                            {tx.status === 'pending' && <Clock className="w-3 h-3" />}
+                            {tx.status === 'approved' ? 'Aprovado' : (tx.status === 'pending' ? 'Pendente' : 'Rejeitado')}
+                          </span>
+                          {tx.reviewedByAdminName && (
+                            <span className="block text-[9px] text-slate-500 font-mono mt-0.5">
+                              por {tx.reviewedByAdminName}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 whitespace-nowrap text-right space-x-1.5 font-mono">
+                          {tx.status === 'pending' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedProofTx(tx);
+                                  setProofModalMode('view');
+                                }}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition cursor-pointer shadow inline-flex items-center gap-1"
+                                title="Conferir comprovativo e validar ativação"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Conferir & Ativar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleValidateTransaction(tx.id, 'reject', 'Rejeitado pela área financeira')}
+                                className="bg-rose-950 hover:bg-rose-900 text-rose-300 font-bold px-2 py-1 rounded-lg text-xs transition border border-rose-800 cursor-pointer"
+                                title="Rejeitar pedido"
+                              >
+                                Rejeitar
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedProofTx(tx);
+                                setProofModalMode('view');
+                              }}
+                              className="text-[11px] text-slate-400 hover:text-slate-200 bg-slate-800/80 px-2.5 py-1 rounded-lg transition cursor-pointer"
+                            >
+                              Ver Detalhes
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* TAB: EXTRATOS, HISTÓRICO & BÓNUS DE UTILIZADORES */}
       {activeTab === 'statements' && isSuperAdmin && (
@@ -977,33 +1210,150 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
                       <td className="p-3 font-mono">{u.isImportUnlocked ? '✓ Sim' : '✕ Não'}</td>
                       <td className="p-3 font-mono">{u.isBatchUnlocked ? '✓ Sim' : '✕ Não'}</td>
                       <td className="p-3 text-right font-mono">
-                        <button
-                          onClick={() => {
-                            setSelectedUserForEdit(u);
-                            setUserFormData({
-                              name: u.name,
-                              email: u.email,
-                              password: '',
-                              phone: u.phone || '',
-                              company: u.company || '',
-                              role: u.role,
-                              queriesRemaining: u.queriesRemaining,
-                              isImportUnlocked: u.isImportUnlocked,
-                              isBatchUnlocked: u.isBatchUnlocked,
-                              isActive: u.isActive
-                            });
-                            setIsCreatingUser(false);
-                          }}
-                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded text-xs"
-                        >
-                          Editar
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setUserPasswordModal({ user: u, newPassword: '', showPlain: false })}
+                            className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-1 rounded text-xs inline-flex items-center gap-1 cursor-pointer transition-colors"
+                            title={`Redefinir palavra-passe de ${u.name}`}
+                          >
+                            <Key className="w-3 h-3 text-amber-400" />
+                            <span>Senha</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedUserForEdit(u);
+                              setUserFormData({
+                                name: u.name,
+                                email: u.email,
+                                password: '',
+                                phone: u.phone || '',
+                                company: u.company || '',
+                                role: u.role,
+                                queriesRemaining: u.queriesRemaining,
+                                isImportUnlocked: u.isImportUnlocked,
+                                isBatchUnlocked: u.isBatchUnlocked,
+                                isActive: u.isActive
+                              });
+                              setIsCreatingUser(false);
+                            }}
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded text-xs"
+                          >
+                            Editar
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
               </tbody>
             </table>
           </div>
+
+          {/* Modal Redefinição de Senha de Utilizador */}
+          {userPasswordModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-[#1E293B] border border-amber-500/40 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <Key className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-100 font-mono">Redefinir Palavra-passe</h3>
+                      <p className="text-xs text-slate-400">Super Administrador (Controlo Total)</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setUserPasswordModal(null)}
+                    className="text-slate-400 hover:text-white text-lg p-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-1">
+                  <p className="text-xs text-slate-400">Utilizador Alvo:</p>
+                  <p className="text-sm font-bold text-slate-100">{userPasswordModal.user.name}</p>
+                  <p className="text-xs text-indigo-400 font-mono">{userPasswordModal.user.email}</p>
+                </div>
+
+                <form onSubmit={handleUpdateUserPassword} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Nova Palavra-passe do Utilizador
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={userPasswordModal.showPlain ? 'text' : 'password'}
+                        required
+                        minLength={4}
+                        placeholder="Insira a nova senha (ex: *Angola@2030*)"
+                        value={userPasswordModal.newPassword}
+                        onChange={(e) =>
+                          setUserPasswordModal({
+                            ...userPasswordModal,
+                            newPassword: e.target.value
+                          })
+                        }
+                        className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-xl px-3 py-2.5 text-xs text-slate-100 font-mono pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setUserPasswordModal({
+                            ...userPasswordModal,
+                            showPlain: !userPasswordModal.showPlain
+                          })
+                        }
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-200"
+                      >
+                        {userPasswordModal.showPlain ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-[10px] text-slate-500">Mínimo de 4 caracteres</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
+                          let generated = '';
+                          for (let i = 0; i < 10; i++) {
+                            generated += chars.charAt(Math.floor(Math.random() * chars.length));
+                          }
+                          setUserPasswordModal({
+                            ...userPasswordModal,
+                            newPassword: generated,
+                            showPlain: true
+                          });
+                        }}
+                        className="text-[10px] text-amber-400 hover:underline cursor-pointer"
+                      >
+                        Gerar Senha Forte
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setUserPasswordModal(null)}
+                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs font-mono inline-flex items-center gap-1.5 transition-colors"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                      <span>Gravar Nova Senha</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1614,6 +1964,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
 
       {/* 10. TAB: INSTALADOR MULTIPLATAFORMA (Super Admin) */}
       {activeTab === 'deploy_packages' && isSuperAdmin && <AdminDeployPackageTab />}
+
+      {/* Modal de Análise e Validação de Comprovativos Financeiros */}
+      {selectedProofTx && (
+        <ProofAttachmentModal
+          isOpen={!!selectedProofTx}
+          onClose={() => setSelectedProofTx(null)}
+          transaction={selectedProofTx}
+          mode={proofModalMode}
+          isAdmin={true}
+          onApprove={async (id, notes) => {
+            await handleValidateTransaction(id, 'approve', notes);
+            setSelectedProofTx(null);
+          }}
+          onReject={async (id, notes) => {
+            await handleValidateTransaction(id, 'reject', notes);
+            setSelectedProofTx(null);
+          }}
+          onSuccess={(updatedTx) => {
+            setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+            loadAllData();
+          }}
+        />
+      )}
     </div>
   );
 };

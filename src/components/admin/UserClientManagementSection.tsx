@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   UserPlus,
@@ -19,7 +19,9 @@ import {
   Save,
   Check,
   AlertTriangle,
-  Briefcase
+  Briefcase,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { UserSafe, UserRole } from '../../types';
 import { INITIAL_STAFF_USERS } from '../../data/mockDatabase';
@@ -46,6 +48,71 @@ export const UserClientManagementSection: React.FC<UserClientManagementSectionPr
     }
     return INITIAL_STAFF_USERS;
   });
+
+  const fetchUsersFromApi = async () => {
+    try {
+      const res = await fetch('/api/admin/users');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.users && Array.isArray(data.users)) {
+          setUsers(data.users);
+          localStorage.setItem('nanucloud_staff_users_db', JSON.stringify(data.users));
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch server users:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsersFromApi();
+  }, []);
+
+  // Password reset modal state
+  const [passwordModalUser, setPasswordModalUser] = useState<UserSafe | null>(null);
+  const [newPassword, setNewPassword] = useState<string>('');
+  const [showPlainPassword, setShowPlainPassword] = useState<boolean>(false);
+  const [passwordSuccessMsg, setPasswordSuccessMsg] = useState<string>('');
+  const [passwordErrorMsg, setPasswordErrorMsg] = useState<string>('');
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState<boolean>(false);
+
+  const handleSaveNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordModalUser) return;
+    setPasswordErrorMsg('');
+    setPasswordSuccessMsg('');
+
+    if (newPassword.trim().length < 4) {
+      setPasswordErrorMsg('A palavra-passe deve conter pelo menos 4 caracteres.');
+      return;
+    }
+
+    setIsSubmittingPassword(true);
+    try {
+      const res = await fetch(`/api/admin/users/${passwordModalUser.id}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: newPassword.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPasswordErrorMsg(data.error || 'Erro ao alterar palavra-passe.');
+      } else {
+        setPasswordSuccessMsg(data.message || `Palavra-passe de ${passwordModalUser.name} alterada com sucesso!`);
+        showSaveNotice(`Palavra-passe de ${passwordModalUser.name} atualizada com sucesso!`);
+        setTimeout(() => {
+          setPasswordModalUser(null);
+          setNewPassword('');
+          setPasswordSuccessMsg('');
+          fetchUsersFromApi();
+        }, 1200);
+      }
+    } catch (err) {
+      setPasswordErrorMsg('Erro ao comunicar com o servidor.');
+    } finally {
+      setIsSubmittingPassword(false);
+    }
+  };
 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterRole, setFilterRole] = useState<string>('all');
@@ -375,6 +442,23 @@ export const UserClientManagementSection: React.FC<UserClientManagementSectionPr
                     </td>
 
                     <td className="p-3 text-right space-x-2">
+                      {isSuperAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPasswordModalUser(user);
+                            setNewPassword('');
+                            setShowPlainPassword(false);
+                            setPasswordErrorMsg('');
+                            setPasswordSuccessMsg('');
+                          }}
+                          className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition cursor-pointer"
+                          title="Alterar Palavra-passe do Utilizador"
+                        >
+                          <Key className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(user)}
@@ -571,6 +655,114 @@ export const UserClientManagementSection: React.FC<UserClientManagementSectionPr
                   className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-5 rounded-xl uppercase shadow cursor-pointer"
                 >
                   {editingUser ? 'Salvar Alterações' : 'Cadastrar Membro'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Password Reset Modal (Super Admin) */}
+      {passwordModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#1E293B] border border-amber-500/40 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-mono font-bold text-slate-100">Redefinir Palavra-passe</h4>
+                  <p className="text-[11px] text-slate-400">Super Administrador (Controlo Total)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPasswordModalUser(null)}
+                className="text-slate-400 hover:text-white text-lg p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+              <span className="text-[10px] text-slate-400 block">Conta Selecionada:</span>
+              <span className="text-sm font-bold text-slate-100 block">{passwordModalUser.name}</span>
+              <span className="text-xs text-indigo-400 font-mono block">{passwordModalUser.email}</span>
+            </div>
+
+            {passwordErrorMsg && (
+              <div className="p-3 bg-rose-500/20 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center gap-2 font-mono">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{passwordErrorMsg}</span>
+              </div>
+            )}
+
+            {passwordSuccessMsg && (
+              <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs flex items-center gap-2 font-mono">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{passwordSuccessMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveNewPassword} className="space-y-4 font-mono text-xs">
+              <div>
+                <label className="text-slate-300 block mb-1 font-bold">
+                  Nova Palavra-passe
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPlainPassword ? 'text' : 'password'}
+                    required
+                    minLength={4}
+                    placeholder="Insira a nova senha (ex: *Angola@2030*)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-xl px-3 py-2.5 text-xs text-slate-100 pr-10 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPlainPassword(!showPlainPassword)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                  >
+                    {showPlainPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-[10px] text-slate-500">Mínimo 4 caracteres</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
+                      let generated = '';
+                      for (let i = 0; i < 10; i++) {
+                        generated += chars.charAt(Math.floor(Math.random() * chars.length));
+                      }
+                      setNewPassword(generated);
+                      setShowPlainPassword(true);
+                    }}
+                    className="text-[10px] text-amber-400 hover:underline cursor-pointer"
+                  >
+                    Gerar Senha Forte
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setPasswordModalUser(null)}
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPassword}
+                  className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold py-2 px-5 rounded-xl uppercase shadow cursor-pointer inline-flex items-center gap-1.5 transition-colors"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  <span>{isSubmittingPassword ? 'A guardar...' : 'Gravar Nova Senha'}</span>
                 </button>
               </div>
             </form>

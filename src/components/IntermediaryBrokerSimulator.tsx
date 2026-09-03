@@ -23,6 +23,8 @@ import {
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { canUserSimulate } from '../utils/accessControl';
+import { ClientCreditNoticeBanner } from './ClientCreditNoticeBanner';
 
 interface IntermediaryBrokerSimulatorProps {
   user: UserSafe | null;
@@ -269,6 +271,21 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
     }
 
     setFieldErrors({});
+
+    // AUTH & RBAC SIMULATION CHECK
+    if (!user) {
+      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
+      onOpenAuth();
+      return;
+    }
+
+    const simCheck = canUserSimulate(user);
+    if (!simCheck.allowed) {
+      setErrorMessage(simCheck.message);
+      onOpenPlans();
+      return;
+    }
+
     setIsCalculating(true);
 
     setTimeout(() => {
@@ -277,7 +294,7 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
       setIsCalculating(false);
       setSuccessMessage('Simulação de intermediação calculada com sucesso com base nas normas fiscais vigentes!');
 
-      if (user && user.queriesRemaining > 0) {
+      if (user && user.queriesRemaining > 0 && user.role !== 'staff' && user.role !== 'admin' && user.role !== 'admin_level1' && user.role !== 'super_admin') {
         onCalculationDone(Math.max(0, user.queriesRemaining - 1));
       }
     }, 200);
@@ -436,6 +453,13 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
 
   return (
     <div className="space-y-6">
+      {/* Aviso de Créditos e Estado de Acesso RBAC */}
+      <ClientCreditNoticeBanner
+        user={user}
+        onOpenPlans={onOpenPlans}
+        onOpenAuth={onOpenAuth}
+      />
+
       {/* Header Banner */}
       <div className="bg-[#1E293B] border border-slate-800 rounded-2xl p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-6">

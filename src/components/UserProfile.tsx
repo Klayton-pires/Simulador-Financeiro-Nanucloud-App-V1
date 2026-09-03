@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserSafe, QueryHistoryItem, Transaction } from '../types';
-import { User, Key, Sparkles, Gem, History, CreditCard, Download, Edit2, Check, Trash2, Shield, Calendar, Building, Mail, Phone, Globe, CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { User, Key, Sparkles, Gem, History, CreditCard, Download, Edit2, Check, Trash2, Shield, Calendar, Building, Mail, Phone, Globe, CheckCircle2, Clock, XCircle, Paperclip, Eye, UploadCloud } from 'lucide-react';
+import { ProofAttachmentModal } from './ProofAttachmentModal';
 
 interface UserProfileProps {
   user: UserSafe;
@@ -26,6 +27,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [newPassword, setNewPassword] = useState<string>('');
   const [profileMsg, setProfileMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState<boolean>(false);
+
+  // Proof attachment modal state
+  const [proofModalTx, setProofModalTx] = useState<Transaction | null>(null);
+  const [proofModalMode, setProofModalMode] = useState<'upload' | 'view'>('upload');
 
   useEffect(() => {
     fetchHistory();
@@ -467,6 +472,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   <th className="p-3">Valor</th>
                   <th className="p-3">Pesquisas</th>
                   <th className="p-3">Estado</th>
+                  <th className="p-3 text-right">Comprovativo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-slate-200">
@@ -495,6 +501,51 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         {tx.status === 'approved' ? 'Aprovado & Ativo' : (tx.status === 'pending' ? 'Pendente de Validação' : 'Rejeitado')}
                       </span>
                     </td>
+                    <td className="p-3 text-right whitespace-nowrap">
+                      {tx.paymentProofUrl ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => {
+                              setProofModalTx(tx);
+                              setProofModalMode('view');
+                            }}
+                            className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 transition"
+                            title="Ver anexo do comprovativo"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Ver Anexo</span>
+                          </button>
+                          {tx.status === 'pending' && (
+                            <button
+                              onClick={() => {
+                                setProofModalTx(tx);
+                                setProofModalMode('upload');
+                              }}
+                              className="bg-slate-700/50 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 transition"
+                              title="Substituir anexo"
+                            >
+                              <Paperclip className="w-3 h-3" />
+                              <span>Substituir</span>
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        tx.status === 'pending' ? (
+                          <button
+                            onClick={() => {
+                              setProofModalTx(tx);
+                              setProofModalMode('upload');
+                            }}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1 ml-auto transition shadow-sm"
+                          >
+                            <Paperclip className="w-3 h-3" />
+                            <span>Submeter Comprovativo</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-500 text-[11px]">—</span>
+                        )
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -502,6 +553,20 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           </div>
         )}
       </div>
+
+      {/* Modal de Anexo de Comprovativo */}
+      {proofModalTx && (
+        <ProofAttachmentModal
+          isOpen={!!proofModalTx}
+          onClose={() => setProofModalTx(null)}
+          transaction={proofModalTx}
+          mode={proofModalMode}
+          onSuccess={(updatedTx) => {
+            setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+            setProofModalTx(null);
+          }}
+        />
+      )}
     </div>
   );
 };

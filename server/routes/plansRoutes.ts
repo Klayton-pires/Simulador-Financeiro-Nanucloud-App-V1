@@ -43,6 +43,13 @@ router.get('/public-config', (req: AuthRequest, res: Response) => {
     whatsappSupport1: settings.whatsappSupport1,
     whatsappSupport2: settings.whatsappSupport2,
     supportEmail: settings.supportEmail,
+    companyLogoUrl: settings.companyLogoUrl,
+    socialFacebook: settings.socialFacebook,
+    socialInstagram: settings.socialInstagram,
+    socialLinkedIn: settings.socialLinkedIn,
+    socialTwitterX: settings.socialTwitterX,
+    socialYouTube: settings.socialYouTube,
+    socialWhatsApp: settings.socialWhatsApp,
     enableMultiplatformDownloads: settings.enableMultiplatformDownloads ?? false,
     moduleMinCredits: settings.moduleMinCredits,
     moduleQueryPrices: settings.moduleQueryPrices,
@@ -95,8 +102,30 @@ router.post('/calculate-custom', (req: AuthRequest, res: Response) => {
 // 3. INICIAR PEDIDO DE COMPRA / RECARGA DE PLANO
 router.post('/purchase', requireAuth, (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user!;
-    const { planId, customAmountKz, paymentMethod, paymentReference, notes } = req.body;
+    const authUser = req.user!;
+    const {
+      planId,
+      customAmountKz,
+      paymentMethod,
+      paymentReference,
+      paymentProofUrl,
+      paymentProofName,
+      paymentProofSize,
+      notes,
+      userId,
+      userEmail,
+      userName
+    } = req.body;
+
+    // Resolve target client: preferentially match the client explicitly passed, otherwise authenticated user
+    let customerUser = authUser;
+    if (userId) {
+      const found = db.findUserById(userId);
+      if (found) customerUser = found;
+    } else if (userEmail) {
+      const found = db.findUserByEmail(userEmail);
+      if (found) customerUser = found;
+    }
 
     const settings = db.getSettings();
     let selectedPlan = db.getPlans().find(p => p.id === planId);
@@ -129,16 +158,19 @@ router.post('/purchase', requireAuth, (req: AuthRequest, res: Response) => {
     const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const newTransaction: Transaction = {
       id: txId,
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: customerUser.id,
+      userName: userName || customerUser.name,
+      userEmail: userEmail || customerUser.email,
       planId: planId || 'plan_custom',
       planName,
       amountKz,
       queriesGranted: queriesCount,
       validityDays,
-      paymentMethod: paymentMethod || 'multicaixa_express',
+      paymentMethod: paymentMethod || 'bank_transfer',
       paymentReference: paymentReference ? paymentReference.trim() : undefined,
+      paymentProofUrl: paymentProofUrl || undefined,
+      paymentProofName: paymentProofName || undefined,
+      paymentProofSize: paymentProofSize ? Number(paymentProofSize) : undefined,
       notes: notes ? notes.trim() : undefined,
       status: txStatus,
       reviewedByAdminName: isDirectInstantPayment ? 'GATEWAY_AUTOMATED_VALIDATION' : undefined,
@@ -150,7 +182,7 @@ router.post('/purchase', requireAuth, (req: AuthRequest, res: Response) => {
 
     // If direct automated payment, automatically credit queries & unlock modules for the user immediately!
     if (isDirectInstantPayment) {
-      const targetUser = db.findUserById(user.id);
+      const targetUser = db.findUserById(customerUser.id);
       if (targetUser) {
         const currentQueries = targetUser.queriesRemaining || 0;
         const newQueries = currentQueries + queriesCount;
@@ -159,7 +191,7 @@ router.post('/purchase', requireAuth, (req: AuthRequest, res: Response) => {
         const expDate = new Date();
         expDate.setDate(expDate.getDate() + validityDays);
 
-        db.updateUser(user.id, {
+        db.updateUser(customerUser.id, {
           queriesRemaining: newQueries,
           planExpiresAt: expDate.toISOString(),
           isActive: true
@@ -168,22 +200,22 @@ router.post('/purchase', requireAuth, (req: AuthRequest, res: Response) => {
     }
 
     db.addAuditLog({
-      userId: user.id,
-      userName: user.name,
-      userRole: user.role,
+      userId: customerUser.id,
+      userName: customerUser.name,
+      userRole: customerUser.role,
       action: isDirectInstantPayment ? 'PLAN_PURCHASE_AUTO_ACTIVATED' : 'PLAN_PURCHASE_REQUEST',
       entityType: 'payment',
       entityId: txId,
       ipAddress: req.ip || req.socket.remoteAddress,
       details: isDirectInstantPayment
-        ? `Pagamento direto aprovado via ${paymentMethod} para ${planName} (${amountKz.toLocaleString('pt-PT')} Kz). ${queriesCount} consultas creditadas automaticamente a ${user.name}.`
-        : `Pedido de adesão ao ${planName} no valor de ${amountKz.toLocaleString('pt-PT')} Kz criado por ${user.name}. Aguarda validação administrativa.`
+        ? `Pagamento direto aprovado via ${paymentMethod} para ${planName} (${amountKz.toLocaleString('pt-PT')} Kz). ${queriesCount} consultas creditadas automaticamente a ${customerUser.name}.`
+        : `Pedido de adesão ao ${planName} no valor de ${amountKz.toLocaleString('pt-PT')} Kz criado por ${customerUser.name}. Aguarda validação financeira do comprovativo.`
     });
 
     return res.status(201).json({
       message: isDirectInstantPayment
         ? 'Pagamento validado com sucesso! O plano e as suas consultas foram ativados imediatamente.'
-        : 'Pedido de adesão registado com sucesso! Efetue o pagamento e submeta o comprovativo para ativação imediata.',
+        : 'Pedido de adesão registado com sucesso! Efetue o pagamento e submeta o comprovativo para validação pela equipa financeira.',
       transaction: newTransaction,
       queriesCount,
       bankDetails: {
@@ -203,19 +235,22 @@ router.post('/purchase', requireAuth, (req: AuthRequest, res: Response) => {
 router.post('/upload-proof', requireAuth, (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
-    const { transactionId, paymentProofUrl, paymentReference, notes } = req.body;
+    const { transactionId, paymentProofUrl, paymentProofName, paymentProofSize, paymentReference, notes } = req.body;
 
     if (!transactionId) {
       return res.status(400).json({ error: 'ID de transação obrigatório.' });
     }
 
     const tx = db.findTransactionById(transactionId);
-    if (!tx || tx.userId !== user.id) {
+    const isSuperOrAdmin = user.role === 'admin_level1' || user.role === 'admin_level2';
+    if (!tx || (tx.userId !== user.id && !isSuperOrAdmin)) {
       return res.status(404).json({ error: 'Transação não encontrada ou sem permissão.' });
     }
 
     const updated = db.updateTransaction(transactionId, {
-      paymentProofUrl: paymentProofUrl || tx.paymentProofUrl,
+      paymentProofUrl: paymentProofUrl !== undefined ? paymentProofUrl : tx.paymentProofUrl,
+      paymentProofName: paymentProofName !== undefined ? paymentProofName : tx.paymentProofName,
+      paymentProofSize: paymentProofSize !== undefined ? Number(paymentProofSize) : tx.paymentProofSize,
       paymentReference: paymentReference ? paymentReference.trim() : tx.paymentReference,
       notes: notes ? notes.trim() : tx.notes
     });
@@ -228,7 +263,7 @@ router.post('/upload-proof', requireAuth, (req: AuthRequest, res: Response) => {
       entityType: 'payment',
       entityId: transactionId,
       ipAddress: req.ip || req.socket.remoteAddress,
-      details: `Comprovativo/referência submetido para a transação ${transactionId} por ${user.name}.`
+      details: `Comprovativo/anexo (${paymentProofName || 'Documento'}) submetido para a transação ${transactionId} por ${user.name}.`
     });
 
     return res.json({
@@ -244,7 +279,15 @@ router.post('/upload-proof', requireAuth, (req: AuthRequest, res: Response) => {
 // 5. HISTÓRICO DE TRANSAÇÕES DO UTILIZADOR
 router.get('/my-transactions', requireAuth, (req: AuthRequest, res: Response) => {
   const user = req.user!;
-  const transactions = db.getTransactions().filter(t => t.userId === user.id);
+  const requestedUserId = req.query.userId as string;
+  const isSuperOrAdmin = user.role === 'admin_level1' || user.role === 'admin_level2';
+
+  let targetUserId = user.id;
+  if (requestedUserId && (requestedUserId === user.id || isSuperOrAdmin || user.id.startsWith('usr_admin_nanuhost') || user.id.startsWith('usr_klayton_pires'))) {
+    targetUserId = requestedUserId;
+  }
+
+  const transactions = db.getTransactions().filter(t => t.userId === targetUserId);
   return res.json({ transactions });
 });
 

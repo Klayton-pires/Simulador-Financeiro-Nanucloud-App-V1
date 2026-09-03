@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import * as XLSX from 'xlsx';
 import { db } from '../db.js';
-import { AuthRequest, requireAuth } from '../auth.js';
+import { AuthRequest, requireAuth, isStaffOrAdminRole } from '../auth.js';
 import { QueryHistoryItem } from '../types.js';
 
 const router = Router();
@@ -10,6 +10,7 @@ const router = Router();
 router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
+    const isStaff = isStaffOrAdminRole(user.role);
     const {
       countryCode,
       costNet,
@@ -100,10 +101,10 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
       }
     }
 
-    // Check query credits
-    if (user.queriesRemaining <= 0) {
+    // Check query credits (Clients must have remaining credits, staff/admin can simulate freely)
+    if (!isStaff && user.queriesRemaining <= 0) {
       return res.status(402).json({
-        error: 'As suas consultas gratuitas esgotaram. Por favor, adquira um plano ou recarregue créditos para continuar a simular.',
+        error: 'A sua conta de cliente não possui créditos disponíveis. É obrigatório ter crédito na conta para utilizar qualquer módulo de simulação. Por favor, adquira um plano ou recarregue créditos.',
         code: 'CREDITS_EXHAUSTED'
       });
     }
@@ -148,11 +149,13 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
     const incomeTax = Math.max(0, estimatedTax - retentionAmount);
     const netProfit = operatingProfit - incomeTax;
 
-    // Decrement credits
-    const updatedUser = db.updateUser(user.id, {
-      queriesRemaining: user.queriesRemaining - 1,
-      totalQueriesUsed: user.totalQueriesUsed + 1
-    });
+    // Decrement credits for clients (Staff accounts do not consume quota)
+    const updatedUser = isStaff
+      ? user
+      : db.updateUser(user.id, {
+          queriesRemaining: Math.max(0, user.queriesRemaining - 1),
+          totalQueriesUsed: user.totalQueriesUsed + 1
+        });
 
     const historyItem: QueryHistoryItem = {
       id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -223,19 +226,20 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
 router.post('/calculate-import', requireAuth, (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
+    const isStaff = isStaffOrAdminRole(user.role);
 
-    // Check if import module is unlocked
-    if (!user.isImportUnlocked && user.role === 'user') {
+    // Check if import module is unlocked for clients
+    if (!isStaff && !user.isImportUnlocked) {
       return res.status(403).json({
-        error: 'O Módulo de Importação Aduaneira encontra-se bloqueado. Adquira o Plano Ouro, Platina, Diamante ou Plano Personalizado para desbloquear.',
+        error: 'O Módulo de Importação Aduaneira encontra-se bloqueado para o seu plano. Adquira o Plano Ouro, Platina, Diamante ou Plano Personalizado para desbloquear.',
         code: 'MODULE_LOCKED'
       });
     }
 
-    // Check query credits
-    if (user.queriesRemaining <= 0) {
+    // Check query credits (Clients must have credits)
+    if (!isStaff && user.queriesRemaining <= 0) {
       return res.status(402).json({
-        error: 'As suas consultas esgotaram. Adquira um plano ou recarregue créditos para continuar.',
+        error: 'A sua conta de cliente não possui créditos disponíveis. É obrigatório ter crédito na conta para utilizar qualquer módulo de simulação. Por favor, adquira um plano ou recarregue créditos.',
         code: 'CREDITS_EXHAUSTED'
       });
     }
@@ -291,11 +295,13 @@ router.post('/calculate-import', requireAuth, (req: AuthRequest, res: Response) 
     const incomeTax = operatingProfit > 0 ? operatingProfit * (industrialTaxRate / 100) : 0;
     const netProfit = operatingProfit - incomeTax;
 
-    // Decrement credits
-    const updatedUser = db.updateUser(user.id, {
-      queriesRemaining: user.queriesRemaining - 1,
-      totalQueriesUsed: user.totalQueriesUsed + 1
-    });
+    // Decrement credits for clients
+    const updatedUser = isStaff
+      ? user
+      : db.updateUser(user.id, {
+          queriesRemaining: Math.max(0, user.queriesRemaining - 1),
+          totalQueriesUsed: user.totalQueriesUsed + 1
+        });
 
     const historyItem: QueryHistoryItem = {
       id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -354,18 +360,19 @@ router.post('/calculate-import', requireAuth, (req: AuthRequest, res: Response) 
 router.post('/calculate-batch', requireAuth, (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
+    const isStaff = isStaffOrAdminRole(user.role);
 
-    // Check if batch module is unlocked
-    if (!user.isBatchUnlocked && user.role === 'user') {
+    // Check if batch module is unlocked for clients
+    if (!isStaff && !user.isBatchUnlocked) {
       return res.status(403).json({
-        error: 'O Módulo de Operações e Cálculos em Lote (Excel) encontra-se bloqueado. Adquira o Plano Platina, Diamante ou Personalizado para desbloquear.',
+        error: 'O Módulo de Operações e Cálculos em Lote (Excel) encontra-se bloqueado para o seu plano. Adquira o Plano Platina, Diamante ou Personalizado para desbloquear.',
         code: 'MODULE_LOCKED'
       });
     }
 
-    if (user.queriesRemaining <= 0) {
+    if (!isStaff && user.queriesRemaining <= 0) {
       return res.status(402).json({
-        error: 'Consultas esgotadas. Recarregue a sua conta para continuar.',
+        error: 'A sua conta de cliente não possui créditos disponíveis. É obrigatório ter crédito na conta para utilizar qualquer módulo de simulação. Por favor, adquira um plano ou recarregue créditos.',
         code: 'CREDITS_EXHAUSTED'
       });
     }
@@ -449,10 +456,12 @@ router.post('/calculate-batch', requireAuth, (req: AuthRequest, res: Response) =
       };
     });
 
-    const updatedUser = db.updateUser(user.id, {
-      queriesRemaining: user.queriesRemaining - 1,
-      totalQueriesUsed: user.totalQueriesUsed + 1
-    });
+    const updatedUser = isStaff
+      ? user
+      : db.updateUser(user.id, {
+          queriesRemaining: Math.max(0, user.queriesRemaining - 1),
+          totalQueriesUsed: user.totalQueriesUsed + 1
+        });
 
     const totalCostBase = processed.reduce((acc: number, r: any) => acc + (parseFloat(r['[NANUCLOUD] Custo Base (S/ IVA)']) || 0), 0);
     const totalPvpFinal = processed.reduce((acc: number, r: any) => acc + (parseFloat(r['[NANUCLOUD] PVP Final Recomendado (C/ IVA)']) || 0), 0);

@@ -19,7 +19,10 @@ import {
   Check,
   AlertTriangle,
   UserCheck,
-  Users
+  Users,
+  Eye,
+  EyeOff,
+  RefreshCw
 } from 'lucide-react';
 import { UserSafe, UserRole, PermissionGroup } from '../types';
 import { DEFAULT_PERMISSION_GROUPS } from '../data/permissions';
@@ -29,89 +32,53 @@ interface UsersManagementTabProps {
   onRefresh?: () => void;
 }
 
-export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentUser }) => {
+export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentUser, onRefresh }) => {
   const isSuperAdmin =
     currentUser.role === 'superadmin' ||
     currentUser.role === 'super_admin' ||
     currentUser.role === 'admin_level1' ||
     currentUser.role === 'admin';
+  const isAdmin = isSuperAdmin || currentUser.role === 'admin_level2';
 
-  const [staffUsers, setStaffUsers] = useState<UserSafe[]>(() => {
+  const [staffUsers, setStaffUsers] = useState<UserSafe[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Password reset modal state
+  const [passwordModalUser, setPasswordModalUser] = useState<UserSafe | null>(null);
+  const [newPassword, setNewPassword] = useState<string>('');
+  const [showPlainPassword, setShowPlainPassword] = useState<boolean>(false);
+  const [passwordSuccessMsg, setPasswordSuccessMsg] = useState<string>('');
+  const [passwordErrorMsg, setPasswordErrorMsg] = useState<string>('');
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState<boolean>(false);
+
+  const fetchRealUsers = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/users');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.users && Array.isArray(data.users)) {
+          setStaffUsers(data.users);
+          localStorage.setItem('nanucloud_staff_users_db', JSON.stringify(data.users));
+          setIsLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch server users, attempting cached:', e);
+    }
     const saved = localStorage.getItem('nanucloud_staff_users_db');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        setStaffUsers(JSON.parse(saved));
       } catch (e) {}
     }
-    return [
-      {
-        id: 'usr_super_01',
-        name: 'Joaquim Monteiro (Super Administrador)',
-        email: 'joaquim.monteiro@nanucloud.com',
-        role: 'super_admin',
-        country: 'Angola',
-        phone: '+244 955 581 862',
-        company: 'NANUCLOUD Direção Geral',
-        permissionGroupId: 'grp_super_admin',
-        isActive: true,
-        queriesRemaining: 999999,
-        totalQueriesUsed: 412,
-        activePlanId: 'plan_superadmin',
-        activePlanName: 'Licença Master Super Admin',
-        planExpiresAt: null,
-        isImportUnlocked: true,
-        isBatchUnlocked: true,
-        isApiUnlocked: true,
-        createdAt: '2026-01-01T00:00:00Z',
-        updatedAt: '2026-01-01T00:00:00Z',
-        lastLoginAt: '2026-08-25T16:00:00Z'
-      },
-      {
-        id: 'usr_admin2_02',
-        name: 'Dra. Teresa Bento (Diretora Fiscal / Admin)',
-        email: 'teresa.bento@nanucloud.com',
-        role: 'admin_level2',
-        country: 'Angola',
-        phone: '+244 955 580 653',
-        company: 'NANUCLOUD Consultoria Fiscal',
-        permissionGroupId: 'grp_admin_level2',
-        isActive: true,
-        queriesRemaining: 50000,
-        totalQueriesUsed: 189,
-        activePlanId: 'plan_pro',
-        activePlanName: 'Licença Administrador Nível 2',
-        planExpiresAt: '2026-12-31T23:59:59Z',
-        isImportUnlocked: true,
-        isBatchUnlocked: true,
-        isApiUnlocked: true,
-        createdAt: '2026-02-10T00:00:00Z',
-        updatedAt: '2026-02-10T00:00:00Z',
-        lastLoginAt: '2026-08-25T14:20:00Z'
-      },
-      {
-        id: 'usr_mgr_03',
-        name: 'Carlos Manuel (Gestor Comercial)',
-        email: 'carlos.comercial@nanucloud.com',
-        role: 'manager',
-        country: 'Angola',
-        phone: '+244 944 935 617',
-        company: 'NANUCLOUD Vendas & Suporte',
-        permissionGroupId: 'grp_commercial',
-        isActive: true,
-        queriesRemaining: 10000,
-        totalQueriesUsed: 94,
-        activePlanId: 'plan_pro',
-        activePlanName: 'Plano Comercial & Vendas',
-        planExpiresAt: '2026-12-31T23:59:59Z',
-        isImportUnlocked: true,
-        isBatchUnlocked: true,
-        isApiUnlocked: false,
-        createdAt: '2026-03-01T00:00:00Z',
-        updatedAt: '2026-03-01T00:00:00Z',
-        lastLoginAt: '2026-08-25T09:10:00Z'
-      }
-    ];
-  });
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    fetchRealUsers();
+  }, []);
 
   const [permissionGroups] = useState<PermissionGroup[]>(() => {
     const saved = localStorage.getItem('nanucloud_rbac_groups');
@@ -128,12 +95,16 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
   // Form State
   const [formName, setFormName] = useState<string>('');
   const [formEmail, setFormEmail] = useState<string>('');
+  const [formPassword, setFormPassword] = useState<string>('');
+  const [formConfirmPassword, setFormConfirmPassword] = useState<string>('');
+  const [showFormPassword, setShowFormPassword] = useState<boolean>(false);
+  const [isSavingUser, setIsSavingUser] = useState<boolean>(false);
   const [formPhone, setFormPhone] = useState<string>('');
   const [formCompany, setFormCompany] = useState<string>('');
   const [formCountry, setFormCountry] = useState<string>('Angola');
-  const [formRole, setFormRole] = useState<UserRole>('manager');
+  const [formRole, setFormRole] = useState<UserRole>('staff');
   const [formPermissionGroup, setFormPermissionGroup] = useState<string>('grp_commercial');
-  const [formQueries, setFormQueries] = useState<number>(1000);
+  const [formQueries, setFormQueries] = useState<number>(10000);
   const [formIsActive, setFormIsActive] = useState<boolean>(true);
   const [formUnlockImport, setFormUnlockImport] = useState<boolean>(true);
   const [formUnlockBatch, setFormUnlockBatch] = useState<boolean>(true);
@@ -151,12 +122,15 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
   const handleOpenCreate = () => {
     setFormName('');
     setFormEmail('');
+    setFormPassword('');
+    setFormConfirmPassword('');
+    setShowFormPassword(false);
     setFormPhone('');
     setFormCompany('NANUCLOUD');
     setFormCountry('Angola');
-    setFormRole('manager');
+    setFormRole('staff');
     setFormPermissionGroup('grp_commercial');
-    setFormQueries(1000);
+    setFormQueries(10000);
     setFormIsActive(true);
     setFormUnlockImport(true);
     setFormUnlockBatch(true);
@@ -179,6 +153,9 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
     setEditingUser(user);
     setFormName(user.name);
     setFormEmail(user.email);
+    setFormPassword('');
+    setFormConfirmPassword('');
+    setShowFormPassword(false);
     setFormPhone(user.phone || '');
     setFormCompany(user.company || 'NANUCLOUD');
     setFormCountry(user.country || 'Angola');
@@ -192,12 +169,26 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
     setSecurityError(null);
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setSecurityError(null);
 
     if (!formName.trim() || !formEmail.trim()) {
       setSecurityError('Nome e Email são campos obrigatórios.');
+      return;
+    }
+
+    if (!editingUser) {
+      if (!formPassword || formPassword.trim().length < 6) {
+        setSecurityError('A palavra-passe é obrigatória para registar um membro Staff (mínimo 6 caracteres).');
+        return;
+      }
+      if (formPassword !== formConfirmPassword) {
+        setSecurityError('A confirmação da palavra-passe não coincide com a palavra-passe.');
+        return;
+      }
+    } else if (formPassword && formPassword.trim().length < 6) {
+      setSecurityError('A nova palavra-passe deve conter pelo menos 6 caracteres.');
       return;
     }
 
@@ -211,55 +202,71 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
       return;
     }
 
-    if (editingUser) {
-      const updated = staffUsers.map((u) => {
-        if (u.id === editingUser.id) {
-          return {
-            ...u,
+    setIsSavingUser(true);
+    try {
+      if (editingUser) {
+        const payload: any = {
+          name: formName.trim(),
+          phone: formPhone.trim(),
+          company: formCompany.trim(),
+          role: formRole,
+          queriesRemaining: Number(formQueries) || 1000,
+          isActive: formIsActive,
+          isImportUnlocked: formUnlockImport,
+          isBatchUnlocked: formUnlockBatch
+        };
+        if (formPassword && formPassword.trim().length >= 6) {
+          payload.password = formPassword.trim();
+        }
+
+        const res = await fetch(`/api/admin/users/${editingUser.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setSecurityError(data.error || 'Erro ao atualizar dados do utilizador no servidor.');
+          setIsSavingUser(false);
+          return;
+        }
+
+        await fetchRealUsers();
+        setEditingUser(null);
+        setSaveSuccessMsg('Membro Staff atualizado com sucesso!');
+        setTimeout(() => setSaveSuccessMsg(null), 3500);
+      } else {
+        const res = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             name: formName.trim(),
             email: formEmail.trim(),
+            password: formPassword.trim(),
             phone: formPhone.trim(),
-            company: formCompany.trim(),
-            country: formCountry.trim(),
+            company: formCompany.trim() || 'NANUCLOUD',
             role: formRole,
-            permissionGroupId: formPermissionGroup,
-            queriesRemaining: Number(formQueries) || 0,
-            isActive: formIsActive,
+            queriesRemaining: Number(formQueries) || 10000,
             isImportUnlocked: formUnlockImport,
-            isBatchUnlocked: formUnlockBatch,
-            isApiUnlocked: formUnlockApi,
-            updatedAt: new Date().toISOString()
-          };
+            isBatchUnlocked: formUnlockBatch
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setSecurityError(data.error || 'Erro ao criar conta de Staff no servidor.');
+          setIsSavingUser(false);
+          return;
         }
-        return u;
-      });
-      saveStaffDb(updated);
-      setEditingUser(null);
-    } else {
-      const newUser: UserSafe = {
-        id: `staff_${Date.now()}`,
-        name: formName.trim(),
-        email: formEmail.trim(),
-        phone: formPhone.trim(),
-        company: formCompany.trim() || 'NANUCLOUD',
-        country: formCountry.trim(),
-        role: formRole,
-        permissionGroupId: formPermissionGroup,
-        isActive: formIsActive,
-        queriesRemaining: Number(formQueries) || 1000,
-        totalQueriesUsed: 0,
-        activePlanId: 'plan_staff_internal',
-        activePlanName: `Perfil Staff: ${formRole.toUpperCase()}`,
-        planExpiresAt: null,
-        isImportUnlocked: formUnlockImport,
-        isBatchUnlocked: formUnlockBatch,
-        isApiUnlocked: formUnlockApi,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        lastLoginAt: null
-      };
-      saveStaffDb([newUser, ...staffUsers]);
-      setIsCreateModalOpen(false);
+
+        await fetchRealUsers();
+        setIsCreateModalOpen(false);
+        setSaveSuccessMsg('Novo membro Staff criado com sucesso! As credenciais com senha foram registadas.');
+        setTimeout(() => setSaveSuccessMsg(null), 3500);
+      }
+    } catch (err) {
+      setSecurityError('Falha ao comunicar com o servidor. Verifique a conexão.');
+    } finally {
+      setIsSavingUser(false);
     }
   };
 
@@ -276,6 +283,43 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
 
     const updated = staffUsers.map((u) => (u.id === target.id ? { ...u, isActive: !u.isActive } : u));
     saveStaffDb(updated);
+  };
+
+  const handleSaveNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordModalUser) return;
+    setPasswordErrorMsg('');
+    setPasswordSuccessMsg('');
+
+    if (newPassword.trim().length < 4) {
+      setPasswordErrorMsg('A palavra-passe deve conter pelo menos 4 caracteres.');
+      return;
+    }
+
+    setIsSubmittingPassword(true);
+    try {
+      const res = await fetch(`/api/admin/users/${passwordModalUser.id}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: newPassword.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPasswordErrorMsg(data.error || 'Erro ao atualizar palavra-passe.');
+      } else {
+        setPasswordSuccessMsg(data.message || `Palavra-passe de ${passwordModalUser.name} alterada com sucesso!`);
+        setTimeout(() => {
+          setPasswordModalUser(null);
+          setNewPassword('');
+          setPasswordSuccessMsg('');
+          fetchRealUsers();
+        }, 1200);
+      }
+    } catch (err) {
+      setPasswordErrorMsg('Erro ao comunicar com o servidor.');
+    } finally {
+      setIsSubmittingPassword(false);
+    }
   };
 
   const filteredStaff = staffUsers.filter((u) => {
@@ -344,7 +388,7 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
           </div>
         </div>
 
-        {isSuperAdmin && (
+        {isAdmin && (
           <button
             onClick={handleOpenCreate}
             className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2.5 px-5 rounded-xl text-xs font-mono uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg cursor-pointer shrink-0"
@@ -352,6 +396,19 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
             <UserPlus className="w-4 h-4" /> Adicionar Membro Staff
           </button>
         )}
+      </div>
+
+      {/* Diretriz de Segurança: Staff exclusivo por Admin no Backoffice */}
+      <div className="bg-indigo-950/40 border border-indigo-500/30 p-4 rounded-2xl flex items-start gap-3 text-xs font-mono text-indigo-300">
+        <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="font-bold text-indigo-200">
+            Regra de Segurança: Contas Staff Criadas Exclusivamente por Administradores no Backoffice
+          </p>
+          <p className="text-[11px] text-indigo-300/80 leading-relaxed">
+            O registo público na tela de login destina-se estritamente a clientes finais para utilização dos simuladores no Front-End. Todas as contas de Staff (Administradores, Gestores e Operadores) só podem ser criadas aqui no Backoffice por um Administrador, com palavra-passe obrigatória definida no ato de registo.
+          </p>
+        </div>
       </div>
 
       {saveSuccessMsg && (
@@ -480,6 +537,22 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
 
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => {
+                            setPasswordModalUser(user);
+                            setNewPassword('');
+                            setShowPlainPassword(false);
+                            setPasswordErrorMsg('');
+                            setPasswordSuccessMsg('');
+                          }}
+                          className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 rounded-lg transition"
+                          title="Alterar Palavra-passe do Utilizador"
+                        >
+                          <Key className="w-4 h-4" />
+                        </button>
+                      )}
+
                       <button
                         onClick={() => handleOpenEdit(user)}
                         className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition"
@@ -593,6 +666,7 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
                     {isSuperAdmin && <option value="super_admin">Super Administrador (Acesso Total)</option>}
                     <option value="admin_level2">Administrador Nível 2</option>
                     <option value="manager">Gestor Comercial & Atendimento</option>
+                    <option value="staff">Técnico / Operador Staff</option>
                   </select>
                 </div>
 
@@ -610,6 +684,47 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
                     ))}
                   </select>
                 </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-slate-400 font-bold">
+                    {editingUser
+                      ? 'Nova Palavra-passe Staff (Opcional - deixe em branco para manter a atual)'
+                      : 'Palavra-passe de Acesso ao Backoffice * (Mínimo 6 caracteres)'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showFormPassword ? 'text' : 'password'}
+                      value={formPassword}
+                      onChange={(e) => setFormPassword(e.target.value)}
+                      placeholder={editingUser ? '••••••••' : 'Defina a palavra-passe do membro Staff'}
+                      required={!editingUser}
+                      minLength={6}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500 outline-none pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowFormPassword(!showFormPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                    >
+                      {showFormPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {!editingUser && (
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-slate-400 font-bold">Confirmar Palavra-passe *</label>
+                    <input
+                      type={showFormPassword ? 'text' : 'password'}
+                      value={formConfirmPassword}
+                      onChange={(e) => setFormConfirmPassword(e.target.value)}
+                      placeholder="Repita a palavra-passe para confirmação"
+                      required
+                      minLength={6}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500 outline-none"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Módulos Desbloqueados */}
@@ -662,6 +777,115 @@ export const UsersManagementTab: React.FC<UsersManagementTabProps> = ({ currentU
                   className="px-5 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl flex items-center gap-2 cursor-pointer"
                 >
                   <Save className="w-4 h-4" /> Guardar Membro
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Redefinição de Senha (Super Admin) */}
+      {passwordModalUser && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1E293B] border border-amber-500/40 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100 font-mono">Alterar Palavra-passe</h3>
+                  <p className="text-xs text-slate-400">Super Administrador (Controlo de Credenciais)</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPasswordModalUser(null)}
+                className="text-slate-400 hover:text-white text-lg p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800">
+              <div className="text-[11px] text-slate-400">Conta Selecionada:</div>
+              <div className="text-sm font-bold text-slate-100 mt-0.5">{passwordModalUser.name}</div>
+              <div className="text-xs text-indigo-400 font-mono flex items-center gap-1 mt-0.5">
+                <Mail className="w-3 h-3 text-slate-500" /> {passwordModalUser.email}
+              </div>
+            </div>
+
+            {passwordErrorMsg && (
+              <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{passwordErrorMsg}</span>
+              </div>
+            )}
+
+            {passwordSuccessMsg && (
+              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{passwordSuccessMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveNewPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1 font-mono">
+                  Nova Palavra-passe
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPlainPassword ? 'text' : 'password'}
+                    required
+                    minLength={4}
+                    placeholder="Insira a nova senha (ex: *Angola@2030*)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-xl px-3 py-2.5 text-xs text-slate-100 font-mono pr-10 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPlainPassword(!showPlainPassword)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                  >
+                    {showPlainPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-[10px] text-slate-500">Mínimo 4 caracteres</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
+                      let generated = '';
+                      for (let i = 0; i < 10; i++) {
+                        generated += chars.charAt(Math.floor(Math.random() * chars.length));
+                      }
+                      setNewPassword(generated);
+                      setShowPlainPassword(true);
+                    }}
+                    className="text-[10px] text-amber-400 hover:underline cursor-pointer"
+                  >
+                    Gerar Senha Forte
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setPasswordModalUser(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPassword}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold text-xs font-mono inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  <span>{isSubmittingPassword ? 'A guardar...' : 'Confirmar e Gravar'}</span>
                 </button>
               </div>
             </form>

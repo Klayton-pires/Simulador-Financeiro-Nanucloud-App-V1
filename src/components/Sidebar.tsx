@@ -1,6 +1,7 @@
 import React from 'react';
 import { UserSafe } from '../types';
 import { SupportedLang, TRANSLATIONS } from '../i18n/translations';
+import { isStaffOrAdmin } from '../utils/accessControl';
 import {
   Store,
   Ship,
@@ -62,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenTerms
 }) => {
   const t = TRANSLATIONS[currentLang] || TRANSLATIONS.pt;
+  const isStaff = isStaffOrAdmin(user?.role);
   const isSuperAdmin = user?.role === 'super_admin' || user?.role === 'admin_level1';
   const isAdmin = isSuperAdmin || user?.role === 'admin' || user?.role === 'admin_level2';
   const isManager = isAdmin || user?.role === 'manager';
@@ -166,11 +168,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
 
-        {/* Management & Governance Section */}
-        {managementItems.length > 0 && (
+        {/* Management & Governance Section - Exclusivo para Staff e Administradores */}
+        {isStaff && managementItems.length > 0 && (
           <>
-            <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mt-4 mb-2 px-3 font-mono">
-              Gestão & Operações
+            <div className="text-[10px] text-amber-400 uppercase tracking-[0.2em] font-bold mt-4 mb-2 px-3 font-mono flex items-center justify-between">
+              <span>Backoffice</span>
+              <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30">STAFF</span>
             </div>
             {managementItems.map((item) => {
               const Icon = item.icon;
