@@ -27,6 +27,8 @@ import { downloadOfficialExcelTemplate } from '../utils/excelTemplate';
 import { exportSimulationDossierPDF } from '../utils/exportDocumentUtils';
 import { isStaffOrAdmin, canUserSimulate } from '../utils/accessControl';
 import { ClientCreditNoticeBanner } from './ClientCreditNoticeBanner';
+import { consumeGuestCredit, getGuestCredits } from '../utils/guestCredits';
+import { ExhaustedCreditsModal } from './ExhaustedCreditsModal';
 
 interface ExcelBatchSimulatorProps {
   user: UserSafe | null;
@@ -47,9 +49,10 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
   onCalculationDone
 }) => {
   const t = TRANSLATIONS[currentLang] || TRANSLATIONS.pt;
+  const [showExhaustedModal, setShowExhaustedModal] = useState<boolean>(false);
 
   const isStaff = isStaffOrAdmin(user?.role);
-  const isUnlocked = isStaff || (user ? Boolean(user.isBatchUnlocked || user.activePlanId) : false);
+  const isUnlocked = isStaff || !user || Boolean(user?.isBatchUnlocked || user?.activePlanId);
 
   const [countryCode, setCountryCode] = useState<string>('AO');
   const [vatRate, setVatRate] = useState<number>(14);
@@ -110,8 +113,10 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!user) {
-      onOpenAuth();
+    const simCheck = canUserSimulate(user);
+    if (!simCheck.allowed) {
+      setErrorMessage(simCheck.message);
+      setShowExhaustedModal(true);
       return;
     }
 
@@ -194,17 +199,10 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
       return;
     }
 
-    // AUTH & RBAC SIMULATION CHECK
-    if (!user) {
-      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
-      onOpenAuth();
-      return;
-    }
-
     const simCheck = canUserSimulate(user);
     if (!simCheck.allowed) {
       setErrorMessage(simCheck.message);
-      onOpenPlans();
+      setShowExhaustedModal(true);
       return;
     }
 
@@ -231,7 +229,7 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
       if (!res.ok) {
         if (res.status === 403 || res.status === 402) {
           setErrorMessage(resData.error);
-          onOpenPlans();
+          setShowExhaustedModal(true);
         } else {
           setErrorMessage(resData.error || 'Erro ao processar o cálculo em lote.');
         }
@@ -243,7 +241,15 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
       setSuccessMessage(
         `Cálculo concluído com sucesso! ${resData.processedItems.length} linhas processadas com as colunas NANUCLOUD aplicadas.`
       );
-      onCalculationDone(resData.queriesRemaining);
+
+      if (user) {
+        onCalculationDone(resData.queriesRemaining);
+      } else {
+        const left = consumeGuestCredit();
+        if (left === 0) {
+          setTimeout(() => setShowExhaustedModal(true), 1200);
+        }
+      }
     } catch (err) {
       console.error(err);
       setErrorMessage('Ocorreu uma falha de comunicação com o servidor ao calcular o lote.');
@@ -762,6 +768,15 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
           <strong>Aviso Legal Nanucloud:</strong> A utilização deste simulador em lotes Excel tem caráter estimativo e informativo, <strong>não dispensando a consulta de um profissional de contas</strong> ou contabilista certificado.
         </span>
       </div>
+
+      {/* Exhausted Credits Modal - Prompts user to buy plan, then login */}
+      <ExhaustedCreditsModal
+        isOpen={showExhaustedModal}
+        onClose={() => setShowExhaustedModal(false)}
+        onOpenPlans={onOpenPlans}
+        onOpenAuth={onOpenAuth}
+        isGuest={!user}
+      />
     </div>
   );
 };

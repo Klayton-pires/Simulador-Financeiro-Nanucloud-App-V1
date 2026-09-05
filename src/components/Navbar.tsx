@@ -5,6 +5,7 @@ import { Sparkles, Shield, User as UserIcon, LogOut, FileText, CreditCard, Chevr
 import { NanuCloudLogo } from './NanuCloudLogo';
 import { useLayoutMode } from '../data/layoutMode';
 import { isStaffOrAdmin, getRoleDisplayLabel } from '../utils/accessControl';
+import { useGuestCredits } from '../utils/guestCredits';
 
 interface NavbarProps {
   user: UserSafe | null;
@@ -35,6 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [layoutMode, setLayoutMode] = useLayoutMode();
+  const guestCredits = useGuestCredits();
   const t = TRANSLATIONS[currentLang] || TRANSLATIONS.pt;
 
   return (
@@ -116,10 +118,30 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
           ) : (
-            <div className="hidden sm:flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2.5 py-1 rounded-lg text-xs font-mono">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>{t.freeQueriesTag}</span>
-            </div>
+            <button
+              onClick={onOpenPlans}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer ${
+                guestCredits > 0
+                  ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 animate-pulse'
+              }`}
+              title={
+                guestCredits > 0
+                  ? `${guestCredits} simulações de teste disponíveis sem registo. Clique para ver planos.`
+                  : 'Créditos gratuitos esgotados! Clique para adquirir um plano e continuar.'
+              }
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${guestCredits > 0 ? 'text-emerald-400' : 'text-amber-400'}`} />
+              <span className="font-bold">{guestCredits}</span>
+              <span className="hidden sm:inline font-sans text-[11px] opacity-80">grátis</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                guestCredits > 0
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-amber-500/30 text-amber-200 border border-amber-500/50'
+              }`}>
+                {guestCredits > 0 ? 'PLANOS' : 'COMPRAR'}
+              </span>
+            </button>
           )}
 
           {/* Botão de Acesso ao Back Office - Exclusivo para Staff e Administradores */}

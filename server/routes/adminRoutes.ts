@@ -80,7 +80,10 @@ router.post('/transactions/:id/validate', requireAdminLevel2, (req: AuthRequest,
       return res.status(404).json({ error: 'Transação não encontrada.' });
     }
 
-    const user = db.findUserById(tx.userId);
+    let user = db.findUserById(tx.userId);
+    if (!user && tx.userEmail) {
+      user = db.findUserByEmail(tx.userEmail);
+    }
     if (!user) {
       return res.status(404).json({ error: 'Utilizador associado à transação não foi encontrado.' });
     }
@@ -94,8 +97,8 @@ router.post('/transactions/:id/validate', requireAdminLevel2, (req: AuthRequest,
       const unlocksBatch = selectedPlan ? selectedPlan.unlocksBatch : true;
 
       // Update user balances and unlocked modules
-      db.updateUser(user.id, {
-        queriesRemaining: user.queriesRemaining + tx.queriesGranted,
+      const updatedUser = db.updateUser(user.id, {
+        queriesRemaining: (user.queriesRemaining || 0) + tx.queriesGranted,
         activePlanId: tx.planId,
         activePlanName: tx.planName,
         planExpiresAt: expiryDate,
@@ -103,13 +106,23 @@ router.post('/transactions/:id/validate', requireAdminLevel2, (req: AuthRequest,
         isBatchUnlocked: user.isBatchUnlocked || unlocksBatch
       });
 
-      db.updateTransaction(id, {
+      const updatedTx = db.updateTransaction(id, {
         status: 'approved',
         reviewedByAdminId: admin.id,
         reviewedByAdminName: admin.name,
         reviewedAt: new Date().toISOString(),
         notes: notes || tx.notes
       });
+
+      // Synchronize SQLite DB
+      try {
+        sqliteDb.syncFromObject({
+          users: db.getUsers(),
+          transactions: db.getTransactions()
+        });
+      } catch (sqlErr) {
+        console.warn('SQLite sync warning on transaction approval:', sqlErr);
+      }
 
       db.addAuditLog({
         userId: admin.id,
@@ -119,13 +132,36 @@ router.post('/transactions/:id/validate', requireAdminLevel2, (req: AuthRequest,
         entityType: 'payment',
         entityId: id,
         ipAddress: req.ip || req.socket.remoteAddress,
-        details: `Pagamento de ${tx.amountKz.toLocaleString('pt-PT')} Kz aprovado para ${user.name} (${user.email}). Atribuídas ${tx.queriesGranted} pesquisas. Módulos atualizados.`
+        details: `Pagamento de ${tx.amountKz.toLocaleString('pt-PT')} Kz aprovado para ${user.name} (${user.email}). Atribuídas ${tx.queriesGranted} consultas. Novo saldo: ${updatedUser?.queriesRemaining} consultas. Módulos atualizados.`
       });
 
+      const safeUser = updatedUser ? {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        phone: updatedUser.phone,
+        company: updatedUser.company,
+        role: updatedUser.role,
+        isActive: updatedUser.isActive,
+        queriesRemaining: updatedUser.queriesRemaining,
+        totalQueriesUsed: updatedUser.totalQueriesUsed,
+        activePlanId: updatedUser.activePlanId,
+        activePlanName: updatedUser.activePlanName,
+        planExpiresAt: updatedUser.planExpiresAt,
+        isImportUnlocked: updatedUser.isImportUnlocked,
+        isBatchUnlocked: updatedUser.isBatchUnlocked,
+        createdAt: updatedUser.createdAt,
+        updatedAt: updatedUser.updatedAt
+      } : null;
+
       return res.json({
-        message: `Pagamento aprovado com sucesso! ${tx.queriesGranted} pesquisas creditadas e plano ativado para ${user.name}.`,
+        message: `Pagamento aprovado com sucesso! ${tx.queriesGranted} consultas creditadas e plano ativado para ${user.name}. Novo saldo: ${safeUser?.queriesRemaining} consultas.`,
         transactionId: id,
-        status: 'approved'
+        status: 'approved',
+        transaction: updatedTx,
+        user: safeUser,
+        queriesAdded: tx.queriesGranted,
+        newTotalQueries: safeUser?.queriesRemaining
       });
     } else {
       db.updateTransaction(id, {

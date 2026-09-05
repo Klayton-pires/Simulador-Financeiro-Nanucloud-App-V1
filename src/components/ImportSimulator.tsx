@@ -22,6 +22,10 @@ import {
 } from '../utils/exportDocumentUtils';
 import { isStaffOrAdmin, canUserSimulate } from '../utils/accessControl';
 import { ClientCreditNoticeBanner } from './ClientCreditNoticeBanner';
+import { ConfirmSimulationModal, SimulationSummaryItem } from './ConfirmSimulationModal';
+import { saveSimulationToFirestore } from '../services/firebase';
+import { consumeGuestCredit, getGuestCredits } from '../utils/guestCredits';
+import { ExhaustedCreditsModal } from './ExhaustedCreditsModal';
 
 interface ImportSimulatorProps {
   user: UserSafe | null;
@@ -39,9 +43,10 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
   onCalculationDone
 }) => {
   const t = TRANSLATIONS[currentLang] || TRANSLATIONS.pt;
+  const [showExhaustedModal, setShowExhaustedModal] = useState<boolean>(false);
 
   const isStaff = isStaffOrAdmin(user?.role);
-  const isUnlocked = isStaff || (user ? Boolean(user.isImportUnlocked || user.activePlanId) : false);
+  const isUnlocked = isStaff || !user || Boolean(user?.isImportUnlocked || user?.activePlanId);
 
   const [originCountry, setOriginCountry] = useState<string>('CN');
   const [destCountry, setDestCountry] = useState<string>('AO');
@@ -59,6 +64,7 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
   const [notes, setNotes] = useState<string>('');
 
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [results, setResults] = useState<any | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -76,20 +82,23 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
     );
   };
 
-  const handleCalculate = async () => {
+  // Reset results if user changes inputs to enforce explicit confirmation
+  const isFirstRender = React.useRef(true);
+  React.useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setResults(null);
+  }, [fob, freight, insurance, customsRate, iecRate, otherFees, vatRate, marginPct, tpaRate, destCountry, originCountry]);
+
+  const handleRequestCalculate = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
 
     const cFob = parseFloat(fob) || 0;
     if (cFob <= 0) {
       setErrorMessage('O valor FOB (Mercadoria) deve ser superior a zero.');
-      return;
-    }
-
-    // AUTH & RBAC SIMULATION CHECK
-    if (!user) {
-      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
-      onOpenAuth();
       return;
     }
 
@@ -102,14 +111,19 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
     const simCheck = canUserSimulate(user);
     if (!simCheck.allowed) {
       setErrorMessage(simCheck.message);
-      onOpenPlans();
+      setShowExhaustedModal(true);
       return;
     }
 
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmAndExecute = async () => {
     setIsCalculating(true);
 
     try {
-      let remaining = user.queriesRemaining;
+      const cFob = parseFloat(fob) || 0;
+      let remaining = user?.queriesRemaining || 0;
       let calcData = null;
 
       try {
@@ -141,6 +155,7 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
           setErrorMessage(data.error);
           onOpenPlans();
           setIsCalculating(false);
+          setShowConfirmModal(false);
           return;
         }
       } catch (apiErr) {
@@ -187,12 +202,33 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
           estimatedProfit,
           currency: destFiscal.curr
         };
-        remaining = Math.max(0, user.queriesRemaining - 1);
+        remaining = Math.max(0, (user?.queriesRemaining || 1) - 1);
       }
 
       setResults(calcData);
-      setSuccessMessage('Cálculo de importação e despacho aduaneiro concluído com sucesso!');
-      onCalculationDone(remaining);
+      setShowConfirmModal(false);
+      setSuccessMessage('Cálculo de importação e despacho aduaneiro confirmado com sucesso!');
+
+      if (user) {
+        onCalculationDone(remaining);
+        // Save to Firestore
+        saveSimulationToFirestore(user.id, 'import', {
+          originCountry,
+          destCountry,
+          fob: calcData.fob,
+          cif: calcData.cif,
+          landedCost: calcData.landedCost,
+          recommendedPVP: calcData.recommendedPVP,
+          totalCustomsDuties: calcData.totalCustomsDuties,
+          estimatedProfit: calcData.estimatedProfit,
+          productName: productName || 'Mercadoria Internacional'
+        }).catch(() => {});
+      } else {
+        const left = consumeGuestCredit();
+        if (left === 0) {
+          setTimeout(() => setShowExhaustedModal(true), 1200);
+        }
+      }
     } catch (err) {
       console.error(err);
       setErrorMessage('Falha ao calcular importação.');
@@ -200,6 +236,35 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
       setIsCalculating(false);
     }
   };
+
+  const cFob = parseFloat(fob) || 0;
+  const cFreight = parseFloat(freight) || 0;
+  const cIns = parseFloat(insurance) || 0;
+  const cOther = parseFloat(otherFees) || 0;
+
+  const simulationSummaryItems: SimulationSummaryItem[] = [
+    {
+      label: 'Valor FOB Mercadoria',
+      value: formatMoney(cFob),
+      detail: `Origem: ${originCountry} → Destino: ${destFiscal.name}`,
+      isHighlight: true
+    },
+    {
+      label: 'Logística Internacional CIF',
+      value: formatMoney(cFob + cFreight + cIns),
+      detail: `Frete: ${formatMoney(cFreight)} | Seguro: ${formatMoney(cIns)}`
+    },
+    {
+      label: 'Taxas & Direitos Aduaneiros',
+      value: `Tarifa: ${customsRate}% | IEC: ${iecRate}%`,
+      detail: `Outras Despesas: ${formatMoney(cOther)} | IVA: ${vatRate}%`
+    },
+    {
+      label: 'Margem Pretendida',
+      value: `${marginPct}%`,
+      detail: `Taxa TPA/Banco: ${tpaRate}%`
+    }
+  ];
 
   const handleExportPDF = () => {
     if (!results) return;
@@ -539,17 +604,17 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
         </div>
 
         <button
-          onClick={handleCalculate}
+          onClick={handleRequestCalculate}
           disabled={isCalculating}
-          className="w-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-extrabold py-3.5 px-6 rounded-2xl text-sm uppercase tracking-wider transition-all shadow-lg shadow-sky-950/30 flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-extrabold py-3.5 px-6 rounded-2xl text-sm uppercase tracking-wider transition-all shadow-lg shadow-sky-950/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
         >
           <Ship className="w-4 h-4" />
-          <span>{isCalculating ? 'A Calcular Despacho...' : t.btnCalcImp}</span>
+          <span>{isCalculating ? 'A Processar Simulação...' : 'CALCULAR & CONFIRMAR IMPORTAÇÃO'}</span>
         </button>
       </div>
 
       {/* Results View */}
-      {results && (
+      {results ? (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
           {/* Summary Card */}
           <div className="bg-slate-850 border border-sky-500/40 rounded-3xl p-6 shadow-xl">
@@ -560,6 +625,11 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
               </h3>
 
               <div className="flex items-center gap-2">
+                <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold flex items-center gap-1 border border-emerald-500/30">
+                  <CheckCircle className="w-3 h-3 text-emerald-400" />
+                  SIMULAÇÃO CONFIRMADA
+                </span>
+
                 <button
                   onClick={handleExportPDF}
                   className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
@@ -663,7 +733,41 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
             </div>
           </div>
         </div>
+      ) : (
+        <div className="bg-[#1E293B]/60 border border-dashed border-slate-700 rounded-2xl p-8 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center mx-auto">
+            <Anchor className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-200 font-mono">Aguardando Confirmação da Simulação</h3>
+          <p className="text-xs text-slate-400 font-mono max-w-sm mx-auto leading-relaxed">
+            Preencha os valores da mercadoria CIF e encargos aduaneiros e clique no botão <strong className="text-sky-300">"CALCULAR & CONFIRMAR IMPORTAÇÃO"</strong> para apurar o custo nacionalizado e PVP sugerido.
+          </p>
+        </div>
       )}
+
+      {/* Confirmation Modal before calculating results */}
+      <ConfirmSimulationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={handleConfirmAndExecute}
+        moduleName="Comércio Internacional & Importação"
+        title="Confirmar Simulação de Importação"
+        subtitle="Reveja os valores da carga FOB, frete marítimo/aéreo, taxas aduaneiras e margem comercial antes de apurar os custos."
+        summaryItems={simulationSummaryItems}
+        userQueriesRemaining={user ? (user.queriesRemaining || 0) : getGuestCredits()}
+        isStaffOrAdmin={user?.role === 'staff' || user?.role === 'admin' || user?.role === 'admin_level1' || user?.role === 'super_admin'}
+        isGuest={!user}
+        isProcessing={isCalculating}
+      />
+
+      {/* Exhausted Credits Modal - Prompts user to buy plan, then login */}
+      <ExhaustedCreditsModal
+        isOpen={showExhaustedModal}
+        onClose={() => setShowExhaustedModal(false)}
+        onOpenPlans={onOpenPlans}
+        onOpenAuth={onOpenAuth}
+        isGuest={!user}
+      />
 
       {/* Mandatory Accountant Disclaimer */}
       <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2.5 text-xs text-amber-300">

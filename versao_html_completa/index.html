@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NANUCLOUD - Sistema Financeiro & Simulador Fiscal Autónomo</title>
+  <!-- Tailwind CSS CDN para renderização moderna imediata -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f5f7ff',
+              100: '#ebf0fe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+              950: '#0f172a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      body { background: white !important; color: black !important; }
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      .card-print { border: 1px solid #ccc !important; box-shadow: none !important; }
+    }
+    .print-only { display: none; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- TOP STATUS & APP BAR -->
+  <header class="no-print bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <!-- Logo & Brand -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 font-black text-white text-xl">
+          N
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-blue-400 via-indigo-200 to-white bg-clip-text text-transparent">
+              NANUCLOUD
+            </span>
+            <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
+              ● Versão HTML Autónoma
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Motor Fiscal & Financeiro Independente (100% Funcional Offline)</p>
+        </div>
+      </div>
+
+      <!-- Controls: Currency & Print -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-300">
+          <span class="text-slate-400 mr-1.5 font-medium">Moeda:</span>
+          <select id="appCurrency" onchange="updateGlobalCurrency()" class="bg-transparent font-bold text-white outline-none cursor-pointer">
+            <option value="Kz" class="bg-slate-900 text-white" selected>AOA (Kz)</option>
+            <option value="€" class="bg-slate-900 text-white">EUR (€)</option>
+            <option value="$" class="bg-slate-900 text-white">USD ($)</option>
+            <option value="R$" class="bg-slate-900 text-white">BRL (R$)</option>
+            <option value="MT" class="bg-slate-900 text-white">MZN (MT)</option>
+            <option value="CVE" class="bg-slate-900 text-white">CVE (Esc)</option>
+          </select>
+        </div>
+
+        <button onclick="window.print()" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition cursor-pointer">
+          <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+          Imprimir / PDF
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAVIGATION TABS -->
+  <nav class="no-print bg-slate-900 border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex overflow-x-auto gap-2 py-2.5 text-sm font-medium scrollbar-none">
+      <button onclick="switchTab('local')" id="tab-btn-local" class="tab-btn px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold flex items-center gap-2 whitespace-nowrap shadow-sm transition">
+        🛒 Comércio Local & Retalho
+      </button>
+      <button onclick="switchTab('services')" id="tab-btn-services" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2 whitespace-nowrap transition">
+        💼 Serviços & Retenção
+      </button>
+      <button onclick="switchTab('import')" id="tab-btn-import" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2 whitespace-nowrap transition">
+        🚢 Importação & Aduana
+      </button>
+      <button onclick="switchTab('broker')" id="tab-btn-broker" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2 whitespace-nowrap transition">
+        🤝 Intermediação Comercial
+      </button>
+      <button onclick="switchTab('batch')" id="tab-btn-batch" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2 whitespace-nowrap transition">
+        📊 Lote / Excel
+      </button>
+      <button onclick="switchTab('matrix')" id="tab-btn-matrix" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2 whitespace-nowrap transition">
+        📜 Matriz Fiscal Internacional
+      </button>
+      <button onclick="switchTab('history')" id="tab-btn-history" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2 whitespace-nowrap transition">
+        📁 Histórico Local (<span id="historyCount">0</span>)
+      </button>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+
+    <!-- ========================================================================= -->
+    <!-- TAB 1: COMÉRCIO LOCAL & RETALHO -->
+    <!-- ========================================================================= -->
+    <section id="tab-local" class="tab-pane block">
+      <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-black text-white flex items-center gap-2">
+            <span>Simulador de Comércio Local & Preço de Venda</span>
+          </h2>
+          <p class="text-sm text-slate-400">Apure o Preço de Venda ao Público (PVP), IVA Liquidado, Custos Operacionais e Lucro Líquido Real.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="loadLocalSample()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-blue-400 border border-slate-700 rounded-lg transition">
+            Exemplo Prático (10.000 Kz)
+          </button>
+          <button onclick="resetLocalForm()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-400 border border-slate-700 rounded-lg transition">
+            Limpar
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <!-- FORM COLUMN -->
+        <div class="lg:col-span-6 space-y-5 bg-slate-900/70 border border-slate-800 p-6 rounded-2xl shadow-xl">
+          <div>
+            <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Descrição da Mercadoria / Produto</label>
+            <input type="text" id="localTitle" placeholder="Ex: Saco de Arroz 25kg / Óleo Alimentar" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 outline-none">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Custo de Aquisição Líquido (<span class="currLabel">Kz</span>) *</label>
+              <input type="number" id="localCost" step="0.01" min="0" placeholder="0.00" oninput="calculateLocal()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-blue-500 outline-none font-mono font-bold">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Margem de Lucro Desejada (%)</label>
+              <input type="number" id="localMargin" step="0.5" min="0" value="30" oninput="calculateLocal()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-blue-500 outline-none font-mono">
+            </div>
+          </div>
+
+          <!-- TARGET FIXED PRICE OVERRIDE -->
+          <div class="p-3.5 bg-slate-950/60 rounded-xl border border-slate-800/80">
+            <label class="block text-xs font-bold text-indigo-300 mb-1">Preço Fixo Alvo (Opcional - Substitui Margem)</label>
+            <p class="text-[11px] text-slate-400 mb-2">Se definir um preço final de mercado, o sistema calculará a margem líquida resultante reversa.</p>
+            <input type="number" id="localFixedPrice" step="0.01" min="0" placeholder="Ex: 15000 (Deixe 0 para usar a margem %)" oninput="calculateLocal()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Taxa de IVA (%)</label>
+              <select id="localVatRate" onchange="calculateLocal()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:border-blue-500 outline-none">
+                <option value="14" selected>Geral Angola (14%)</option>
+                <option value="7">Simplificado (7%)</option>
+                <option value="5">Cesta Básica (5%)</option>
+                <option value="0">Isento (0%) - Art. 12º CIVA</option>
+                <option value="23">Normal Portugal (23%)</option>
+                <option value="16">Moçambique (16%)</option>
+                <option value="15">Cabo Verde (15%)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Comissão TPA (%)</label>
+              <input type="number" id="localTpaRate" step="0.1" min="0" value="0.5" oninput="calculateLocal()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:border-blue-500 outline-none font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Imposto Ind. (%)</label>
+              <input type="number" id="localIiRate" step="0.5" min="0" value="25" oninput="calculateLocal()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:border-blue-500 outline-none font-mono">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Custos Operacionais Adicionais (<span class="currLabel">Kz</span>)</label>
+            <input type="number" id="localOpCost" step="0.01" min="0" value="0" oninput="calculateLocal()" placeholder="Embalagem, transporte local, etc." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-blue-500 outline-none font-mono">
+          </div>
+
+          <button onclick="saveSimulationLocal('local')" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 transition cursor-pointer text-sm">
+            💾 Guardar no Histórico da Sessão
+          </button>
+        </div>
+
+        <!-- RESULTS COLUMN -->
+        <div class="lg:col-span-6 space-y-6">
+          <div class="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+              <span class="text-xs font-bold uppercase tracking-widest text-blue-400 font-mono">RESUMO ECONÓMICO & FISCAL</span>
+              <span id="localStatusBadge" class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Cálculo em Tempo Real</span>
+            </div>
+
+            <!-- HERO METRIC: PVP FINAL -->
+            <div class="mb-6 p-4 rounded-xl bg-blue-950/40 border border-blue-800/40">
+              <span class="text-xs font-bold uppercase text-blue-300">Preço de Venda ao Público (PVP com IVA)</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="resLocalPvpFinal" class="text-3xl sm:text-4xl font-black text-white font-mono">0.00</span>
+                <span class="currLabel text-xl font-bold text-blue-400">Kz</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">Preço final de prateleira / faturação ao cliente final.</p>
+            </div>
+
+            <!-- DETAILED BREAKDOWN -->
+            <div class="grid grid-cols-2 gap-4 text-xs font-mono">
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Preço Base (Sem IVA)</span>
+                <span id="resLocalPvpBase" class="text-base font-bold text-slate-200">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">IVA Liquidado</span>
+                <span id="resLocalVatSale" class="text-base font-bold text-amber-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Lucro Bruto Operacional</span>
+                <span id="resLocalProfit" class="text-base font-bold text-emerald-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Margem Real Obtida</span>
+                <span id="resLocalActualMargin" class="text-base font-bold text-indigo-400">0.00%</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Custo Comissão TPA</span>
+                <span id="resLocalTpaCost" class="text-base font-bold text-rose-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Estimativa Imposto Industrial</span>
+                <span id="resLocalIndustrialTax" class="text-base font-bold text-rose-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+            </div>
+
+            <!-- NET PROFIT HIGHLIGHT -->
+            <div class="mt-4 p-4 rounded-xl bg-emerald-950/30 border border-emerald-800/40 flex items-center justify-between">
+              <div>
+                <span class="text-xs font-bold uppercase text-emerald-400">Lucro Líquido Real em Caixa</span>
+                <p class="text-[11px] text-slate-400">Após IVA, TPA e Provisão de Imposto Industrial</p>
+              </div>
+              <div class="text-right">
+                <span id="resLocalNetProfit" class="text-xl sm:text-2xl font-black text-emerald-400 font-mono">0.00</span>
+                <span class="currLabel text-sm font-bold text-emerald-300">Kz</span>
+              </div>
+            </div>
+
+            <!-- BREAK-EVEN POINT -->
+            <div class="mt-3 p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 flex items-center justify-between text-xs font-mono">
+              <span class="text-slate-400">Ponto de Equilíbrio (Break-Even PVP):</span>
+              <span class="font-bold text-slate-200"><span id="resLocalBreakEven">0.00</span> <span class="currLabel">Kz</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 2: SERVIÇOS & RETENÇÃO NA FONTE -->
+    <!-- ========================================================================= -->
+    <section id="tab-services" class="tab-pane hidden">
+      <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-black text-white flex items-center gap-2">
+            <span>Simulador de Prestação de Serviços & Retenção na Fonte</span>
+          </h2>
+          <p class="text-sm text-slate-400">Especialmente desenvolvido para consultores, advogados, TI e prestadores de serviços com apuramento da Retenção Legal (6.5% / 25%).</p>
+        </div>
+        <button onclick="loadServicesSample()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-blue-400 border border-slate-700 rounded-lg transition">
+          Exemplo Serviços (100.000 Kz)
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div class="lg:col-span-6 space-y-5 bg-slate-900/70 border border-slate-800 p-6 rounded-2xl shadow-xl">
+          <div>
+            <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Designação do Serviço Prestado</label>
+            <input type="text" id="serviceTitle" placeholder="Ex: Auditoria Contabilística / Consultoria de TI" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 outline-none">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Honorários / Valor Base Faturado (<span class="currLabel">Kz</span>) *</label>
+              <input type="number" id="serviceBaseValue" step="0.01" min="0" placeholder="0.00" oninput="calculateServices()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-blue-500 outline-none font-mono font-bold">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Regime de Retenção na Fonte (%)</label>
+              <select id="serviceRetentionRate" onchange="calculateServices()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:border-blue-500 outline-none font-medium">
+                <option value="6.5" selected>Angola - Art. 67º CIVA / IRT Serviços (6.5%)</option>
+                <option value="15">Prestação Serviços Técnicos Especializados (15%)</option>
+                <option value="25">Não-Residentes / Serviços no Exterior (25%)</option>
+                <option value="20">Portugal - Retenção Categoria B (20%)</option>
+                <option value="25">Portugal - Categoria B Geral (25%)</option>
+                <option value="0">Isento de Retenção na Fonte (0%)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">IVA sobre Serviços (%)</label>
+              <select id="serviceVatRate" onchange="calculateServices()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:border-blue-500 outline-none font-medium">
+                <option value="14" selected>Geral Angola (14%)</option>
+                <option value="7">Simplificado (7%)</option>
+                <option value="0">Isento de IVA (0%)</option>
+                <option value="23">Normal Portugal (23%)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Custos Diretos do Projeto (<span class="currLabel">Kz</span>)</label>
+              <input type="number" id="serviceDirectCosts" step="0.01" min="0" value="0" oninput="calculateServices()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono">
+            </div>
+          </div>
+
+          <button onclick="saveSimulationLocal('service')" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg transition cursor-pointer text-sm">
+            💾 Guardar Simulação de Serviços
+          </button>
+        </div>
+
+        <div class="lg:col-span-6 space-y-6">
+          <div class="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 shadow-2xl">
+            <span class="text-xs font-bold uppercase tracking-widest text-indigo-400 font-mono block mb-4">MAPA DE RETENÇÃO E LÍQUIDO A RECEBER</span>
+
+            <!-- HERO 1: LÍQUIDO A RECEBER -->
+            <div class="mb-6 p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/40">
+              <span class="text-xs font-bold uppercase text-indigo-300">Valor Líquido Real a Entrar na Conta Bancária</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="resServiceNetReceived" class="text-3xl sm:text-4xl font-black text-white font-mono">0.00</span>
+                <span class="currLabel text-xl font-bold text-indigo-400">Kz</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">Montante efetivamente pago pelo cliente contratante após dedução da retenção legal.</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 text-xs font-mono">
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Valor Bruto Faturado</span>
+                <span id="resServiceTotalInvoiced" class="text-base font-bold text-slate-200">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Retenção na Fonte Deduzida</span>
+                <span id="resServiceRetention" class="text-base font-bold text-rose-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">IVA Liquidado na Fatura</span>
+                <span id="resServiceVat" class="text-base font-bold text-amber-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Lucro Líquido Real Final</span>
+                <span id="resServiceNetProfit" class="text-base font-bold text-emerald-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+            </div>
+
+            <div class="mt-5 p-3.5 bg-blue-950/20 border border-blue-900/30 rounded-xl text-xs text-slate-300 leading-relaxed">
+              <strong>Nota Fiscal Importante:</strong> O cliente contratante atua como sujeito passivo com obrigação de retenção, emitindo o respetivo comprovativo/declaração de retenção para abater na liquidação anual de Imposto Industrial ou IRT.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 3: IMPORTAÇÃO & DESPACHO ADUANEIRO -->
+    <!-- ========================================================================= -->
+    <section id="tab-import" class="tab-pane hidden">
+      <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-black text-white flex items-center gap-2">
+            <span>Simulador de Importação & Despacho Aduaneiro</span>
+          </h2>
+          <p class="text-sm text-slate-400">Cálculo de Incoterms FOB, Frete, Seguro, CIF, Direitos Aduaneiros, IEC, Taxa Estatística, IVA Aduaneiro e Custo Nacionalizado (Landed Cost).</p>
+        </div>
+        <button onclick="loadImportSample()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-blue-400 border border-slate-700 rounded-lg transition">
+          Exemplo Importação (FOB $20,000)
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div class="lg:col-span-6 space-y-5 bg-slate-900/70 border border-slate-800 p-6 rounded-2xl shadow-xl">
+          <div>
+            <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Descrição da Mercadoria Importada</label>
+            <input type="text" id="importTitle" placeholder="Ex: Contentor 20ft de Eletrodomésticos / Peças Auto" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 outline-none">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Valor FOB *</label>
+              <input type="number" id="importFob" step="0.01" min="0" placeholder="0.00" oninput="calculateImport()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white font-mono font-bold">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Frete Internacional</label>
+              <input type="number" id="importFreight" step="0.01" min="0" value="0" oninput="calculateImport()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Seguro Marítimo</label>
+              <input type="number" id="importInsurance" step="0.01" min="0" value="0" oninput="calculateImport()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white font-mono">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Direitos Aduaneiros (%)</label>
+              <select id="importCustomsRate" onchange="calculateImport()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:border-blue-500 outline-none">
+                <option value="5">Bens Essenciais (5%)</option>
+                <option value="10" selected>Pauta Geral (10%)</option>
+                <option value="20">Bens Intermédios (20%)</option>
+                <option value="30">Bens de Consumo (30%)</option>
+                <option value="50">Sobretaxa Pautal (50%)</option>
+                <option value="0">Isenção Tarifária (0%)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">IEC (%)</label>
+              <input type="number" id="importIecRate" step="0.5" min="0" value="0" oninput="calculateImport()" placeholder="0%" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">IVA Aduaneiro (%)</label>
+              <select id="importVatRate" onchange="calculateImport()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:border-blue-500 outline-none">
+                <option value="14" selected>Geral (14%)</option>
+                <option value="5">Cesta Básica (5%)</option>
+                <option value="0">Isento (0%)</option>
+                <option value="23">UE / Portugal (23%)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Taxas Portuárias & Despachante</label>
+              <input type="number" id="importPortFees" step="0.01" min="0" value="250" oninput="calculateImport()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Margem de Revenda Local (%)</label>
+              <input type="number" id="importLocalMargin" step="1" min="0" value="35" oninput="calculateImport()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono">
+            </div>
+          </div>
+
+          <button onclick="saveSimulationLocal('import')" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg transition cursor-pointer text-sm">
+            💾 Guardar Simulação Aduaneira
+          </button>
+        </div>
+
+        <div class="lg:col-span-6 space-y-6">
+          <div class="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 shadow-2xl">
+            <span class="text-xs font-bold uppercase tracking-widest text-emerald-400 font-mono block mb-4">CUSTO NACIONALIZADO (LANDED COST) & MARGEM</span>
+
+            <!-- HERO: LANDED COST -->
+            <div class="mb-6 p-4 rounded-xl bg-emerald-950/40 border border-emerald-800/40">
+              <span class="text-xs font-bold uppercase text-emerald-300">Custo Total em Armazém (Landed Cost)</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="resImportLandedCost" class="text-3xl sm:text-4xl font-black text-white font-mono">0.00</span>
+                <span class="currLabel text-xl font-bold text-emerald-400">Kz</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">Inclui CIF, Direitos Aduaneiros, IEC, IVA e todas as taxas portuárias.</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 text-xs font-mono">
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Valor Aduaneiro CIF</span>
+                <span id="resImportCif" class="text-base font-bold text-slate-200">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Direitos Aduaneiros</span>
+                <span id="resImportCustoms" class="text-base font-bold text-amber-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">IEC (Consumo)</span>
+                <span id="resImportIec" class="text-base font-bold text-amber-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">IVA Aduaneiro</span>
+                <span id="resImportVat" class="text-base font-bold text-amber-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">PVP de Revenda Sugerido</span>
+                <span id="resImportPvpSale" class="text-base font-bold text-indigo-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Lucro Estimado de Revenda</span>
+                <span id="resImportProfit" class="text-base font-bold text-emerald-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 4: INTERMEDIAÇÃO & CORRETAGEM -->
+    <!-- ========================================================================= -->
+    <section id="tab-broker" class="tab-pane hidden">
+      <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-black text-white flex items-center gap-2">
+            <span>Simulador de Intermediação & Corretagem Comercial</span>
+          </h2>
+          <p class="text-sm text-slate-400">Cálculo de comissões sobre negócios, compra e venda de imóveis, viaturas e mercadorias com retenção na fonte.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div class="lg:col-span-6 space-y-5 bg-slate-900/70 border border-slate-800 p-6 rounded-2xl shadow-xl">
+          <div>
+            <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Designação do Negócio / Transação</label>
+            <input type="text" id="brokerTitle" placeholder="Ex: Intermediação Imobiliária Edifício Talatona" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Valor Global da Transação (<span class="currLabel">Kz</span>) *</label>
+              <input type="number" id="brokerDealValue" step="0.01" min="0" placeholder="Ex: 50000000" oninput="calculateBroker()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono font-bold">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Comissão Acordada (%) *</label>
+              <input type="number" id="brokerCommPct" step="0.1" min="0" value="5" oninput="calculateBroker()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Retenção na Fonte da Comissão (%)</label>
+              <input type="number" id="brokerRetentionRate" step="0.5" min="0" value="6.5" oninput="calculateBroker()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Despesas Operacionais do Corretor</label>
+              <input type="number" id="brokerExpenses" step="0.01" min="0" value="0" oninput="calculateBroker()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono">
+            </div>
+          </div>
+
+          <button onclick="saveSimulationLocal('broker')" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg transition cursor-pointer text-sm">
+            💾 Guardar Intermediação
+          </button>
+        </div>
+
+        <div class="lg:col-span-6 space-y-6">
+          <div class="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 shadow-2xl">
+            <span class="text-xs font-bold uppercase tracking-widest text-amber-400 font-mono block mb-4">MAPA FINANCEIRO DA INTERMEDIAÇÃO</span>
+
+            <div class="mb-6 p-4 rounded-xl bg-amber-950/30 border border-amber-800/40">
+              <span class="text-xs font-bold uppercase text-amber-300">Comissão Líquida do Intermediário</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="resBrokerNetComm" class="text-3xl sm:text-4xl font-black text-white font-mono">0.00</span>
+                <span class="currLabel text-xl font-bold text-amber-400">Kz</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">Valor efetivo após dedução da Retenção na Fonte de 6.5% e despesas.</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 text-xs font-mono">
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Comissão Bruta Total</span>
+                <span id="resBrokerGrossComm" class="text-base font-bold text-slate-200">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block mb-1">Retenção na Fonte Legal</span>
+                <span id="resBrokerRetention" class="text-base font-bold text-rose-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 col-span-2">
+                <span class="text-slate-400 block mb-1">Saldo Remanescente a Entregar ao Proprietário</span>
+                <span id="resBrokerOwnerBalance" class="text-lg font-bold text-emerald-400">0.00</span> <span class="currLabel text-slate-400">Kz</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 5: LOTE / EXCEL / CSV -->
+    <!-- ========================================================================= -->
+    <section id="tab-batch" class="tab-pane hidden">
+      <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-black text-white flex items-center gap-2">
+            <span>Simulador em Lote (Tabela & CSV)</span>
+          </h2>
+          <p class="text-sm text-slate-400">Processe múltiplos produtos simultaneamente com apuramento de totais de investimento, IVA e lucro consolidado.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="addBatchRow()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white rounded-lg transition cursor-pointer">
+            + Adicionar Linha
+          </button>
+          <button onclick="exportBatchCsv()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white rounded-lg transition cursor-pointer">
+            Exportar CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- BATCH TABLE -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="bg-slate-950/80 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+            <tr>
+              <th class="p-3">Artigo / Descrição</th>
+              <th class="p-3">Custo Un. (<span class="currLabel">Kz</span>)</th>
+              <th class="p-3">Qtd</th>
+              <th class="p-3">Margem %</th>
+              <th class="p-3">IVA %</th>
+              <th class="p-3">PVP Un. (c/ IVA)</th>
+              <th class="p-3">Total Venda</th>
+              <th class="p-3">Lucro Total</th>
+              <th class="p-3 text-center">Ação</th>
+            </tr>
+          </thead>
+          <tbody id="batchTableBody" class="divide-y divide-slate-800/60">
+            <!-- Dynamic rows inserted by JS -->
+          </tbody>
+        </table>
+
+        <!-- BATCH TOTALS BAR -->
+        <div class="mt-6 p-4 bg-slate-950 rounded-xl border border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
+          <div>
+            <span class="text-slate-400 block mb-1">Investimento Total Custo:</span>
+            <span id="batchTotalCost" class="text-base font-bold text-slate-200">0.00</span> <span class="currLabel">Kz</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block mb-1">Receita Total de Venda:</span>
+            <span id="batchTotalSale" class="text-base font-bold text-blue-400">0.00</span> <span class="currLabel">Kz</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block mb-1">IVA Total Liquidado:</span>
+            <span id="batchTotalVat" class="text-base font-bold text-amber-400">0.00</span> <span class="currLabel">Kz</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block mb-1">Lucro Operacional Líquido:</span>
+            <span id="batchTotalProfit" class="text-base font-bold text-emerald-400">0.00</span> <span class="currLabel">Kz</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 6: MATRIZ FISCAL INTERNACIONAL -->
+    <!-- ========================================================================= -->
+    <section id="tab-matrix" class="tab-pane hidden">
+      <div class="mb-6">
+        <h2 class="text-2xl font-black text-white">Matriz Fiscal & Legislações Aduaneiras</h2>
+        <p class="text-sm text-slate-400">Tabela de referência para parametrização dos cálculos em conformidade com as regras fiscais dos países suportados.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- ANGOLA -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl">🇦🇴</span>
+            <div>
+              <h3 class="font-bold text-white text-base">Angola (AGT)</h3>
+              <span class="text-xs text-slate-400">CIVA / Pauta Aduaneira OMA</span>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-2 font-mono">
+            <li>• <strong>IVA Geral:</strong> 14% (Regime Geral)</li>
+            <li>• <strong>IVA Cesta Básica:</strong> 5% (Alimentos Essenciais)</li>
+            <li>• <strong>IVA Simplificado:</strong> 7%</li>
+            <li>• <strong>Retenção Serviços:</strong> 6.5% (Art. 67º CIVA)</li>
+            <li>• <strong>Imposto Industrial:</strong> 25% (Geral) / 35% (Banca/Seguros)</li>
+            <li>• <strong>Direitos Aduaneiros:</strong> 2% a 70% conforme NCM/SH</li>
+          </ul>
+        </div>
+
+        <!-- PORTUGAL -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl">🇵🇹</span>
+            <div>
+              <h3 class="font-bold text-white text-base">Portugal (AT)</h3>
+              <span class="text-xs text-slate-400">Código do IVA / CIRS / CIRC</span>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-2 font-mono">
+            <li>• <strong>IVA Normal:</strong> 23% (Continente)</li>
+            <li>• <strong>IVA Intermédio:</strong> 13%</li>
+            <li>• <strong>IVA Reduzido:</strong> 6%</li>
+            <li>• <strong>Retenção Cat. B:</strong> 20% a 25%</li>
+            <li>• <strong>IRC Geral:</strong> 21% (+ Derrama Municipal)</li>
+          </ul>
+        </div>
+
+        <!-- MOÇAMBIQUE -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl">🇲🇿</span>
+            <div>
+              <h3 class="font-bold text-white text-base">Moçambique (ATM)</h3>
+              <span class="text-xs text-slate-400">Regulamento do IVA / IRPC</span>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-2 font-mono">
+            <li>• <strong>IVA Geral:</strong> 16% (Atualizado Decreto 2023)</li>
+            <li>• <strong>Retenção Serviços:</strong> 20%</li>
+            <li>• <strong>IRPC:</strong> 32% (Taxa Padrão)</li>
+          </ul>
+        </div>
+
+        <!-- CABO VERDE -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl">🇨🇻</span>
+            <div>
+              <h3 class="font-bold text-white text-base">Cabo Verde (DNRE)</h3>
+              <span class="text-xs text-slate-400">CIVA / IRPC</span>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-2 font-mono">
+            <li>• <strong>IVA Geral:</strong> 15%</li>
+            <li>• <strong>Retenção Serviços:</strong> 20%</li>
+            <li>• <strong>IRPC:</strong> 22%</li>
+          </ul>
+        </div>
+
+        <!-- BRASIL -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl">🇧🇷</span>
+            <div>
+              <h3 class="font-bold text-white text-base">Brasil (Receita Federal)</h3>
+              <span class="text-xs text-slate-400">ICMS / PIS / COFINS / IRPJ</span>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-2 font-mono">
+            <li>• <strong>ICMS Médio:</strong> 18% a 20.5%</li>
+            <li>• <strong>Retenção IRRF Serviços:</strong> 1.5% a 4.65%</li>
+            <li>• <strong>IRPJ + CSLL:</strong> Lucro Real / Presumido / Simples</li>
+          </ul>
+        </div>
+
+        <!-- INTERNACIONAL / GLOBAL -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl">🌐</span>
+            <div>
+              <h3 class="font-bold text-white text-base">Padrão OMA / Incoterms 2020</h3>
+              <span class="text-xs text-slate-400">Comércio Transfronteiriço</span>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-2 font-mono">
+            <li>• <strong>Base CIF:</strong> FOB + Frete + Seguro</li>
+            <li>• <strong>Valor Tributável:</strong> CIF + Direitos Pautais</li>
+            <li>• <strong>Dupla Tributação:</strong> Convenções Bilaterais</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 7: HISTÓRICO LOCAL -->
+    <!-- ========================================================================= -->
+    <section id="tab-history" class="tab-pane hidden">
+      <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-black text-white">Histórico de Simulações Gravadas</h2>
+          <p class="text-sm text-slate-400">Os seus cálculos são preservados automaticamente no armazenamento local (localStorage) do seu navegador.</p>
+        </div>
+        <button onclick="clearAllHistory()" class="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/50 text-xs font-semibold rounded-lg transition cursor-pointer">
+          Limpar Todo o Histórico
+        </button>
+      </div>
+
+      <div id="historyEmpty" class="text-center py-16 bg-slate-900 border border-slate-800 rounded-2xl">
+        <p class="text-sm text-slate-400">Nenhuma simulação guardada ainda.</p>
+        <p class="text-xs text-slate-500 mt-1">Realize um cálculo em qualquer módulo e clique em "Guardar".</p>
+      </div>
+
+      <div id="historyList" class="space-y-4">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="no-print bg-slate-900/80 border-t border-slate-800 py-6 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <p>© 2025 NANUCLOUD Lda. Todos os direitos reservados. Versão HTML Standalone Autónoma.</p>
+      <p class="font-mono text-slate-400">Compatível com Windows, Mac, Linux, Android e iOS.</p>
+    </div>
+  </footer>
+
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT MOTOR DE CÁLCULO & LÓGICA STANDALONE -->
+  <!-- ========================================================================= -->
+  <script>
+    let currentCurrency = 'Kz';
+    let simulationHistory = [];
+
+    // INIT
+    window.addEventListener('DOMContentLoaded', () => {
+      loadHistoryFromStorage();
+      initBatchSample();
+      calculateLocal();
+      calculateServices();
+      calculateImport();
+      calculateBroker();
+    });
+
+    function formatNumber(num) {
+      if (isNaN(num) || !isFinite(num)) return '0.00';
+      return Number(num).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function updateGlobalCurrency() {
+      currentCurrency = document.getElementById('appCurrency').value;
+      document.querySelectorAll('.currLabel').forEach(el => {
+        el.innerText = currentCurrency;
+      });
+      calculateLocal();
+      calculateServices();
+      calculateImport();
+      calculateBroker();
+      renderBatchTable();
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white', 'font-semibold', 'shadow-sm');
+        btn.classList.add('bg-slate-800', 'text-slate-300');
+      });
+
+      const selectedPane = document.getElementById('tab-' + tabId);
+      const selectedBtn = document.getElementById('tab-btn-' + tabId);
+      if (selectedPane) selectedPane.classList.remove('hidden');
+      if (selectedBtn) {
+        selectedBtn.classList.add('bg-blue-600', 'text-white', 'font-semibold', 'shadow-sm');
+        selectedBtn.classList.remove('bg-slate-800', 'text-slate-300');
+      }
+
+      if (tabId === 'history') {
+        renderHistory();
+      }
+    }
+
+    // 1. CÁLCULO DE COMÉRCIO LOCAL
+    function calculateLocal() {
+      const cost = parseFloat(document.getElementById('localCost').value) || 0;
+      const margin = parseFloat(document.getElementById('localMargin').value) || 0;
+      const fixedPrice = parseFloat(document.getElementById('localFixedPrice').value) || 0;
+      const vatRate = parseFloat(document.getElementById('localVatRate').value) || 0;
+      const tpaRate = parseFloat(document.getElementById('localTpaRate').value) || 0;
+      const iiRate = parseFloat(document.getElementById('localIiRate').value) || 0;
+      const opCost = parseFloat(document.getElementById('localOpCost').value) || 0;
+
+      const totalBaseCost = cost + opCost;
+
+      let pvpBase = 0;
+      let pvpFinal = 0;
+      let vatSale = 0;
+      let profit = 0;
+      let actualMargin = 0;
+
+      if (fixedPrice > 0) {
+        pvpFinal = fixedPrice;
+        pvpBase = pvpFinal / (1 + vatRate / 100);
+        vatSale = pvpFinal - pvpBase;
+        profit = pvpBase - totalBaseCost;
+        actualMargin = totalBaseCost > 0 ? (profit / totalBaseCost) * 100 : 0;
+      } else {
+        profit = totalBaseCost * (margin / 100);
+        pvpBase = totalBaseCost + profit;
+        vatSale = pvpBase * (vatRate / 100);
+        pvpFinal = pvpBase + vatSale;
+        actualMargin = margin;
+      }
+
+      const tpaCost = pvpFinal * (tpaRate / 100);
+      const industrialTax = profit > 0 ? profit * (iiRate / 100) : 0;
+      const netFinalProfit = profit - tpaCost - industrialTax;
+      const breakEvenPvpFinal = totalBaseCost * (1 + vatRate / 100);
+
+      document.getElementById('resLocalPvpFinal').innerText = formatNumber(pvpFinal);
+      document.getElementById('resLocalPvpBase').innerText = formatNumber(pvpBase);
+      document.getElementById('resLocalVatSale').innerText = formatNumber(vatSale);
+      document.getElementById('resLocalProfit').innerText = formatNumber(profit);
+      document.getElementById('resLocalActualMargin').innerText = actualMargin.toFixed(2) + '%';
+      document.getElementById('resLocalTpaCost').innerText = formatNumber(tpaCost);
+      document.getElementById('resLocalIndustrialTax').innerText = formatNumber(industrialTax);
+      document.getElementById('resLocalNetProfit').innerText = formatNumber(netFinalProfit);
+      document.getElementById('resLocalBreakEven').innerText = formatNumber(breakEvenPvpFinal);
+    }
+
+    function loadLocalSample() {
+      document.getElementById('localTitle').value = 'Arroz Agulha Extra 25kg';
+      document.getElementById('localCost').value = 10000;
+      document.getElementById('localMargin').value = 30;
+      document.getElementById('localFixedPrice').value = '';
+      document.getElementById('localVatRate').value = '14';
+      document.getElementById('localTpaRate').value = '1.0';
+      document.getElementById('localIiRate').value = '25';
+      document.getElementById('localOpCost').value = '250';
+      calculateLocal();
+    }
+
+    function resetLocalForm() {
+      document.getElementById('localTitle').value = '';
+      document.getElementById('localCost').value = '';
+      document.getElementById('localMargin').value = '30';
+      document.getElementById('localFixedPrice').value = '';
+      document.getElementById('localOpCost').value = '0';
+      calculateLocal();
+    }
+
+    // 2. CÁLCULO DE SERVIÇOS & RETENÇÃO
+    function calculateServices() {
+      const baseVal = parseFloat(document.getElementById('serviceBaseValue').value) || 0;
+      const retRate = parseFloat(document.getElementById('serviceRetentionRate').value) || 0;
+      const vatRate = parseFloat(document.getElementById('serviceVatRate').value) || 0;
+      const directCosts = parseFloat(document.getElementById('serviceDirectCosts').value) || 0;
+
+      const vatAmount = baseVal * (vatRate / 100);
+      const totalInvoiced = baseVal + vatAmount;
+      const retentionAmount = baseVal * (retRate / 100);
+      const netReceived = totalInvoiced - retentionAmount;
+      const netProfit = (baseVal - retentionAmount) - directCosts;
+
+      document.getElementById('resServiceNetReceived').innerText = formatNumber(netReceived);
+      document.getElementById('resServiceTotalInvoiced').innerText = formatNumber(totalInvoiced);
+      document.getElementById('resServiceRetention').innerText = formatNumber(retentionAmount);
+      document.getElementById('resServiceVat').innerText = formatNumber(vatAmount);
+      document.getElementById('resServiceNetProfit').innerText = formatNumber(netProfit);
+    }
+
+    function loadServicesSample() {
+      document.getElementById('serviceTitle').value = 'Auditoria & Consultoria Fiscal Especializada';
+      document.getElementById('serviceBaseValue').value = 100000;
+      document.getElementById('serviceRetentionRate').value = '6.5';
+      document.getElementById('serviceVatRate').value = '14';
+      document.getElementById('serviceDirectCosts').value = '5000';
+      calculateServices();
+    }
+
+    // 3. CÁLCULO DE IMPORTAÇÃO & DESPACHO ADUANEIRO
+    function calculateImport() {
+      const fob = parseFloat(document.getElementById('importFob').value) || 0;
+      const freight = parseFloat(document.getElementById('importFreight').value) || 0;
+      const insurance = parseFloat(document.getElementById('importInsurance').value) || 0;
+      const customsRate = parseFloat(document.getElementById('importCustomsRate').value) || 0;
+      const iecRate = parseFloat(document.getElementById('importIecRate').value) || 0;
+      const vatRate = parseFloat(document.getElementById('importVatRate').value) || 0;
+      const portFees = parseFloat(document.getElementById('importPortFees').value) || 0;
+      const localMargin = parseFloat(document.getElementById('importLocalMargin').value) || 0;
+
+      const cif = fob + freight + insurance;
+      const customsVal = cif * (customsRate / 100);
+      const iecVal = (cif + customsVal) * (iecRate / 100);
+      const customsTaxableBase = cif + customsVal + iecVal + portFees;
+      const vatVal = customsTaxableBase * (vatRate / 100);
+      const landedCost = cif + customsVal + iecVal + portFees + vatVal;
+
+      const resaleProfit = landedCost * (localMargin / 100);
+      const pvpResaleBase = landedCost + resaleProfit;
+      const pvpResaleFinal = pvpResaleBase * (1 + vatRate / 100);
+
+      document.getElementById('resImportLandedCost').innerText = formatNumber(landedCost);
+      document.getElementById('resImportCif').innerText = formatNumber(cif);
+      document.getElementById('resImportCustoms').innerText = formatNumber(customsVal);
+      document.getElementById('resImportIec').innerText = formatNumber(iecVal);
+      document.getElementById('resImportVat').innerText = formatNumber(vatVal);
+      document.getElementById('resImportPvpSale').innerText = formatNumber(pvpResaleFinal);
+      document.getElementById('resImportProfit').innerText = formatNumber(resaleProfit);
+    }
+
+    function loadImportSample() {
+      document.getElementById('importTitle').value = 'Contentor 20ft de Eletrodomésticos';
+      document.getElementById('importFob').value = 20000;
+      document.getElementById('importFreight').value = 3500;
+      document.getElementById('importInsurance').value = 500;
+      document.getElementById('importCustomsRate').value = '10';
+      document.getElementById('importIecRate').value = '5';
+      document.getElementById('importVatRate').value = '14';
+      document.getElementById('importPortFees').value = '1500';
+      document.getElementById('importLocalMargin').value = '35';
+      calculateImport();
+    }
+
+    // 4. CÁLCULO DE INTERMEDIAÇÃO & CORRETAGEM
+    function calculateBroker() {
+      const dealVal = parseFloat(document.getElementById('brokerDealValue').value) || 0;
+      const commPct = parseFloat(document.getElementById('brokerCommPct').value) || 0;
+      const retRate = parseFloat(document.getElementById('brokerRetentionRate').value) || 0;
+      const expenses = parseFloat(document.getElementById('brokerExpenses').value) || 0;
+
+      const grossComm = dealVal * (commPct / 100);
+      const retention = grossComm * (retRate / 100);
+      const netComm = grossComm - retention - expenses;
+      const ownerBalance = dealVal - grossComm;
+
+      document.getElementById('resBrokerNetComm').innerText = formatNumber(netComm);
+      document.getElementById('resBrokerGrossComm').innerText = formatNumber(grossComm);
+      document.getElementById('resBrokerRetention').innerText = formatNumber(retention);
+      document.getElementById('resBrokerOwnerBalance').innerText = formatNumber(ownerBalance);
+    }
+
+    // 5. SIMULADOR EM LOTE (BATCH TABLE)
+    let batchData = [
+      { desc: 'Óleo Vegetal 1L', cost: 1200, qty: 100, margin: 25, vat: 14 },
+      { desc: 'Farinha de Trigo 50kg', cost: 24000, qty: 20, margin: 20, vat: 5 },
+      { desc: 'Leite Condensado Lata', cost: 850, qty: 250, margin: 30, vat: 14 }
+    ];
+
+    function initBatchSample() {
+      renderBatchTable();
+    }
+
+    function renderBatchTable() {
+      const tbody = document.getElementById('batchTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      let grandCost = 0;
+      let grandSale = 0;
+      let grandVat = 0;
+      let grandProfit = 0;
+
+      batchData.forEach((row, index) => {
+        const lineCost = row.cost * row.qty;
+        const profitUn = row.cost * (row.margin / 100);
+        const pvpBaseUn = row.cost + profitUn;
+        const vatUn = pvpBaseUn * (row.vat / 100);
+        const pvpFinalUn = pvpBaseUn + vatUn;
+
+        const lineSale = pvpFinalUn * row.qty;
+        const lineVat = vatUn * row.qty;
+        const lineProfit = profitUn * row.qty;
+
+        grandCost += lineCost;
+        grandSale += lineSale;
+        grandVat += lineVat;
+        grandProfit += lineProfit;
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition';
+        tr.innerHTML = `
+          <td class="p-3 font-sans font-medium text-white">${row.desc}</td>
+          <td class="p-3">${formatNumber(row.cost)}</td>
+          <td class="p-3">${row.qty}</td>
+          <td class="p-3 text-indigo-400">${row.margin}%</td>
+          <td class="p-3 text-amber-400">${row.vat}%</td>
+          <td class="p-3 font-bold text-white">${formatNumber(pvpFinalUn)}</td>
+          <td class="p-3 text-blue-400 font-bold">${formatNumber(lineSale)}</td>
+          <td class="p-3 text-emerald-400 font-bold">${formatNumber(lineProfit)}</td>
+          <td class="p-3 text-center">
+            <button onclick="removeBatchRow(${index})" class="text-rose-400 hover:text-rose-300 font-bold">×</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('batchTotalCost').innerText = formatNumber(grandCost);
+      document.getElementById('batchTotalSale').innerText = formatNumber(grandSale);
+      document.getElementById('batchTotalVat').innerText = formatNumber(grandVat);
+      document.getElementById('batchTotalProfit').innerText = formatNumber(grandProfit);
+    }
+
+    function addBatchRow() {
+      const desc = prompt('Descrição do Produto:', 'Novo Artigo Comercial');
+      if (!desc) return;
+      const cost = parseFloat(prompt('Custo Unitário:', '1000')) || 1000;
+      const qty = parseInt(prompt('Quantidade:', '10')) || 10;
+      const margin = parseFloat(prompt('Margem %:', '30')) || 30;
+      const vat = parseFloat(prompt('IVA % (14, 5 ou 0):', '14')) || 14;
+
+      batchData.push({ desc, cost, qty, margin, vat });
+      renderBatchTable();
+    }
+
+    function removeBatchRow(index) {
+      batchData.splice(index, 1);
+      renderBatchTable();
+    }
+
+    function exportBatchCsv() {
+      let csv = 'Descricao,CustoUnitario,Quantidade,MargemPct,IVAPct,PVPFinalUnitario\n';
+      batchData.forEach(r => {
+        const pvp = (r.cost * (1 + r.margin / 100)) * (1 + r.vat / 100);
+        csv += `"${r.desc}",${r.cost},${r.qty},${r.margin},${r.vat},${pvp.toFixed(2)}\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `NANUCLOUD_Lote_${Date.now()}.csv`;
+      a.click();
+    }
+
+    // 6. HISTÓRICO LOCALSTORAGE
+    function saveSimulationLocal(type) {
+      let title = '';
+      let details = {};
+
+      if (type === 'local') {
+        title = document.getElementById('localTitle').value || 'Comércio Local';
+        details = {
+          cost: document.getElementById('localCost').value,
+          margin: document.getElementById('localMargin').value,
+          pvpFinal: document.getElementById('resLocalPvpFinal').innerText,
+          netProfit: document.getElementById('resLocalNetProfit').innerText
+        };
+      } else if (type === 'service') {
+        title = document.getElementById('serviceTitle').value || 'Prestação de Serviços';
+        details = {
+          base: document.getElementById('serviceBaseValue').value,
+          netReceived: document.getElementById('resServiceNetReceived').innerText,
+          retention: document.getElementById('resServiceRetention').innerText
+        };
+      } else if (type === 'import') {
+        title = document.getElementById('importTitle').value || 'Importação Aduaneira';
+        details = {
+          fob: document.getElementById('importFob').value,
+          landedCost: document.getElementById('resImportLandedCost').innerText
+        };
+      } else if (type === 'broker') {
+        title = document.getElementById('brokerTitle').value || 'Intermediação Comercial';
+        details = {
+          dealVal: document.getElementById('brokerDealValue').value,
+          netComm: document.getElementById('resBrokerNetComm').innerText
+        };
+      }
+
+      const item = {
+        id: 'sim_' + Date.now(),
+        type,
+        title,
+        date: new Date().toLocaleString('pt-PT'),
+        details
+      };
+
+      simulationHistory.unshift(item);
+      localStorage.setItem('nanucloud_standalone_history', JSON.stringify(simulationHistory));
+      updateHistoryBadge();
+      alert('✅ Simulação gravada no histórico local com sucesso!');
+    }
+
+    function loadHistoryFromStorage() {
+      try {
+        const saved = localStorage.getItem('nanucloud_standalone_history');
+        if (saved) {
+          simulationHistory = JSON.parse(saved);
+        }
+      } catch (e) {}
+      updateHistoryBadge();
+    }
+
+    function updateHistoryBadge() {
+      const badge = document.getElementById('historyCount');
+      if (badge) badge.innerText = simulationHistory.length;
+    }
+
+    function renderHistory() {
+      const emptyEl = document.getElementById('historyEmpty');
+      const listEl = document.getElementById('historyList');
+
+      if (simulationHistory.length === 0) {
+        emptyEl.classList.remove('hidden');
+        listEl.innerHTML = '';
+        return;
+      }
+
+      emptyEl.classList.add('hidden');
+      listEl.innerHTML = '';
+
+      simulationHistory.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = 'bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between gap-4';
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs uppercase font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold">${item.type}</span>
+              <span class="font-bold text-white text-sm">${item.title}</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">Gravado em: ${item.date}</p>
+          </div>
+          <button onclick="deleteHistoryItem(${index})" class="text-xs text-rose-400 hover:text-rose-300 font-bold px-3 py-1 bg-rose-950/40 rounded border border-rose-900/40">
+            Apagar
+          </button>
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    function deleteHistoryItem(index) {
+      simulationHistory.splice(index, 1);
+      localStorage.setItem('nanucloud_standalone_history', JSON.stringify(simulationHistory));
+      updateHistoryBadge();
+      renderHistory();
+    }
+
+    function clearAllHistory() {
+      if (!confirm('Deseja realmente apagar todo o histórico gravado?')) return;
+      simulationHistory = [];
+      localStorage.removeItem('nanucloud_standalone_history');
+      updateHistoryBadge();
+      renderHistory();
+    }
+  </script>
+</body>
+</html>

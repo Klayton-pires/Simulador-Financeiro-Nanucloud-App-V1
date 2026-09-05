@@ -1,7 +1,8 @@
 import React from 'react';
 import { UserSafe } from '../types';
 import { canUserSimulate, isStaffOrAdmin, isClientUser } from '../utils/accessControl';
-import { AlertCircle, Sparkles, Lock, ArrowRight, UserPlus, LogIn, ShieldCheck } from 'lucide-react';
+import { useGuestCredits } from '../utils/guestCredits';
+import { AlertCircle, Sparkles, Lock, ArrowRight, UserPlus, LogIn, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 interface ClientCreditNoticeBannerProps {
   user: UserSafe | null;
@@ -16,6 +17,7 @@ export const ClientCreditNoticeBanner: React.FC<ClientCreditNoticeBannerProps> =
   onOpenPlans,
   onOpenAuth
 }) => {
+  const guestCredits = useGuestCredits();
   const check = canUserSimulate(user);
 
   // If user is Staff or Admin, show subtle staff badge
@@ -35,23 +37,62 @@ export const ClientCreditNoticeBanner: React.FC<ClientCreditNoticeBannerProps> =
     );
   }
 
-  // If user is not logged in:
+  // If user is not logged in (Guest with free credits):
   if (!user) {
+    if (guestCredits > 0) {
+      return (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-gradient-to-r from-emerald-500/15 via-slate-900 to-indigo-500/15 border border-emerald-500/30 text-xs font-sans text-slate-200 mb-4 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5">
+              <Sparkles className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <div className="font-bold text-emerald-300 flex items-center gap-2">
+                <span>Créditos Grátis de Demonstração Ativos</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30 font-bold">
+                  Sem Login Necessário
+                </span>
+              </div>
+              <p className="text-slate-300 text-[11px] leading-relaxed mt-0.5">
+                Pode usar as suas <strong className="text-emerald-300 font-bold">{guestCredits} consultas gratuitas</strong> sem precisar de fazer login! Preencha os campos abaixo e clique em confirmar para calcular na hora.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/90 border border-slate-700 text-slate-300 text-[11px] font-mono">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Saldo Grátis: <strong className="text-emerald-400">{guestCredits}</strong></span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenAuth('login')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-600 text-white font-mono text-[11px] transition shadow cursor-pointer active:scale-95"
+              title="Inicie sessão se pretender guardar históricos em nuvem"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Entrar</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Guest exhausted all free credits
     return (
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-slate-900 to-indigo-500/15 border border-amber-500/30 text-xs font-sans text-slate-200 mb-4 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-slate-900 to-indigo-500/15 border border-amber-500/30 text-xs font-sans text-slate-200 mb-4 shadow-sm animate-in fade-in duration-200">
         <div className="flex items-start gap-3">
           <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
             <Lock className="w-4 h-4 text-amber-300" />
           </div>
           <div>
             <div className="font-bold text-amber-200 flex items-center gap-1.5">
-              <span>Acesso a Clientes com Crédito</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded border border-amber-500/40">
-                Autenticação Necessária
+              <span>Consultas Gratuitas Esgotadas</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 bg-amber-500/20 text-amber-300 rounded border border-amber-500/40">
+                Saldo: 0
               </span>
             </div>
             <p className="text-slate-300 text-[11px] leading-relaxed mt-0.5">
-              Para executar simulações em {moduleName}, inicie sessão na sua conta de cliente (ou crie o seu registo). É necessário ter créditos disponíveis na conta.
+              Esgotou as suas consultas gratuitas de demonstração. Crie uma conta de cliente ou inicie sessão para adquirir créditos e continuar a simular sem restrições.
             </p>
           </div>
         </div>
@@ -71,6 +112,14 @@ export const ClientCreditNoticeBanner: React.FC<ClientCreditNoticeBannerProps> =
           >
             <UserPlus className="w-3.5 h-3.5" />
             <span>Registar Conta</span>
+          </button>
+          <button
+            type="button"
+            onClick={onOpenPlans}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono font-bold text-[11px] transition shadow cursor-pointer active:scale-95"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Ver Planos</span>
           </button>
         </div>
       </div>

@@ -25,6 +25,10 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { canUserSimulate } from '../utils/accessControl';
 import { ClientCreditNoticeBanner } from './ClientCreditNoticeBanner';
+import { ConfirmSimulationModal, SimulationSummaryItem } from './ConfirmSimulationModal';
+import { saveSimulationToFirestore } from '../services/firebase';
+import { consumeGuestCredit, getGuestCredits } from '../utils/guestCredits';
+import { ExhaustedCreditsModal } from './ExhaustedCreditsModal';
 
 interface IntermediaryBrokerSimulatorProps {
   user: UserSafe | null;
@@ -41,6 +45,7 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
   onOpenAuth,
   onCalculationDone
 }) => {
+  const [showExhaustedModal, setShowExhaustedModal] = useState<boolean>(false);
   const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'admin';
   const availableCountries = getAvailableCountryList(isSuperAdmin);
 
@@ -72,6 +77,7 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
   const [notes, setNotes] = useState<string>('');
 
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [results, setResults] = useState<any | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -134,6 +140,16 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
       }).format(val) + ` ${country.curr}`
     );
   };
+
+  // Reset results if user changes inputs to enforce explicit confirmation
+  const isFirstRender = React.useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setResults(null);
+  }, [countryCode, intermediaryType, commissionScope, productsTotal, servicesTotal, commissionPct, fixedCommissionAmount, includeVatOnCommission, commissionVatRate, retentionRate, tpaRate, tpaMode]);
 
   const calculateIntermediation = () => {
     const prodVal = parseFloat(productsTotal) || 0;
@@ -272,33 +288,74 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
 
     setFieldErrors({});
 
-    // AUTH & RBAC SIMULATION CHECK
-    if (!user) {
-      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
-      onOpenAuth();
-      return;
-    }
-
     const simCheck = canUserSimulate(user);
     if (!simCheck.allowed) {
       setErrorMessage(simCheck.message);
-      onOpenPlans();
+      setShowExhaustedModal(true);
       return;
     }
 
-    setIsCalculating(true);
+    setShowConfirmModal(true);
+  };
 
-    setTimeout(() => {
+  const handleConfirmAndExecute = async () => {
+    setIsCalculating(true);
+    try {
       const calc = calculateIntermediation();
       setResults(calc);
-      setIsCalculating(false);
-      setSuccessMessage('Simulação de intermediação calculada com sucesso com base nas normas fiscais vigentes!');
+      setShowConfirmModal(false);
+      setSuccessMessage('Simulação de intermediação confirmada e calculada com sucesso!');
 
       if (user && user.queriesRemaining > 0 && user.role !== 'staff' && user.role !== 'admin' && user.role !== 'admin_level1' && user.role !== 'super_admin') {
         onCalculationDone(Math.max(0, user.queriesRemaining - 1));
+      } else if (!user) {
+        const left = consumeGuestCredit();
+        if (left === 0) {
+          setTimeout(() => setShowExhaustedModal(true), 1200);
+        }
       }
-    }, 200);
+
+      // Save to Cloud Firestore
+      if (user) {
+        saveSimulationToFirestore(user.id, 'broker_intermediary', {
+          country: countryCode,
+          dealTitle: calc.dealTitle,
+          totalDealVal: calc.totalDealVal,
+          grossCommission: calc.grossCommission,
+          netPayableToIntermediary: calc.netPayableToIntermediary,
+          taxToDeliverToState: calc.taxToDeliverToState,
+          retentionRate: calc.retentionRate
+        }).catch(() => {});
+      }
+    } finally {
+      setIsCalculating(false);
+    }
   };
+
+  const prodVal = parseFloat(productsTotal) || 0;
+  const servVal = parseFloat(servicesTotal) || 0;
+  const totalDealVal = prodVal + servVal;
+  const commPct = parseFloat(commissionPct) || 0;
+
+  const simulationSummaryItems: SimulationSummaryItem[] = [
+    {
+      label: 'Valor Global da Transação',
+      value: formatMoney(totalDealVal),
+      detail: `Produtos: ${formatMoney(prodVal)} | Serviços: ${formatMoney(servVal)}`,
+      isHighlight: true
+    },
+    {
+      label: 'Comissão Negociada',
+      value: commissionScope === 'fixed_amount' 
+        ? formatMoney(parseFloat(fixedCommissionAmount) || 0)
+        : `${commPct}% (${commissionScope === 'products_only' ? 'Produtos' : commissionScope === 'services_only' ? 'Serviços' : 'Negócio Global'})`
+    },
+    {
+      label: 'País & Enquadramento Fiscal',
+      value: `${country.name} (${country.curr})`,
+      detail: `Retenção na Fonte: ${retentionRate}% | IVA Intermediação: ${includeVatOnCommission ? `${commissionVatRate}%` : 'Isento'}`
+    }
+  ];
 
   const activeResults = results;
 
@@ -1007,7 +1064,7 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
             className="w-full sm:flex-1 bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-bold py-3.5 px-6 rounded-xl text-xs font-mono uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
           >
             <Calculator className="w-4 h-4" />
-            <span>{isCalculating ? 'A CALCULAR & ENQUADRAR...' : 'CALCULAR INTERMEDIAÇÃO & COMISSÕES'}</span>
+            <span>{isCalculating ? 'A PROCESSAR SIMULAÇÃO...' : 'CALCULAR & CONFIRMAR COMISSÕES'}</span>
           </button>
         </div>
       </div>
@@ -1025,7 +1082,8 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
                     Demonstração da Intermediação & Liquidação Fiscal
                   </h3>
                   <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                    Apurado • 1 Crédito
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    SIMULAÇÃO CONFIRMADA
                   </span>
                 </div>
                 <span className="text-[10px] text-slate-400 font-mono">
@@ -1213,12 +1271,36 @@ export const IntermediaryBrokerSimulator: React.FC<IntermediaryBrokerSimulatorPr
           <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
             <Calculator className="w-6 h-6" />
           </div>
-          <h3 className="text-sm font-bold text-slate-200 font-mono">Aguardando Execução do Cálculo</h3>
+          <h3 className="text-sm font-bold text-slate-200 font-mono">Aguardando Confirmação da Simulação</h3>
           <p className="text-xs text-slate-400 font-mono max-w-sm mx-auto leading-relaxed">
-            Preencha os valores da transação e parâmetros da comissão e clique no botão <strong>"CALCULAR INTERMEDIAÇÃO & COMISSÕES"</strong> para apurar os montantes e retenções fiscais.
+            Preencha os valores da transação e parâmetros da comissão e clique no botão <strong className="text-indigo-300">"CALCULAR & CONFIRMAR COMISSÕES"</strong> para apurar os montantes e retenções fiscais.
           </p>
         </div>
       )}
+
+      {/* Confirmation Modal before calculating results */}
+      <ConfirmSimulationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={handleConfirmAndExecute}
+        moduleName="Intermediação Comercial & Broker"
+        title="Confirmar Simulação de Comissões"
+        subtitle="Reveja os valores da transação, taxa de comissão e retenção fiscal na fonte antes de apurar os valores finais."
+        summaryItems={simulationSummaryItems}
+        userQueriesRemaining={user ? (user.queriesRemaining || 0) : getGuestCredits()}
+        isStaffOrAdmin={user?.role === 'staff' || user?.role === 'admin' || user?.role === 'admin_level1' || user?.role === 'super_admin'}
+        isGuest={!user}
+        isProcessing={isCalculating}
+      />
+
+      {/* Exhausted Credits Modal - Prompts user to buy plan, then login */}
+      <ExhaustedCreditsModal
+        isOpen={showExhaustedModal}
+        onClose={() => setShowExhaustedModal(false)}
+        onOpenPlans={onOpenPlans}
+        onOpenAuth={onOpenAuth}
+        isGuest={!user}
+      />
     </div>
   );
 };

@@ -112,6 +112,26 @@ export default function App() {
   }, [setLanguage]);
 
   useEffect(() => {
+    const handleUserUpdate = () => {
+      checkAuth();
+    };
+    window.addEventListener('nanucloud_user_updated', handleUserUpdate);
+    window.addEventListener('focus', handleUserUpdate);
+
+    const interval = setInterval(() => {
+      if (user) {
+        checkAuth();
+      }
+    }, 25000);
+
+    return () => {
+      window.removeEventListener('nanucloud_user_updated', handleUserUpdate);
+      window.removeEventListener('focus', handleUserUpdate);
+      clearInterval(interval);
+    };
+  }, [user]);
+
+  useEffect(() => {
     if (language && language !== currentLang) {
       setCurrentLang(language);
     }

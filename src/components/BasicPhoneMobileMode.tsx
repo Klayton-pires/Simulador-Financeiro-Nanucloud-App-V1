@@ -3,6 +3,8 @@ import { Smartphone, Calculator, RotateCcw, Check, Sparkles, AlertCircle, ArrowD
 import { UserSafe } from '../types';
 import { COUNTRIES_DB, getEffectiveCountryFiscal, getAvailableCountryList } from '../data/countries';
 import { canUserSimulate } from '../utils/accessControl';
+import { consumeGuestCredit, getGuestCredits } from '../utils/guestCredits';
+import { ExhaustedCreditsModal } from './ExhaustedCreditsModal';
 
 interface BasicPhoneMobileModeProps {
   user: UserSafe | null;
@@ -17,6 +19,7 @@ export const BasicPhoneMobileMode: React.FC<BasicPhoneMobileModeProps> = ({
   onOpenPlans,
   onOpenAuth
 }) => {
+  const [showExhaustedModal, setShowExhaustedModal] = useState<boolean>(false);
   const [selectedCountry, setSelectedCountry] = useState<string>('AO');
   const [costInput, setCostInput] = useState<string>('1000');
   const [marginInput, setMarginInput] = useState<string>('20');
@@ -82,17 +85,11 @@ export const BasicPhoneMobileMode: React.FC<BasicPhoneMobileModeProps> = ({
       return;
     }
 
-    // AUTH & RBAC SIMULATION CHECK
-    if (!user) {
-      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
-      if (onOpenAuth) onOpenAuth();
-      return;
-    }
-
+    // AUTH & RBAC SIMULATION CHECK - Allows free demo credits without login
     const simCheck = canUserSimulate(user);
     if (!simCheck.allowed) {
       setErrorMessage(simCheck.message);
-      if (onOpenPlans) onOpenPlans();
+      setShowExhaustedModal(true);
       return;
     }
 
@@ -128,6 +125,11 @@ export const BasicPhoneMobileMode: React.FC<BasicPhoneMobileModeProps> = ({
 
         if (onCalculationDone) {
           onCalculationDone(remaining);
+        }
+      } else {
+        const left = consumeGuestCredit();
+        if (left === 0) {
+          setTimeout(() => setShowExhaustedModal(true), 1200);
         }
       }
 
@@ -440,6 +442,14 @@ export const BasicPhoneMobileMode: React.FC<BasicPhoneMobileModeProps> = ({
         <strong>Aviso Legal Nanucloud:</strong> A utilização deste aplicativo tem caráter meramente informativo e estimativo, não dispensando a consulta de um profissional de contas ou contabilista certificado.
       </div>
 
+      {/* Exhausted Credits Modal - Prompts user to buy plan, then login */}
+      <ExhaustedCreditsModal
+        isOpen={showExhaustedModal}
+        onClose={() => setShowExhaustedModal(false)}
+        onOpenPlans={onOpenPlans || (() => {})}
+        onOpenAuth={onOpenAuth || (() => {})}
+        isGuest={!user}
+      />
     </div>
   );
 };

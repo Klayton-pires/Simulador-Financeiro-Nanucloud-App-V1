@@ -36,6 +36,9 @@ import { useLayoutMode } from '../data/layoutMode';
 import { ClientCreditNoticeBanner } from './ClientCreditNoticeBanner';
 import { canUserSimulate } from '../utils/accessControl';
 import { ConfirmSimulationModal, SimulationSummaryItem } from './ConfirmSimulationModal';
+import { saveSimulationToFirestore } from '../services/firebase';
+import { consumeGuestCredit, getGuestCredits } from '../utils/guestCredits';
+import { ExhaustedCreditsModal } from './ExhaustedCreditsModal';
 
 interface LocalTradeSimulatorProps {
   user: UserSafe | null;
@@ -418,17 +421,11 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
 
     setFieldErrors({});
 
-    // AUTH & RBAC SIMULATION CHECK
-    if (!user) {
-      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
-      onOpenAuth();
-      return;
-    }
-
+    // AUTH & RBAC SIMULATION CHECK - Allows free demo credits without login
     const simCheck = canUserSimulate(user);
     if (!simCheck.allowed) {
       setErrorMessage(simCheck.message);
-      onOpenPlans();
+      setShowExhaustedModal(true);
       return;
     }
 
@@ -529,7 +526,26 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
 
       setCalculationResults(scenarios);
       setSuccessMessage('Simulação confirmada e calculada com sucesso!');
-      onCalculationDone(remaining);
+
+      if (user) {
+        onCalculationDone(remaining);
+        // Persist simulation to Cloud Firestore
+        saveSimulationToFirestore(user.id, 'local_trade', {
+          country: countryCode,
+          productName: productName || 'Artigo Comercial',
+          costNet: net,
+          marginPct: mPct,
+          fixedFinalPrice: fPrice,
+          vatRate,
+          tpaRate,
+          scenariosCount: scenarios.length
+        }).catch(() => {});
+      } else {
+        const left = consumeGuestCredit();
+        if (left === 0) {
+          setTimeout(() => setShowExhaustedModal(true), 1200);
+        }
+      }
     } catch (err) {
       console.error(err);
       setErrorMessage('Falha ao processar simulação.');
@@ -568,10 +584,10 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
     }
   ];
 
-  if (currentExtras.hasExtras && currentExtras.totalGross > 0) {
+  if (currentExtras.hasExtras && currentExtras.totalExtraPaid > 0) {
     simulationSummaryItems.push({
       label: 'Custos Adicionais (Transporte/Refeições/Extras)',
-      value: formatMoney(currentExtras.totalGross),
+      value: formatMoney(currentExtras.totalExtraPaid),
       detail: 'Custos logísticos incorporados na formação de preço'
     });
   }
@@ -1908,9 +1924,19 @@ export const LocalTradeSimulator: React.FC<LocalTradeSimulatorProps> = ({
         title="Confirmar Simulação de Preços"
         subtitle="Reveja a composição de custo, taxas e margem antes de processar os cenários oficiais."
         summaryItems={simulationSummaryItems}
-        userQueriesRemaining={user?.queriesRemaining || 0}
+        userQueriesRemaining={user ? (user.queriesRemaining || 0) : getGuestCredits()}
         isStaffOrAdmin={user?.role === 'staff' || user?.role === 'admin' || user?.role === 'admin_level1' || user?.role === 'admin_level2' || user?.role === 'super_admin'}
+        isGuest={!user}
         isProcessing={isCalculating}
+      />
+
+      {/* Exhausted Credits Modal - Prompts user to buy plan, then login */}
+      <ExhaustedCreditsModal
+        isOpen={showExhaustedModal}
+        onClose={() => setShowExhaustedModal(false)}
+        onOpenPlans={onOpenPlans}
+        onOpenAuth={onOpenAuth}
+        isGuest={!user}
       />
     </div>
   );

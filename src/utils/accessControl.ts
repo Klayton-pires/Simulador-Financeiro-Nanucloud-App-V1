@@ -1,4 +1,5 @@
 import { UserSafe, UserRole } from '../types';
+import { getGuestCredits } from './guestCredits';
 
 export const BACKOFFICE_ROLES: UserRole[] = [
   'super_admin',
@@ -61,20 +62,35 @@ export function getRoleDisplayLabel(role?: string | null): string {
 
 /**
  * Validates whether a user can perform a simulation in any module:
- * - Unauthenticated: requires login with client or staff account
+ * - Unauthenticated (Guest): uses free demonstration credits without login!
  * - Client: MUST have queriesRemaining > 0
- * - Staff / Admin / Super Admin: permitted to test & simulate
+ * - Staff / Admin / Super Admin: permitted to test & simulate freely
  */
 export function canUserSimulate(user: UserSafe | null): {
   allowed: boolean;
   reason: 'not_authenticated' | 'no_credits' | 'ok';
   message: string;
+  isGuest?: boolean;
+  requiresAuth?: boolean;
 } {
+  // Free guest credits: NO LOGIN REQUIRED
   if (!user) {
+    const freeRemaining = getGuestCredits();
+    if (freeRemaining > 0) {
+      return {
+        allowed: true,
+        reason: 'ok',
+        message: `Simulação gratuita permitida. Tem ${freeRemaining} consultas grátis de demonstração disponíveis (sem necessidade de login).`,
+        isGuest: true,
+        requiresAuth: false
+      };
+    }
     return {
       allowed: false,
-      reason: 'not_authenticated',
-      message: 'Para utilizar qualquer simulação nos módulos, é necessário iniciar sessão na sua conta de cliente (ou registar-se) e ter créditos ativos na conta.'
+      reason: 'no_credits',
+      message: 'Esgotou as suas consultas gratuitas de demonstração. Para continuar a simular, inicie sessão ou registe-se e adquira um plano de créditos.',
+      isGuest: true,
+      requiresAuth: true
     };
   }
 
@@ -92,7 +108,7 @@ export function canUserSimulate(user: UserSafe | null): {
     return {
       allowed: false,
       reason: 'no_credits',
-      message: 'A sua conta de cliente não possui créditos disponíveis (Saldo: 0). É obrigatório ter créditos na conta para utilizar qualquer módulo de simulação. Por favor, adira a um plano ou carregue o seu saldo.'
+      message: 'A sua conta de cliente não possui créditos disponíveis (Saldo: 0). É obrigatório ter créditos na conta para utilizar qualquer módulo de simulação. Por favor, adquira um plano ou carregue o seu saldo.'
     };
   }
 

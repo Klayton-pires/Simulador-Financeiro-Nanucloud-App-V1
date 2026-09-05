@@ -6,11 +6,11 @@ import { QueryHistoryItem } from '../types.js';
 
 const router = Router();
 
-// 1. SIMULAÇÃO COMÉRCIO LOCAL & SERVIÇOS COM RETENÇÃO NA FONTE
-router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) => {
+// 1. SIMULAÇÃO COMÉRCIO LOCAL & SERVIÇOS COM RETENÇÃO NA FONTE (Permite convidados sem login)
+router.post('/calculate-local', (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user!;
-    const isStaff = isStaffOrAdminRole(user.role);
+    const user = req.user;
+    const isStaff = user ? isStaffOrAdminRole(user.role) : false;
     const {
       countryCode,
       costNet,
@@ -101,8 +101,8 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
       }
     }
 
-    // Check query credits (Clients must have remaining credits, staff/admin can simulate freely)
-    if (!isStaff && user.queriesRemaining <= 0) {
+    // Check query credits for authenticated clients (staff/admin simulate freely, guests use free quota)
+    if (user && !isStaff && user.queriesRemaining <= 0) {
       return res.status(402).json({
         error: 'A sua conta de cliente não possui créditos disponíveis. É obrigatório ter crédito na conta para utilizar qualquer módulo de simulação. Por favor, adquira um plano ou recarregue créditos.',
         code: 'CREDITS_EXHAUSTED'
@@ -149,70 +149,78 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
     const incomeTax = Math.max(0, estimatedTax - retentionAmount);
     const netProfit = operatingProfit - incomeTax;
 
-    // Decrement credits for clients (Staff accounts do not consume quota)
-    const updatedUser = isStaff
-      ? user
-      : db.updateUser(user.id, {
-          queriesRemaining: Math.max(0, user.queriesRemaining - 1),
-          totalQueriesUsed: user.totalQueriesUsed + 1
-        });
-
-    const historyItem: QueryHistoryItem = {
-      id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      userId: user.id,
-      type: 'local',
-      itemType: isService ? 'service' : 'product',
-      retentionRate: cRetentionRate,
-      retentionAmount: retentionAmount,
-      netReceived: netReceived,
-      title: productName ? productName.trim() : (isService ? `Prestação de Serviços (${countryCode})` : `Comércio Local (${countryCode})`),
-      description: notes ? notes.trim() : `${isService ? 'Serviço' : 'Produto'} | Margem ${actualMarginApplied.toFixed(1)}% | Retenção ${cRetentionRate}% | Custo ${cCostNet.toFixed(2)}`,
-      countryCode: countryCode || 'AO',
-      costBase: cCostNet,
-      vatRate: cVatRate,
-      marginApplied: actualMarginApplied,
-      finalPrice: pvpFinal,
-      netProfit: netProfit,
-      currency: countryCode === 'PT' ? 'EUR' : (countryCode === 'AO' ? 'Kz' : 'USD'),
-      details: {
-        costNet: effectiveCostNet,
-        merchandiseCostNet: cCostNet,
-        effectiveCostNet,
-        totalExtraCostsNet,
-        totalExtraCostsPaid,
-        totalExtraCostsVat,
-        totalInputVatSupported,
-        vatCost: totalInputVatSupported,
-        extraCosts: {
-          transport: transportCalc,
-          meals: mealsCalc,
-          lodging: lodgingCalc,
-          otherExtras: otherExtrasCalc,
-          isRoundTrip: cTransportRoundTrip
-        },
-        grossProfit: profit,
-        pvpBase,
-        vatSale,
-        pvpFinal,
-        netVatToPay,
-        tpaCost,
-        retentionRate: cRetentionRate,
-        retentionAmount,
-        netReceived,
-        industrialTaxRate,
-        incomeTax,
-        netProfit,
-        itemType: isService ? 'service' : 'product',
-        fixedPriceUsed: cFixedPrice > 0
+    const calcDetails = {
+      costNet: effectiveCostNet,
+      merchandiseCostNet: cCostNet,
+      effectiveCostNet,
+      totalExtraCostsNet,
+      totalExtraCostsPaid,
+      totalExtraCostsVat,
+      totalInputVatSupported,
+      vatCost: totalInputVatSupported,
+      extraCosts: {
+        transport: transportCalc,
+        meals: mealsCalc,
+        lodging: lodgingCalc,
+        otherExtras: otherExtrasCalc,
+        isRoundTrip: cTransportRoundTrip
       },
-      createdAt: new Date().toISOString()
+      grossProfit: profit,
+      pvpBase,
+      vatSale,
+      pvpFinal,
+      netVatToPay,
+      tpaCost,
+      retentionRate: cRetentionRate,
+      retentionAmount,
+      netReceived,
+      industrialTaxRate,
+      incomeTax,
+      netProfit,
+      itemType: isService ? 'service' : 'product',
+      fixedPriceUsed: cFixedPrice > 0
     };
 
-    db.addQueryHistory(historyItem);
+    // Decrement credits for authenticated clients (Staff accounts do not consume quota)
+    let updatedUser = user;
+    let historyItem: QueryHistoryItem | null = null;
+
+    if (user) {
+      updatedUser = isStaff
+        ? user
+        : db.updateUser(user.id, {
+            queriesRemaining: Math.max(0, user.queriesRemaining - 1),
+            totalQueriesUsed: user.totalQueriesUsed + 1
+          });
+
+      historyItem = {
+        id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: user.id,
+        type: 'local',
+        itemType: isService ? 'service' : 'product',
+        retentionRate: cRetentionRate,
+        retentionAmount: retentionAmount,
+        netReceived: netReceived,
+        title: productName ? productName.trim() : (isService ? `Prestação de Serviços (${countryCode})` : `Comércio Local (${countryCode})`),
+        description: notes ? notes.trim() : `${isService ? 'Serviço' : 'Produto'} | Margem ${actualMarginApplied.toFixed(1)}% | Retenção ${cRetentionRate}% | Custo ${cCostNet.toFixed(2)}`,
+        countryCode: countryCode || 'AO',
+        costBase: cCostNet,
+        vatRate: cVatRate,
+        marginApplied: actualMarginApplied,
+        finalPrice: pvpFinal,
+        netProfit: netProfit,
+        currency: countryCode === 'PT' ? 'EUR' : (countryCode === 'AO' ? 'Kz' : 'USD'),
+        details: calcDetails,
+        createdAt: new Date().toISOString()
+      };
+
+      db.addQueryHistory(historyItem);
+    }
 
     return res.json({
       success: true,
-      calculation: historyItem.details,
+      guest: !user,
+      calculation: calcDetails,
       historyItem,
       queriesRemaining: updatedUser?.queriesRemaining ?? 0
     });
@@ -222,22 +230,22 @@ router.post('/calculate-local', requireAuth, (req: AuthRequest, res: Response) =
   }
 });
 
-// 2. SIMULAÇÃO IMPORTAÇÃO & DESPACHO ADUANEIRO
-router.post('/calculate-import', requireAuth, (req: AuthRequest, res: Response) => {
+// 2. SIMULAÇÃO IMPORTAÇÃO & DESPACHO ADUANEIRO (Permite convidados sem login)
+router.post('/calculate-import', (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user!;
-    const isStaff = isStaffOrAdminRole(user.role);
+    const user = req.user;
+    const isStaff = user ? isStaffOrAdminRole(user.role) : false;
 
     // Check if import module is unlocked for clients
-    if (!isStaff && !user.isImportUnlocked) {
+    if (user && !isStaff && !user.isImportUnlocked) {
       return res.status(403).json({
         error: 'O Módulo de Importação Aduaneira encontra-se bloqueado para o seu plano. Adquira o Plano Ouro, Platina, Diamante ou Plano Personalizado para desbloquear.',
         code: 'MODULE_LOCKED'
       });
     }
 
-    // Check query credits (Clients must have credits)
-    if (!isStaff && user.queriesRemaining <= 0) {
+    // Check query credits (Authenticated clients must have credits)
+    if (user && !isStaff && user.queriesRemaining <= 0) {
       return res.status(402).json({
         error: 'A sua conta de cliente não possui créditos disponíveis. É obrigatório ter crédito na conta para utilizar qualquer módulo de simulação. Por favor, adquira um plano ou recarregue créditos.',
         code: 'CREDITS_EXHAUSTED'
@@ -295,58 +303,66 @@ router.post('/calculate-import', requireAuth, (req: AuthRequest, res: Response) 
     const incomeTax = operatingProfit > 0 ? operatingProfit * (industrialTaxRate / 100) : 0;
     const netProfit = operatingProfit - incomeTax;
 
-    // Decrement credits for clients
-    const updatedUser = isStaff
-      ? user
-      : db.updateUser(user.id, {
-          queriesRemaining: Math.max(0, user.queriesRemaining - 1),
-          totalQueriesUsed: user.totalQueriesUsed + 1
-        });
-
-    const historyItem: QueryHistoryItem = {
-      id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      userId: user.id,
-      type: 'import',
-      title: productName ? productName.trim() : `Importação ${originCountry || 'CN'} -> ${destCountry || 'AO'}`,
-      description: notes ? notes.trim() : `FOB: ${cFob.toFixed(2)} | CIF: ${cif.toFixed(2)} | Custo Nacionalizado: ${nationalizedCostNet.toFixed(2)}`,
-      countryCode: destCountry || 'AO',
-      costBase: nationalizedCostNet,
-      vatRate: cVatRate,
-      marginApplied: cMargin,
-      finalPrice: pvpFinal,
-      netProfit: netProfit,
-      currency: destCountry === 'PT' ? 'EUR' : (destCountry === 'AO' ? 'Kz' : 'USD'),
-      details: {
-        originCountry,
-        destCountry,
-        fob: cFob,
-        freight: cFreight,
-        insurance: cInsurance,
-        cif,
-        customsRate: cCustomsRate,
-        customsDuty,
-        iecRate: cIecRate,
-        iecTax,
-        otherFees: cOtherFees,
-        nationalizedCostNet,
-        marginPct: cMargin,
-        profit,
-        pvpBase,
-        vatSale,
-        pvpFinal,
-        netVatToPay,
-        tpaCost,
-        incomeTax,
-        netProfit
-      },
-      createdAt: new Date().toISOString()
+    const calcDetails = {
+      originCountry,
+      destCountry,
+      fob: cFob,
+      freight: cFreight,
+      insurance: cInsurance,
+      cif,
+      customsRate: cCustomsRate,
+      customsDuty,
+      iecRate: cIecRate,
+      iecTax,
+      otherFees: cOtherFees,
+      nationalizedCostNet,
+      marginPct: cMargin,
+      profit,
+      pvpBase,
+      vatSale,
+      pvpFinal,
+      netVatToPay,
+      tpaCost,
+      incomeTax,
+      netProfit
     };
 
-    db.addQueryHistory(historyItem);
+    // Decrement credits for authenticated clients
+    let updatedUser = user;
+    let historyItem: QueryHistoryItem | null = null;
+
+    if (user) {
+      updatedUser = isStaff
+        ? user
+        : db.updateUser(user.id, {
+            queriesRemaining: Math.max(0, user.queriesRemaining - 1),
+            totalQueriesUsed: user.totalQueriesUsed + 1
+          });
+
+      historyItem = {
+        id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: user.id,
+        type: 'import',
+        title: productName ? productName.trim() : `Importação ${originCountry || 'CN'} -> ${destCountry || 'AO'}`,
+        description: notes ? notes.trim() : `FOB: ${cFob.toFixed(2)} | CIF: ${cif.toFixed(2)} | Custo Nacionalizado: ${nationalizedCostNet.toFixed(2)}`,
+        countryCode: destCountry || 'AO',
+        costBase: nationalizedCostNet,
+        vatRate: cVatRate,
+        marginApplied: cMargin,
+        finalPrice: pvpFinal,
+        netProfit: netProfit,
+        currency: destCountry === 'PT' ? 'EUR' : (destCountry === 'AO' ? 'Kz' : 'USD'),
+        details: calcDetails,
+        createdAt: new Date().toISOString()
+      };
+
+      db.addQueryHistory(historyItem);
+    }
 
     return res.json({
       success: true,
-      calculation: historyItem.details,
+      guest: !user,
+      calculation: calcDetails,
       historyItem,
       queriesRemaining: updatedUser?.queriesRemaining ?? 0
     });
@@ -356,21 +372,21 @@ router.post('/calculate-import', requireAuth, (req: AuthRequest, res: Response) 
   }
 });
 
-// 3. SIMULAÇÃO EM LOTE EXCEL
-router.post('/calculate-batch', requireAuth, (req: AuthRequest, res: Response) => {
+// 3. SIMULAÇÃO EM LOTE EXCEL (Permite demonstração sem login)
+router.post('/calculate-batch', (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user!;
-    const isStaff = isStaffOrAdminRole(user.role);
+    const user = req.user;
+    const isStaff = user ? isStaffOrAdminRole(user.role) : false;
 
     // Check if batch module is unlocked for clients
-    if (!isStaff && !user.isBatchUnlocked) {
+    if (user && !isStaff && !user.isBatchUnlocked) {
       return res.status(403).json({
         error: 'O Módulo de Operações e Cálculos em Lote (Excel) encontra-se bloqueado para o seu plano. Adquira o Plano Platina, Diamante ou Personalizado para desbloquear.',
         code: 'MODULE_LOCKED'
       });
     }
 
-    if (!isStaff && user.queriesRemaining <= 0) {
+    if (user && !isStaff && user.queriesRemaining <= 0) {
       return res.status(402).json({
         error: 'A sua conta de cliente não possui créditos disponíveis. É obrigatório ter crédito na conta para utilizar qualquer módulo de simulação. Por favor, adquira um plano ou recarregue créditos.',
         code: 'CREDITS_EXHAUSTED'
@@ -456,43 +472,49 @@ router.post('/calculate-batch', requireAuth, (req: AuthRequest, res: Response) =
       };
     });
 
-    const updatedUser = isStaff
-      ? user
-      : db.updateUser(user.id, {
-          queriesRemaining: Math.max(0, user.queriesRemaining - 1),
-          totalQueriesUsed: user.totalQueriesUsed + 1
-        });
-
     const totalCostBase = processed.reduce((acc: number, r: any) => acc + (parseFloat(r['[NANUCLOUD] Custo Base (S/ IVA)']) || 0), 0);
     const totalPvpFinal = processed.reduce((acc: number, r: any) => acc + (parseFloat(r['[NANUCLOUD] PVP Final Recomendado (C/ IVA)']) || 0), 0);
     const totalNetProfit = processed.reduce((acc: number, r: any) => acc + (parseFloat(r['[NANUCLOUD] Lucro Líquido Real']) || 0), 0);
 
-    const historyItem: QueryHistoryItem = {
-      id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      userId: user.id,
-      type: 'batch',
-      title: listName ? listName.trim() : `Lote Excel (${items.length} produtos)`,
-      description: `${items.length} itens calculados com ${cMargin}% margem e ${cVatRate}% IVA`,
-      countryCode: countryCode || 'AO',
-      costBase: totalCostBase,
-      vatRate: cVatRate,
-      marginApplied: cMargin,
-      finalPrice: totalPvpFinal,
-      netProfit: totalNetProfit,
-      currency: currency,
-      details: {
-        totalItems: items.length,
-        processedSample: processed.slice(0, 10),
-        marginPct: cMargin,
-        vatRate: cVatRate
-      },
-      createdAt: new Date().toISOString()
-    };
+    let updatedUser = user;
+    let historyItem: QueryHistoryItem | null = null;
 
-    db.addQueryHistory(historyItem);
+    if (user) {
+      updatedUser = isStaff
+        ? user
+        : db.updateUser(user.id, {
+            queriesRemaining: Math.max(0, user.queriesRemaining - 1),
+            totalQueriesUsed: user.totalQueriesUsed + 1
+          });
+
+      historyItem = {
+        id: `qh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: user.id,
+        type: 'batch',
+        title: listName ? listName.trim() : `Lote Excel (${items.length} produtos)`,
+        description: `${items.length} itens calculados com ${cMargin}% margem e ${cVatRate}% IVA`,
+        countryCode: countryCode || 'AO',
+        costBase: totalCostBase,
+        vatRate: cVatRate,
+        marginApplied: cMargin,
+        finalPrice: totalPvpFinal,
+        netProfit: totalNetProfit,
+        currency: currency,
+        details: {
+          totalItems: items.length,
+          processedSample: processed.slice(0, 10),
+          marginPct: cMargin,
+          vatRate: cVatRate
+        },
+        createdAt: new Date().toISOString()
+      };
+
+      db.addQueryHistory(historyItem);
+    }
 
     return res.json({
       success: true,
+      guest: !user,
       processedItems: processed,
       historyItem,
       queriesRemaining: updatedUser?.queriesRemaining ?? 0

@@ -10,6 +10,7 @@ import { AdminBackupTab } from './admin/AdminBackupTab';
 import { AdminAdvancedSettingsTab } from './admin/AdminAdvancedSettingsTab';
 import { AdminBotLearningTab } from './admin/AdminBotLearningTab';
 import { AdminDeployPackageTab } from './admin/AdminDeployPackageTab';
+import { syncUserToFirestore } from '../services/firebase';
 
 interface AdminPanelProps {
   user: UserSafe;
@@ -271,6 +272,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onRefreshUser }) =
         setAlertMsg({ text: data.error || 'Erro ao validar transação.', type: 'error' });
       } else {
         setAlertMsg({ text: data.message, type: 'success' });
+        if (data.user) {
+          try {
+            await syncUserToFirestore(data.user);
+          } catch (e) {
+            console.warn('Firestore sync note:', e);
+          }
+          window.dispatchEvent(new CustomEvent('nanucloud_user_updated', { detail: data.user }));
+        }
         loadAllData();
         onRefreshUser();
       }

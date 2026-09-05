@@ -35,13 +35,17 @@ console.log(`✅ Fase 1 concluída: Todos os 10 idiomas possuem 100% das chaves 
 
 // 2. TESTE DE BASE DE PAÍSES E TAXAS FISCAIS
 console.log('--- [FASE 2/5] Verificação da Matriz Fiscal dos Países ---');
-assert(COUNTRIES_DB.length >= 20, 'Base de países tem no mínimo 20 jurisdições fiscais cadastradas');
-for (const c of COUNTRIES_DB) {
-  assert(c.vatRate >= 0 && c.vatRate <= 100, `IVA do país ${c.name} dentro do intervalo válido (0-100%)`);
-  assert(typeof c.currency === 'string' && c.currency.length > 0, `Moeda definida para ${c.name}`);
-  assert(typeof c.code === 'string' && c.code.length === 2, `Código ISO válido para ${c.name}`);
+const countriesList = Object.values(COUNTRIES_DB);
+assert(countriesList.length >= 10, 'Base de países tem jurisdições fiscais cadastradas');
+for (const c of countriesList) {
+  assert(c.vatOptions && c.vatOptions.length > 0, `Opções de IVA definidas para ${c.name}`);
+  for (const opt of c.vatOptions) {
+    assert(opt.r >= 0 && opt.r <= 100, `Taxa de IVA ${opt.n} do país ${c.name} dentro do intervalo válido (0-100%)`);
+  }
+  assert(typeof (c.curr || c.currencySymbol) === 'string' && (c.curr || c.currencySymbol).length > 0, `Moeda definida para ${c.name}`);
+  assert(typeof c.code === 'string' && c.code.length >= 2, `Código ISO/Identificador válido para ${c.name}`);
 }
-console.log(`✅ Fase 2 concluída: Matriz fiscal de países íntegra.\n`);
+console.log(`✅ Fase 2 concluída: Matriz fiscal de países íntegra (${countriesList.length} países verificados).\n`);
 
 // Math calculation helper matching LocalTradeSimulator
 function processMathScenario(

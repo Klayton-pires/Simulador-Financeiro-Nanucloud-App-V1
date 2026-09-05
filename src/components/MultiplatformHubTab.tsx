@@ -46,6 +46,19 @@ export const MultiplatformHubTab: React.FC<MultiplatformHubTabProps> = ({ curren
 
   const platforms = [
     {
+      id: 'html_standalone',
+      name: 'Versão HTML Completa Autónoma',
+      folder: '/versao_html_completa/',
+      badge: '100% Standalone / Zero Setup',
+      color: 'from-emerald-600/20 to-teal-600/20 border-emerald-500/40 text-emerald-400',
+      icon: Globe,
+      description: 'Versão autónoma completa em HTML5/CSS/JS, com todos os módulos operacionais (Comércio, Serviços, Importação, Intermediação, Lote, Matriz Fiscal), modo offline e impressão em PDF.',
+      database: 'LocalStorage Database Autónomo',
+      quickCmd: 'Abrir diretamente versao_html_completa/index.html no navegador',
+      files: ['index.html', 'LEIAME.txt'],
+      directUrl: '/versao_html_completa/index.html'
+    },
+    {
       id: 'web',
       name: 'Web Standalone & PWA',
       folder: '/packages/web/',
@@ -379,6 +392,18 @@ Versão: 2026.8.0
                 </div>
 
                 <div className="space-y-2 pt-2 border-t border-slate-800">
+                  {(p as any).directUrl && (
+                    <a
+                      href={(p as any).directUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-xl text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md shadow-emerald-900/30"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Abrir Versão HTML no Navegador
+                    </a>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => handleDownloadPlatformZip(p.id)}

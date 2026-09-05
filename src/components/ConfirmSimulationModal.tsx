@@ -18,6 +18,7 @@ interface ConfirmSimulationModalProps {
   summaryItems: SimulationSummaryItem[];
   userQueriesRemaining?: number;
   isStaffOrAdmin?: boolean;
+  isGuest?: boolean;
   isProcessing?: boolean;
   confirmButtonText?: string;
 }
@@ -32,6 +33,7 @@ export const ConfirmSimulationModal: React.FC<ConfirmSimulationModalProps> = ({
   summaryItems,
   userQueriesRemaining = 0,
   isStaffOrAdmin = false,
+  isGuest = false,
   isProcessing = false,
   confirmButtonText = 'Confirmar & Processar Simulação'
 }) => {
@@ -105,6 +107,11 @@ export const ConfirmSimulationModal: React.FC<ConfirmSimulationModalProps> = ({
             {isStaffOrAdmin ? (
               <span>
                 <strong>Acesso Staff:</strong> A simulação será processada com consultas ilimitadas sem débito.
+              </span>
+            ) : isGuest ? (
+              <span>
+                <strong>Simulação Gratuita (Sem Login):</strong> Esta simulação consumirá <strong>1 consulta grátis</strong> de demonstração. Saldo restante após cálculo:{' '}
+                <strong>{Math.max(0, userQueriesRemaining - 1)} consultas gratuitas</strong>.
               </span>
             ) : (
               <span>

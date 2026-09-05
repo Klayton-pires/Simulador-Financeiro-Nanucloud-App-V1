@@ -27,6 +27,10 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { ClientCreditNoticeBanner } from './ClientCreditNoticeBanner';
 import { canUserSimulate } from '../utils/accessControl';
+import { ConfirmSimulationModal, SimulationSummaryItem } from './ConfirmSimulationModal';
+import { saveSimulationToFirestore } from '../services/firebase';
+import { consumeGuestCredit, getGuestCredits } from '../utils/guestCredits';
+import { ExhaustedCreditsModal } from './ExhaustedCreditsModal';
 
 interface ServicesConsultingSimulatorProps {
   user: UserSafe | null;
@@ -44,6 +48,8 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
   onCalculationDone
 }) => {
   const t = TRANSLATIONS[currentLang] || TRANSLATIONS.pt;
+
+  const [showExhaustedModal, setShowExhaustedModal] = useState<boolean>(false);
 
   // Configuration and inputs
   const [countryCode, setCountryCode] = useState<string>('AO');
@@ -85,6 +91,7 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [hasCalculated, setHasCalculated] = useState<boolean>(false);
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [countryVersion, setCountryVersion] = useState<number>(0);
@@ -182,7 +189,7 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
     return `${val.toLocaleString('pt-AO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${country.curr}`;
   };
 
-  const handleCalculate = async () => {
+  const handleRequestCalculate = () => {
     setErrorMessage(null);
 
     if (baseLabor <= 0) {
@@ -190,31 +197,75 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
       return;
     }
 
-    // AUTH & RBAC SIMULATION CHECK
-    if (!user) {
-      setErrorMessage('Para utilizar qualquer simulação nos módulos, inicie sessão na sua conta de cliente (com crédito ativo) ou conta de staff.');
-      onOpenAuth();
-      return;
-    }
-
+    // AUTH & RBAC SIMULATION CHECK - Allows free demo credits without login
     const simCheck = canUserSimulate(user);
     if (!simCheck.allowed) {
       setErrorMessage(simCheck.message);
-      onOpenPlans();
+      setShowExhaustedModal(true);
       return;
     }
 
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmAndExecute = async () => {
     setIsCalculating(true);
     try {
       if (user && user.queriesRemaining > 0 && user.role !== 'staff' && user.role !== 'admin' && user.role !== 'admin_level1' && user.role !== 'super_admin') {
         const newQueries = Math.max(0, user.queriesRemaining - 1);
         onCalculationDone(newQueries);
+      } else if (!user) {
+        const left = consumeGuestCredit();
+        if (left === 0) {
+          setTimeout(() => setShowExhaustedModal(true), 1200);
+        }
       }
       setHasCalculated(true);
+      setShowConfirmModal(false);
+
+      // Save simulation to Cloud Firestore
+      if (user) {
+        saveSimulationToFirestore(user.id, 'services_consulting', {
+          country: countryCode,
+          billingMode,
+          baseLabor,
+          grossInvoiceTotal,
+          netBankReceived,
+          netOperationalProfit,
+          vatRate,
+          retentionRate: effectiveRetentionRate
+        }).catch(() => {});
+      }
     } finally {
       setIsCalculating(false);
     }
   };
+
+  const simulationSummaryItems: SimulationSummaryItem[] = [
+    {
+      label: 'Honorários Base de Serviço',
+      value: formatCurrency(baseLabor),
+      detail: billingMode === 'fixed' ? 'Valor Fixo Fechado' : billingMode === 'hourly' ? `${totalHours}h a ${formatCurrency(parseFloat(hourlyRate) || 0)}/h` : `${distanceKm} km`,
+      isHighlight: true
+    },
+    {
+      label: 'Margem de Consultoria / Sobrecusto',
+      value: `${marginPct}% (+${formatCurrency(markupAmount)})`
+    },
+    {
+      label: 'País & Enquadramento Fiscal',
+      value: `${country.name} (${country.curr})`,
+      detail: `IVA: ${vatRate}% | Retenção: ${applyRetention ? `${effectiveRetentionRate}%` : 'Isento'} | TPA: ${tpaRate}%`
+    }
+  ];
+
+  if (totalLogistics > 0) {
+    simulationSummaryItems.push({
+      label: 'Despesas de Logística (Transporte / Diárias)',
+      value: formatCurrency(totalLogistics),
+      detail: `${techniciansCount} técnicos × ${daysDuration} dias`
+    });
+  }
 
   // Export to PDF
   const handleExportPDF = () => {
@@ -537,7 +588,10 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => setBillingMode('fixed')}
+                onClick={() => {
+                  setBillingMode('fixed');
+                  setHasCalculated(false);
+                }}
                 className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center gap-1.5 ${
                   billingMode === 'fixed'
                     ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md'
@@ -550,7 +604,10 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
 
               <button
                 type="button"
-                onClick={() => setBillingMode('hourly')}
+                onClick={() => {
+                  setBillingMode('hourly');
+                  setHasCalculated(false);
+                }}
                 className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center gap-1.5 ${
                   billingMode === 'hourly'
                     ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md'
@@ -563,7 +620,10 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
 
               <button
                 type="button"
-                onClick={() => setBillingMode('distance')}
+                onClick={() => {
+                  setBillingMode('distance');
+                  setHasCalculated(false);
+                }}
                 className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center gap-1.5 ${
                   billingMode === 'distance'
                     ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md'
@@ -583,7 +643,10 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
                   <input
                     type="number"
                     value={fixedAmount}
-                    onChange={(e) => setFixedAmount(e.target.value)}
+                    onChange={(e) => {
+                      setFixedAmount(e.target.value);
+                      setHasCalculated(false);
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-3 pr-12 py-2 text-sm text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
                   />
                   <span className="absolute right-3 top-2.5 text-xs text-slate-500 font-mono">{country.curr}</span>
@@ -598,7 +661,10 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
                   <input
                     type="number"
                     value={hourlyRate}
-                    onChange={(e) => setHourlyRate(e.target.value)}
+                    onChange={(e) => {
+                      setHourlyRate(e.target.value);
+                      setHasCalculated(false);
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -607,7 +673,10 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
                   <input
                     type="number"
                     value={totalHours}
-                    onChange={(e) => setTotalHours(e.target.value)}
+                    onChange={(e) => {
+                      setTotalHours(e.target.value);
+                      setHasCalculated(false);
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -627,7 +696,10 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
                     <input
                       type="number"
                       value={ratePerKm}
-                      onChange={(e) => setRatePerKm(e.target.value)}
+                      onChange={(e) => {
+                        setRatePerKm(e.target.value);
+                        setHasCalculated(false);
+                      }}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -636,7 +708,10 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
                     <input
                       type="number"
                       value={distanceKm}
-                      onChange={(e) => setDistanceKm(e.target.value)}
+                      onChange={(e) => {
+                        setDistanceKm(e.target.value);
+                        setHasCalculated(false);
+                      }}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -647,7 +722,10 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
                     <input
                       type="checkbox"
                       checked={isRoundTrip}
-                      onChange={(e) => setIsRoundTrip(e.target.checked)}
+                      onChange={(e) => {
+                        setIsRoundTrip(e.target.checked);
+                        setHasCalculated(false);
+                      }}
                       className="w-4 h-4 rounded text-indigo-600 focus:ring-0 bg-slate-900 border-slate-700"
                     />
                     Cobrar Deslocação de Ida e Volta (×2)
@@ -871,12 +949,12 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
             <div className="pt-2">
               <button
                 type="button"
-                onClick={handleCalculate}
+                onClick={handleRequestCalculate}
                 disabled={isCalculating}
-                className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 active:scale-[0.98] text-white rounded-xl text-sm font-mono font-bold transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 active:scale-[0.98] text-white rounded-xl text-sm font-mono font-bold transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 <TrendingUp className="w-4 h-4" />
-                <span>{isCalculating ? 'A Processar Cálculo...' : 'CALCULAR PROPOSTA DE SERVIÇOS'}</span>
+                <span>{isCalculating ? 'A Processar Simulação...' : 'CALCULAR & CONFIRMAR SIMULAÇÃO'}</span>
               </button>
             </div>
           </div>
@@ -893,8 +971,9 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
                   <Receipt className="w-5 h-5 text-indigo-400" />
                   <h3 className="text-sm font-bold text-slate-100 font-mono">FICHA DE PRESTAÇÃO DE SERVIÇOS</h3>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
-                  Apurado • 1 Crédito
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  SIMULAÇÃO CONFIRMADA
                 </span>
               </div>
 
@@ -995,14 +1074,38 @@ export const ServicesConsultingSimulator: React.FC<ServicesConsultingSimulatorPr
               <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
                 <Receipt className="w-6 h-6" />
               </div>
-              <h3 className="text-sm font-bold text-slate-200 font-mono">Aguardando Execução do Cálculo</h3>
+              <h3 className="text-sm font-bold text-slate-200 font-mono">Aguardando Confirmação da Simulação</h3>
               <p className="text-xs text-slate-400 font-mono max-w-sm mx-auto leading-relaxed">
-                Preencha os dados do serviço e despesas logísticas e clique no botão <strong>"CALCULAR PROPOSTA DE SERVIÇOS"</strong> para apurar o total bruto, retenções e valor líquido.
+                Preencha os dados do serviço e despesas logísticas e clique no botão <strong className="text-indigo-300">"CALCULAR & CONFIRMAR SIMULAÇÃO"</strong> para apurar o total bruto, retenções e valor líquido.
               </p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Confirmation Modal before calculating results */}
+      <ConfirmSimulationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={handleConfirmAndExecute}
+        moduleName="Prestação de Serviços & Consultoria"
+        title="Confirmar Simulação de Serviços"
+        subtitle="Reveja a composição de honorários, logística e retenções na fonte antes de apurar os valores finais."
+        summaryItems={simulationSummaryItems}
+        userQueriesRemaining={user ? (user.queriesRemaining || 0) : getGuestCredits()}
+        isStaffOrAdmin={user?.role === 'staff' || user?.role === 'admin' || user?.role === 'admin_level1' || user?.role === 'super_admin'}
+        isGuest={!user}
+        isProcessing={isCalculating}
+      />
+
+      {/* Exhausted Credits Modal - Prompts user to buy plan, then login */}
+      <ExhaustedCreditsModal
+        isOpen={showExhaustedModal}
+        onClose={() => setShowExhaustedModal(false)}
+        onOpenPlans={onOpenPlans}
+        onOpenAuth={onOpenAuth}
+        isGuest={!user}
+      />
     </div>
   );
 };

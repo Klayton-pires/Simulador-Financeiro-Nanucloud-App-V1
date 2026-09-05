@@ -60,6 +60,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Audit Logs Collection (Immutable logs created by signed-in users/staff, readable by Admin)
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn() && isValidId(logId);
+      allow update, delete: if false;
+    }
+
     // Admins Collection
     match /admins/{adminId} {
       allow read: if isSignedIn();

@@ -1,0 +1,94 @@
+# NANUCLOUD - VERSÃO HTML AUTÓNOMA COMPLETA (STANDALONE)
+
+Bem-vindo à versão 100% autónoma do NANUCLOUD em HTML / CSS / JavaScript.
+
+Esta versão foi especialmente concebida para ser executada diretamente em qualquer computador (Windows, macOS, Linux) ou dispositivo móvel (Android, iOS) sem necessidade de instalar Node.js, servidores locais ou configurar bases de dados externas.
+
+---
+
+## 📂 Conteúdo Desta Pasta (`/versao_html_completa`)
+
+1. **`index.html`**:
+   - Aplicação completa num único ficheiro HTML moderno.
+   - Contém todos os motores de cálculo financeiro e fiscal em JavaScript puro.
+   - Suporta modo offline (não necessita de ligação à internet após o primeiro carregamento).
+   - Guarda o histórico de simulações no armazenamento local do navegador (`localStorage`).
+
+2. **`LEIAME.txt`**:
+   - Este manual rápido de utilização.
+
+---
+
+## 🚀 Como Executar no Seu Computador ou Telemóvel
+
+### No Windows:
+1. Abra a pasta `versao_html_completa`.
+2. Dê **duplo clique** no ficheiro `index.html`.
+3. O programa abrirá imediatamente no seu navegador preferido (Google Chrome, Microsoft Edge, Mozilla Firefox, Opera, Brave).
+
+### No macOS (MacBook / iMac):
+1. Dê duplo clique no ficheiro `index.html` ou clique com o botão direito e escolha "Abrir com" -> Safari / Google Chrome.
+
+### No Linux (Ubuntu, Debian, Fedora):
+1. Abra o gestor de ficheiros e dê duplo clique em `index.html` ou execute no terminal:
+   ```bash
+   google-chrome index.html
+   # ou
+   firefox index.html
+   ```
+
+### Em Telemóveis / Tablets (Android e iPhone/iPad):
+1. Envie o ficheiro `index.html` por WhatsApp, Email ou Google Drive para o seu telemóvel.
+2. Abra-o com o navegador padrão para utilizar todas as funcionalidades e simulações em qualquer lugar.
+
+---
+
+## 🧮 Módulos e Funcionalidades Incluídas a Funcionar 100%:
+
+1. **Comércio Local & Retalho**:
+   - Preço de Venda ao Público (PVP com IVA).
+   - Base de Incidência (PVP sem IVA).
+   - IVA Liquidado por regimes (Geral 14%, Simplificado 7%, Cesta Básica 5%, Isento 0%, Portugal 23%, etc.).
+   - Dedução de Custos Operacionais e Comissão de TPA (0.5% a 2.5%).
+   - Apuramento da Provisão de Imposto Industrial (25%).
+   - Cálculo automático do Lucro Líquido Real em Caixa e Ponto de Equilíbrio (Break-Even).
+   - Modo de Preço Fixo com cálculo da margem líquida reversa.
+
+2. **Prestação de Serviços & Retenção na Fonte**:
+   - Apuramento de Honorários Brutos com IVA.
+   - Retenção na Fonte Legal Automática (Art. 67º CIVA / IRT Serviços 6.5%, Serviços Técnicos 15%, Não-Residentes 25%).
+   - Valor Líquido Real a Receber em Conta Bancária.
+
+3. **Importação & Despacho Aduaneiro**:
+   - Incoterms FOB, Frete Internacional e Seguro Marítimo/Aéreo.
+   - Apuramento do Valor Aduaneiro CIF.
+   - Pauta Aduaneira (Direitos Aduaneiros 5% a 50%).
+   - Imposto Especial de Consumo (IEC).
+   - Taxas Portuárias e Despacho.
+   - IVA Aduaneiro (14%).
+   - Custo Total Nacionalizado em Armazém (Landed Cost).
+   - Sugestão de PVP de revenda com lucro estimado.
+
+4. **Intermediação & Corretagem Comercial**:
+   - Comissões sobre negócios, compra/venda de imóveis e mercadorias.
+   - Retenção na fonte da comissão e saldo remanescente do proprietário.
+
+5. **Simulador em Lote (Lote / Excel / CSV)**:
+   - Adição e remoção de linhas em tempo real.
+   - Cálculo simultâneo de custos, vendas, IVA e lucros totais consolidados.
+   - Exportação direta para ficheiro CSV (compatível com Microsoft Excel).
+
+6. **Matriz Fiscal Internacional**:
+   - Regras fiscais e tributárias detalhadas para Angola (AGT), Portugal (AT), Moçambique, Cabo Verde, Brasil e Normas Internacionais (OMA).
+
+7. **Histórico Local de Simulações**:
+   - Gravação instantânea em `localStorage` para não perder cálculos.
+   - Consulta, gestão e eliminação de registos anteriores.
+
+8. **Exportação e Impressão de Relatórios em PDF**:
+   - Formatação automática limpa para impressão ou guardar como PDF através do atalho Ctrl+P ou botão "Imprimir / PDF".
+
+---
+
+© 2025 NANUCLOUD Lda. Todos os direitos reservados.
+Desenvolvido para máxima rapidez, precisão contabilística e portabilidade.
