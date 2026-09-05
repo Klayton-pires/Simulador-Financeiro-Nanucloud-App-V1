@@ -100,36 +100,36 @@ const DEFAULT_BANK_ACCOUNTS: BankAccount[] = [
   {
     id: 'bank_bai_01',
     bankName: 'Banco Angolano de Investimentos (BAI)',
-    iban: 'AO06 0040 0000 1234 5678 9012 3',
+    iban: 'AO06 0040 0000 0692 4329 1010 6',
     swift: 'BAIAOLLU',
-    holder: 'NANUCLOUD Lda',
+    holder: 'KLAYTON PIRES',
     currency: 'AOA (Kz)',
     isActive: true
   },
   {
     id: 'bank_bfa_02',
     bankName: 'Banco de Fomento Angola (BFA)',
-    iban: 'AO06 0006 0000 9876 5432 1098 7',
+    iban: 'AO06 0006 0000 9745 7140 3018 1',
     swift: 'BFAAOLLU',
-    holder: 'NANUCLOUD Lda',
+    holder: 'KLAYTON PIRES',
     currency: 'AOA (Kz)',
     isActive: true
   },
   {
     id: 'bank_bma_03',
     bankName: 'Banco Millennium Atlântico (BMA)',
-    iban: 'AO06 0055 0000 4567 8901 2345 6',
+    iban: 'AO06 0055 0000 2469 9241 1017 7',
     swift: 'BMAAOLLU',
-    holder: 'NANUCLOUD Lda',
+    holder: 'KLAYTON PIRES',
     currency: 'AOA (Kz)',
     isActive: true
   },
   {
     id: 'bank_bic_04',
     bankName: 'Banco BIC Angola',
-    iban: 'AO06 0051 0000 3344 5566 7788 9',
+    iban: 'AO06 0051 0000 7027 5788 1519 5',
     swift: 'BICAOLLU',
-    holder: 'NANUCLOUD Lda',
+    holder: 'KLAYTON PIRES',
     currency: 'AOA (Kz)',
     isActive: true
   }
@@ -739,7 +739,7 @@ class DatabaseEngine {
       fiscalAiAutoCheckEnabled: true,
 
       bankName: 'Banco BAI / BFA / Millennium Atlântico',
-      bankIban: 'AO06 0040 0000 1234 5678 9012 3',
+      bankIban: 'AO06 0051 0000 7027 5788 1519 5',
       bankHolder: 'NANUCLOUD Lda',
       expressPhone: '929462681',
       bankAccounts: DEFAULT_BANK_ACCOUNTS,
