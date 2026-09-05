@@ -480,6 +480,88 @@ router.put('/users/:id/password', requireAdminLevel2, (req: AuthRequest, res: Re
   }
 });
 
+// 5c. VALIDAR PLANO ESCOLHIDO DO CLIENTE (Staff & Administradores)
+router.post('/users/:id/validate-plan', requireAdminLevel2, (req: AuthRequest, res: Response) => {
+  try {
+    const staffOrAdmin = req.user!;
+    const { id } = req.params;
+    const { 
+      planId, 
+      planName, 
+      queriesGranted, 
+      validityDays = 30, 
+      unlockImport, 
+      unlockBatch, 
+      unlockApi,
+      notes 
+    } = req.body;
+
+    const targetUser = db.findUserById(id) || db.findUserByEmail(id);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Cliente / Utilizador não encontrado no sistema.' });
+    }
+
+    const availablePlans = db.getPlans();
+    const matchedPlan = availablePlans.find(p => p.id === planId);
+
+    const chosenPlanName = planName || (matchedPlan ? matchedPlan.name : 'Plano Personalizado');
+    const queriesToAdd = typeof queriesGranted === 'number' 
+      ? queriesGranted 
+      : (matchedPlan ? matchedPlan.queriesCount : 30);
+    const days = typeof validityDays === 'number' ? validityDays : (matchedPlan ? matchedPlan.validityDays : 30);
+    
+    const expiresDate = new Date();
+    expiresDate.setDate(expiresDate.getDate() + days);
+
+    const updatedUser = db.updateUser(targetUser.id, {
+      activePlanId: planId || targetUser.activePlanId || 'plan_bronze',
+      activePlanName: chosenPlanName,
+      queriesRemaining: (targetUser.queriesRemaining || 0) + queriesToAdd,
+      planExpiresAt: expiresDate.toISOString(),
+      isImportUnlocked: unlockImport !== undefined ? unlockImport : (targetUser.isImportUnlocked || Boolean(matchedPlan?.unlocksImport)),
+      isBatchUnlocked: unlockBatch !== undefined ? unlockBatch : (targetUser.isBatchUnlocked || Boolean(matchedPlan?.unlocksBatch)),
+      ...(unlockApi !== undefined ? { isApiUnlocked: unlockApi } : {})
+    });
+
+    if (!updatedUser) {
+      return res.status(500).json({ error: 'Erro ao atualizar dados do cliente.' });
+    }
+
+    // Se houver transações pendentes deste cliente para este plano, aprova automaticamente
+    const transactions = db.getTransactions();
+    const pendingTx = transactions.find(t => 
+      (t.userId === targetUser.id || t.userEmail === targetUser.email) && 
+      t.status === 'pending' &&
+      (!planId || t.planId === planId || t.planName === chosenPlanName)
+    );
+
+    if (pendingTx) {
+      db.updateTransactionStatus(pendingTx.id, 'approved', staffOrAdmin.id, staffOrAdmin.name);
+    }
+
+    db.addAuditLog({
+      userId: staffOrAdmin.id,
+      userName: staffOrAdmin.name,
+      userRole: staffOrAdmin.role,
+      action: 'PLAN_VALIDATED_BY_STAFF',
+      entityType: 'user',
+      entityId: targetUser.id,
+      ipAddress: req.ip || req.socket.remoteAddress,
+      details: `Plano "${chosenPlanName}" validado e ativado para ${targetUser.name} (${targetUser.email}) por ${staffOrAdmin.name}. +${queriesToAdd} consultas creditadas. Validade até ${expiresDate.toLocaleDateString('pt-PT')}. Notas: ${notes || 'Validação de plano confirmada pelo staff.'}`
+    });
+
+    const { passwordHash: _, ...safeUser } = updatedUser;
+    return res.json({
+      success: true,
+      message: `Plano "${chosenPlanName}" validado com sucesso! ${queriesToAdd} consultas creditadas para ${targetUser.name}.`,
+      user: safeUser
+    });
+  } catch (err: any) {
+    console.error('Error validating plan for user:', err);
+    return res.status(500).json({ error: 'Erro ao validar o plano do cliente.' });
+  }
+});
+
 // =========================================================================
 // 6. AUDITORIA & LOGS DO SISTEMA (Nível 1 - Super Admin)
 // =========================================================================
@@ -962,8 +1044,8 @@ router.get('/database-credentials', requireAdminLevel1, (req: AuthRequest, res: 
         tableCounts: sqliteInfo.tableCounts
       },
       superAdminCredentials: {
-        superAdminEmail: 'joaquim.monteiro@nanucloud.com',
-        adminAccessEmail: 'klayton.pires.monteiro@gmail.com',
+        superAdminEmail: 'suporte@nanucloud.com',
+        adminAccessEmail: 'suporte@nanucloud.com',
         role: 'admin_level1 (Super Administrador)',
         privileges: 'Acesso total irrestrito, retenção vitalícia de histórico, permissão de purga'
       },

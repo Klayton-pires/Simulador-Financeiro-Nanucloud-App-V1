@@ -745,7 +745,7 @@ export class SqliteDatabaseManager {
       // 1. Delete demo users except official admin
       this.db.run(`
         DELETE FROM users 
-        WHERE email NOT IN ('nanuhost', 'klayton.pires.monteiro@gmail.com')
+        WHERE email NOT IN ('nanuhost', 'suporte@nanucloud.com')
         AND (
           LOWER(email) LIKE '%demo%' OR LOWER(email) LIKE '%teste%' OR LOWER(email) LIKE '%sample%'
           OR LOWER(name) LIKE '%demo%' OR LOWER(name) LIKE '%teste%' OR LOWER(name) LIKE '%demonstra%'

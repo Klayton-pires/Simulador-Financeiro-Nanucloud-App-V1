@@ -9,8 +9,8 @@
 - **Sede Social:** Luanda, República de Angola
 - **Marca Registada:** **Nanucloud ®** (Registada no IAPI — Instituto Angolano da Propriedade Intelectual)
 - **Representante Legal / CEO:** Klayton Pires Monteiro
-- **E-mails de Contacto:** `klayton.pires.monteiro@gmail.com` | `klayton_pires@hotmail.com`
-- **Contactos Telefónicos / WhatsApp:** +244 954 269 353 / +244 929 462 681
+- **E-mails de Contacto:** `geral@nanucloud.com` | `suporte@nanucloud.com`
+- **Contactos Telefónicos / WhatsApp:** +244 944 935 617 / +244 944 935 618
 - **Domínio Principal:** `nanucloud.com`
 - **Subdomínio de Aplicação:** `simulador.nanucloud.com`
 

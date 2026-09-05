@@ -27,7 +27,7 @@ router.all('/backoffice-direct', (req: AuthRequest, res: Response) => {
 // 1. REGISTO DE UTILIZADOR (EXCLUSIVO CLIENTES FINAIS PARA O FRONT-END)
 router.post('/register', async (req: AuthRequest, res: Response) => {
   try {
-    const { name, email, phone, company, address, nif, country, password, confirmPassword, acceptTerms, otpCode } = req.body;
+    const { name, email, phone, company, address, nif, country, password, confirmPassword, acceptTerms, otpCode, chosenPlanId } = req.body;
 
     if (!name || (!email && !phone) || !password) {
       return res.status(400).json({ error: 'Nome, contacto (telemóvel ou e-mail) e palavra-passe são obrigatórios.' });
@@ -80,6 +80,13 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
     const passwordHash = bcrypt.hashSync(password, salt);
     const freeQueries = settings.freeQueriesOnRegister || 3;
 
+    // Check if user selected a preferred plan on signup
+    const matchedPlan = chosenPlanId ? db.getPlans().find(p => p.id === chosenPlanId) : null;
+    const initialPlanId = matchedPlan ? matchedPlan.id : null;
+    const initialPlanName = matchedPlan 
+      ? `${matchedPlan.name} (Pendente de Validação pelo Staff)` 
+      : `Plano Gratuito Inicial (${freeQueries} Consultas)`;
+
     // REGRA DE OURO: A criação pública pelo login é ESTRITAMENTE para clientes finais usarem o Front-End
     // Contas de Staff, Gerentes ou Administradores só podem ser criadas por administradores dentro do Backoffice
     const newUser: User = {
@@ -96,8 +103,8 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
       isActive: true,
       queriesRemaining: freeQueries,
       totalQueriesUsed: 0,
-      activePlanId: null,
-      activePlanName: `Plano Gratuito Inicial (${freeQueries} Consultas)`,
+      activePlanId: initialPlanId,
+      activePlanName: initialPlanName,
       planExpiresAt: null,
       isImportUnlocked: false,
       isBatchUnlocked: false,
@@ -107,6 +114,20 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
     };
 
     db.addUser(newUser);
+
+    if (matchedPlan) {
+      db.createTransaction({
+        userId: newUser.id,
+        userName: newUser.name,
+        userEmail: newUser.email,
+        planId: matchedPlan.id,
+        planName: matchedPlan.name,
+        amountKz: matchedPlan.priceKz,
+        paymentMethod: 'transfer',
+        status: 'pending',
+        notes: `Plano escolhido no ato de registo da conta. Aguarda validação do staff.`
+      });
+    }
 
     // Send Welcome & Confirmation SMS
     if (cleanPhone) {

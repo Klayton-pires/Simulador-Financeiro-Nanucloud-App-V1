@@ -5,6 +5,7 @@ import {
   User, 
   Plan, 
   Transaction, 
+  TransactionStatus,
   QueryHistoryItem, 
   AuditLog, 
   SystemSettings, 
@@ -343,17 +344,17 @@ class DatabaseEngine {
       nanuhostAccount.queriesRemaining = 999999;
     }
 
-    // 2. Ensure Klayton Pires account is maintained (klayton.pires.monteiro@gmail.com / Super Admin)
-    let klayton = this.findUserByEmail('klayton.pires.monteiro@gmail.com');
+    // 2. Ensure Klayton Pires account is maintained (suporte@nanucloud.com / Super Admin)
+    let klayton = this.findUserByEmail('suporte@nanucloud.com');
     if (!klayton) {
       const superAdminKlayton: User = {
         id: 'usr_klayton_pires',
         name: 'Klayton Pires',
-        email: 'klayton.pires.monteiro@gmail.com',
-        phone: '+244954269353',
+        email: 'suporte@nanucloud.com',
+        phone: '+244944935617',
         company: 'NANUCLOUD Lda',
         address: 'Angola, Luanda, Maianga',
-        nif: '5001294819',
+        nif: '5417653438',
         country: 'AO',
         passwordHash: bcrypt.hashSync('admin123', salt),
         role: 'admin_level1',
@@ -477,11 +478,11 @@ class DatabaseEngine {
     // Set company brand strictly to NANUCLOUD
     this.data.settings.companyName = 'NANUCLOUD';
     if (!this.data.settings.companyPhone1) {
-      this.data.settings.companyPhone1 = '+244929462681';
-      this.data.settings.companyPhone2 = '+244954269353';
-      this.data.settings.companyEmail1 = 'joaquim.monteiro@nanucloud.com';
-      this.data.settings.companyEmail2 = 'klayton_pires@hotmail.com';
-      this.data.settings.companyNif = '5001294819';
+      this.data.settings.companyPhone1 = '+244944935618';
+      this.data.settings.companyPhone2 = '+244955581862';
+      this.data.settings.companyEmail1 = 'geral@nanucloud.com';
+      this.data.settings.companyEmail2 = 'suporte@nanucloud.com';
+      //this.data.settings.companyNif = '5417653438';
       this.data.settings.footerCopyrightText = `© ${new Date().getFullYear()} Nanucloud. Todos os direitos reservados.`;
       this.data.settings.activeThemeId = 'theme_nanucloud_dark';
       this.data.settings.autoHolidayThemeEnabled = true;
@@ -516,7 +517,7 @@ class DatabaseEngine {
       phone: '+244929462681',
       company: 'NANUCLOUD Lda',
       address: 'Angola, Luanda, Viana, Capalanca',
-      nif: '5001294819',
+      nif: '5417653438',
       country: 'AO',
       passwordHash: bcrypt.hashSync('admin123', salt),
       role: 'admin_level1',
@@ -561,8 +562,8 @@ class DatabaseEngine {
 
     const demoUser: User = {
       id: 'usr_demo_client_003',
-      name: 'Klayton Monteiro',
-      email: 'klayton.pires.monteiro@gmail.com',
+      name: 'teste1',
+      email: 'teste1@teste.com',
       phone: '+244923000111',
       company: 'Monteiro Import & Export',
       address: 'Luanda, Viana',
@@ -692,16 +693,16 @@ class DatabaseEngine {
         excel: 50,
         api_integration: 50
       },
-      whatsappSupport1: '+244954269353',
-      whatsappSupport2: '+244929462681',
-      supportEmail: 'klayton.pires.monteiro@gmail.com',
-      companyName: 'Klayton Pires - Prestações de Serviços e Negocios (SU) Lda',
+      whatsappSupport1: '+244944935618',
+      whatsappSupport2: '+244955581862',
+      supportEmail: 'suporte@nanucloud.com',
+      companyName: 'Nanucloud',
       companyAddress: 'Luanda, Angola',
-      companyNif: '5417653438',
-      companyPhone1: '+244954269353',
-      companyPhone2: '+244929462681',
-      companyEmail1: 'klayton.pires.monteiro@gmail.com',
-      companyEmail2: 'klayton_pires@hotmail.com',
+      //companyNif: '5417653438',
+      companyPhone1: '+244955581862',
+      companyPhone2: '+244944935618',
+      companyEmail1: 'simulador@nanucloud.com',
+      companyEmail2: 'geral@nanucloud.com',
       companyLogoUrl: '',
       footerCopyrightText: '© 2026 Nanucloud. Todos os direitos reservados.',
       
@@ -730,7 +731,7 @@ class DatabaseEngine {
       socialFacebook: 'https://facebook.com/nanucloud',
       socialInstagram: 'https://instagram.com/nanucloud',
       socialLinkedIn: 'https://linkedin.com/company/nanucloud',
-      socialWhatsApp: 'https://wa.me/244929462681',
+      socialWhatsApp: 'https://wa.me/244944935618',
       socialYouTube: 'https://youtube.com/@nanucloud',
 
       activeThemeId: 'theme_nanucloud_dark',
@@ -1400,12 +1401,48 @@ class DatabaseEngine {
     return tx;
   }
 
+  public createTransaction(txData: Partial<Transaction> & { userId: string; userName: string; userEmail: string; planId: string; planName: string; amountKz: number; status: TransactionStatus }): Transaction {
+    const newTx: Transaction = {
+      id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      userId: txData.userId,
+      userName: txData.userName,
+      userEmail: txData.userEmail,
+      planId: txData.planId,
+      planName: txData.planName,
+      amountKz: txData.amountKz,
+      queriesGranted: txData.queriesGranted || 0,
+      validityDays: txData.validityDays || 30,
+      paymentMethod: txData.paymentMethod || 'bank_transfer',
+      paymentProofUrl: txData.paymentProofUrl,
+      paymentProofName: txData.paymentProofName,
+      paymentProofSize: txData.paymentProofSize,
+      paymentReference: txData.paymentReference,
+      notes: txData.notes,
+      status: txData.status,
+      createdAt: new Date().toISOString()
+    };
+    this.data.transactions.unshift(newTx);
+    this.save();
+    return newTx;
+  }
+
   public updateTransaction(id: string, updates: Partial<Transaction>): Transaction | undefined {
     const idx = this.data.transactions.findIndex(t => t.id === id);
     if (idx === -1) return undefined;
     this.data.transactions[idx] = { ...this.data.transactions[idx], ...updates };
     this.save();
     return this.data.transactions[idx];
+  }
+
+  public updateTransactionStatus(id: string, status: TransactionStatus, adminId?: string, adminName?: string): Transaction | undefined {
+    const tx = this.findTransactionById(id);
+    if (!tx) return undefined;
+    tx.status = status;
+    if (adminId) tx.reviewedByAdminId = adminId;
+    if (adminName) tx.reviewedByAdminName = adminName;
+    tx.reviewedAt = new Date().toISOString();
+    this.save();
+    return tx;
   }
 
   // Support Inquiry Operations
@@ -1656,8 +1693,8 @@ class DatabaseEngine {
     // 1. Filter out demo users (preserving real admins and real users)
     const initialUsersCount = this.data.users.length;
     this.data.users = this.data.users.filter(u => {
-      // Keep real super admin Joaquim and real admin Klayton Pires
-      if (u.email === 'joaquim.monteiro@nanucloud.com' || u.email === 'klayton.pires.monteiro@gmail.com' || u.name === 'nanuhost') {
+      // Keep real super admin Joaquim and real admin Suporte nanucloud
+      if (u.email === 'joaquim.monteiro@nanucloud.com' || u.email === 'suporte@nanucloud.com' || u.name === 'nanuhost') {
         return true;
       }
       return !isDemoAccount(u.email, u.name);

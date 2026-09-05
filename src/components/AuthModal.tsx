@@ -33,6 +33,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [address, setAddress] = useState('');
   const [nif, setNif] = useState('');
   const [country, setCountry] = useState('AO');
+  const [chosenPlanId, setChosenPlanId] = useState('free');
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -66,7 +67,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const payload =
         mode === 'login'
           ? { email, password }
-          : { name, email, password, confirmPassword, acceptTerms, phone, company, address, nif, country };
+          : { 
+              name, 
+              email, 
+              password, 
+              confirmPassword, 
+              acceptTerms, 
+              phone, 
+              company, 
+              address, 
+              nif, 
+              country, 
+              chosenPlanId: chosenPlanId === 'free' ? null : chosenPlanId 
+            };
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -79,6 +92,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         localStorage.setItem('nanucloud_session_user', JSON.stringify(data.user));
         if (data.token) {
           localStorage.setItem('nanucloud_token', data.token);
+        }
+        try {
+          const storedClientsJson = localStorage.getItem('nanucloud_clients_db');
+          const storedClients = storedClientsJson ? JSON.parse(storedClientsJson) : [];
+          if (!storedClients.some((c: any) => c.id === data.user.id || c.email === data.user.email)) {
+            storedClients.unshift(data.user);
+            localStorage.setItem('nanucloud_clients_db', JSON.stringify(storedClients));
+          }
+          window.dispatchEvent(new CustomEvent('nanucloud_clients_updated'));
+        } catch (e) {
+          // ignore
         }
         onSuccess(data.user);
         onClose();
@@ -99,16 +123,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     // Static / Offline Fallback Mode (GitHub Pages / Standalone SPA)
     if (mode === 'login') {
       const isNanuhostAdm =
-        (email.trim().toLowerCase() === 'nanuhost' || email.trim().toLowerCase() === 'admin') &&
+        (email.trim().toLowerCase() === 'nanucloud' || email.trim().toLowerCase() === 'admin') &&
         (password === 'admin' || password === 'admin123');
       const isKlaytonAdm =
-        email.trim().toLowerCase() === 'klayton.pires.monteiro@gmail.com' && password === 'admin123';
+        email.trim().toLowerCase() === 'suporte@nanucloud.com' && password === 'admin123';
 
       if (isNanuhostAdm || isKlaytonAdm) {
         const fallbackAdmin: UserSafe = {
           id: isKlaytonAdm ? 'usr_klayton_pires' : 'usr_admin_nanuhost',
-          name: isKlaytonAdm ? 'Klayton Pires' : 'nanuhost',
-          email: isKlaytonAdm ? 'klayton.pires.monteiro@gmail.com' : 'nanuhost',
+          name: isKlaytonAdm ? 'Staff Nanucloud' : 'nanucloud',
+          email: isKlaytonAdm ? 'suporte@nanucloud.com' : 'nanucloud',
           role: 'admin_level1',
           isActive: true,
           activePlanId: 'plan_diamante',
@@ -153,14 +177,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } else {
       // Register fallback
+      const planLabelMap: Record<string, string> = {
+        plan_bronze: 'Plano Bronze (10 Consultas)',
+        plan_prata: 'Plano Prata (30 Consultas)',
+        plan_ouro: 'Plano Ouro Pro (60 Consultas)',
+        plan_platina: 'Plano Platina Business (100 Consultas)',
+        plan_diamante: 'Plano Diamante Enterprise (200 Consultas)'
+      };
+
+      const fallbackPlanName = chosenPlanId === 'free' 
+        ? 'Plano Gratuito Inicial (3 Consultas)' 
+        : `${planLabelMap[chosenPlanId] || 'Plano Escolhido'} (Pendente de Validação pelo Staff)`;
+
       const newUser: UserSafe = {
         id: `usr_${Date.now()}`,
         name: name || 'Novo Utilizador',
         email: email.trim(),
+        phone: phone ? phone.trim() : undefined,
         role: 'user',
         isActive: true,
-        activePlanId: null,
-        activePlanName: 'Plano Inicial (3 Consultas)',
+        activePlanId: chosenPlanId === 'free' ? null : chosenPlanId,
+        activePlanName: fallbackPlanName,
         planExpiresAt: null,
         queriesRemaining: 3,
         totalQueriesUsed: 0,
@@ -175,6 +212,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         lastLoginAt: new Date().toISOString()
       };
       localStorage.setItem('nanucloud_session_user', JSON.stringify(newUser));
+
+      try {
+        const storedClientsJson = localStorage.getItem('nanucloud_clients_db');
+        const storedClients = storedClientsJson ? JSON.parse(storedClientsJson) : [];
+        if (!storedClients.some((c: any) => c.id === newUser.id || c.email === newUser.email)) {
+          storedClients.unshift(newUser);
+          localStorage.setItem('nanucloud_clients_db', JSON.stringify(storedClients));
+        }
+        window.dispatchEvent(new CustomEvent('nanucloud_clients_updated'));
+      } catch (e) {
+        // ignore
+      }
+
       onSuccess(newUser);
       onClose();
     }
@@ -377,6 +427,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {mode === 'register' && (
             <>
+              <div>
+                <label className="text-slate-400 font-bold block mb-1">
+                  Plano Pretendido / Escolhido *
+                </label>
+                <select
+                  value={chosenPlanId}
+                  onChange={(e) => setChosenPlanId(e.target.value)}
+                  className="w-full bg-[#0F172A] border border-slate-800 text-slate-100 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 font-mono"
+                >
+                  <option value="free">Plano Inicial Gratuito (3 Consultas de Teste)</option>
+                  <option value="plan_bronze">Plano Bronze - 500 Kz (10 Consultas)</option>
+                  <option value="plan_prata">Plano Prata - 1.500 Kz (30 Consultas)</option>
+                  <option value="plan_ouro">Plano Ouro Pro - 3.000 Kz (60 Consultas + Importação)</option>
+                  <option value="plan_platina">Plano Platina Business - 5.000 Kz (100 Consultas + Lotes)</option>
+                  <option value="plan_diamante">Plano Diamante Enterprise - 10.000 Kz (200 Consultas + VIP)</option>
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Ao criar conta, terá direito às consultas de teste e o staff poderá validar o plano escolhido.
+                </p>
+              </div>
+
               <div>
                 <label className="text-slate-400 font-bold block mb-1">Confirmar Palavra-passe *</label>
                 <div className="relative">
