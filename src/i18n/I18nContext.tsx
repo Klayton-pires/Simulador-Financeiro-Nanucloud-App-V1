@@ -44,47 +44,33 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isRTL = currentLangMeta.dir === 'rtl';
 
-  // Synchronize Google Translate widget
-  const syncGoogleTranslate = useCallback((targetLang: SupportedLang) => {
+  // Limpeza de cookies legados do Google Translate caso existam
+  const clearLegacyGoogleTranslateCookies = useCallback(() => {
     try {
-      const gLang = targetLang === 'zh' ? 'zh-CN' : targetLang;
-      if (targetLang === 'pt') {
-        document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-        document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
-      } else {
-        document.cookie = `googtrans=/pt/${gLang}; path=/;`;
-        document.cookie = `googtrans=/pt/${gLang}; path=/; domain=${window.location.hostname};`;
-      }
-
-      const selectEl = document.querySelector('.goog-te-combo') as HTMLSelectElement | null;
-      if (selectEl) {
-        selectEl.value = targetLang === 'pt' ? '' : gLang;
-        selectEl.dispatchEvent(new Event('change'));
-      }
-    } catch (e) {
-      console.warn('Google translate synchronization notice:', e);
-    }
+      document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
+    } catch {}
   }, []);
 
-  // Synchronize document direction, lang attribute, and Google Translate
+  // Synchronize document direction and lang attribute
   useEffect(() => {
     try {
       document.documentElement.dir = currentLangMeta.dir;
       document.documentElement.lang = language;
       localStorage.setItem(STORAGE_KEY, language);
       localStorage.setItem('nanucloud_lang', language);
-      syncGoogleTranslate(language);
+      clearLegacyGoogleTranslateCookies();
     } catch {}
-  }, [language, currentLangMeta, syncGoogleTranslate]);
+  }, [language, currentLangMeta, clearLegacyGoogleTranslateCookies]);
 
   const setLanguage = useCallback((lang: SupportedLang) => {
     setLanguageState(lang);
     try {
       localStorage.setItem(STORAGE_KEY, lang);
       localStorage.setItem('nanucloud_lang', lang);
-      syncGoogleTranslate(lang);
+      clearLegacyGoogleTranslateCookies();
     } catch {}
-  }, [syncGoogleTranslate]);
+  }, [clearLegacyGoogleTranslateCookies]);
 
   // Instant dictionary translation for keys
   const t = useCallback(

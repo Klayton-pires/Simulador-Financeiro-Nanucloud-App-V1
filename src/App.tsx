@@ -131,6 +131,32 @@ export default function App() {
     };
   }, [user]);
 
+  // Presence heartbeat: quando qualquer membro do staff/admin está logado, notifica o servidor em tempo real
+  useEffect(() => {
+    if (!user) return;
+    const isStaff = ['super_admin', 'superadmin', 'admin_level1', 'admin_level2', 'admin', 'manager', 'staff'].includes(user.role);
+    if (!isStaff) return;
+
+    const pingPresence = async () => {
+      try {
+        await fetch('/api/chat/ping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userName: user.name,
+            userEmail: user.email
+          })
+        });
+      } catch (err) {
+        // quiet error
+      }
+    };
+
+    pingPresence();
+    const interval = setInterval(pingPresence, 12000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   useEffect(() => {
     if (language && language !== currentLang) {
       setCurrentLang(language);
@@ -152,6 +178,13 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
+        localStorage.setItem('nanucloud_session_user', JSON.stringify(data.user));
+        return;
+      } else if (res.status === 401) {
+        // Token inválido ou expirado
+        localStorage.removeItem('nanucloud_token');
+        localStorage.removeItem('nanucloud_session_user');
+        setUser(null);
         return;
       }
     } catch (err) {
@@ -199,6 +232,7 @@ export default function App() {
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
+      localStorage.removeItem('nanucloud_token');
       localStorage.removeItem('nanucloud_session_user');
       setUser(null);
       setActiveTab('local');

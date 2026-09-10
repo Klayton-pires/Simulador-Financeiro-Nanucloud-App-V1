@@ -6,6 +6,26 @@ import { QueryHistoryItem } from '../types.js';
 
 const router = Router();
 
+// As consultas grátis restauram automaticamente no dia seguinte para clientes
+function ensureClientCreditsDaily(user: any): boolean {
+  if (!user) return true;
+  const isStaff = isStaffOrAdminRole(user.role);
+  if (isStaff) return true;
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (user.lastDailyCreditDate !== today) {
+    if (!user.activePlanId || user.queriesRemaining <= 0) {
+      user.queriesRemaining = Math.max(user.queriesRemaining, 5);
+    }
+    user.lastDailyCreditDate = today;
+    db.updateUser(user.id, {
+      queriesRemaining: user.queriesRemaining,
+      lastDailyCreditDate: today
+    });
+  }
+  return user.queriesRemaining > 0;
+}
+
 // 1. SIMULAÇÃO COMÉRCIO LOCAL & SERVIÇOS COM RETENÇÃO NA FONTE (Permite convidados sem login)
 router.post('/calculate-local', (req: AuthRequest, res: Response) => {
   try {
@@ -101,10 +121,10 @@ router.post('/calculate-local', (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Check query credits for authenticated clients (staff/admin simulate freely, guests use free quota)
-    if (user && !isStaff && user.queriesRemaining <= 0) {
+    // Check query credits for authenticated clients (staff/admin simulate freely, guests use free quota, restores daily)
+    if (user && !isStaff && !ensureClientCreditsDaily(user)) {
       return res.status(402).json({
-        error: 'A sua conta de cliente não possui créditos disponíveis. É obrigatório ter crédito na conta para utilizar qualquer módulo de simulação. Por favor, adquira um plano ou recarregue créditos.',
+        error: 'A sua conta de cliente não possui créditos disponíveis. As consultas grátis renovam automaticamente no dia seguinte! Para continuar agora, ative um plano ou recarregue créditos.',
         code: 'CREDITS_EXHAUSTED'
       });
     }
@@ -244,10 +264,10 @@ router.post('/calculate-import', (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Check query credits (Authenticated clients must have credits)
-    if (user && !isStaff && user.queriesRemaining <= 0) {
+    // Check query credits (Authenticated clients must have credits, restores daily)
+    if (user && !isStaff && !ensureClientCreditsDaily(user)) {
       return res.status(402).json({
-        error: 'A sua conta de cliente não possui créditos disponíveis. É obrigatório ter crédito na conta para utilizar qualquer módulo de simulação. Por favor, adquira um plano ou recarregue créditos.',
+        error: 'A sua conta de cliente não possui créditos disponíveis. As consultas grátis renovam automaticamente no dia seguinte! Para continuar agora, ative um plano ou recarregue créditos.',
         code: 'CREDITS_EXHAUSTED'
       });
     }
@@ -386,9 +406,9 @@ router.post('/calculate-batch', (req: AuthRequest, res: Response) => {
       });
     }
 
-    if (user && !isStaff && user.queriesRemaining <= 0) {
+    if (user && !isStaff && !ensureClientCreditsDaily(user)) {
       return res.status(402).json({
-        error: 'A sua conta de cliente não possui créditos disponíveis. É obrigatório ter crédito na conta para utilizar qualquer módulo de simulação. Por favor, adquira um plano ou recarregue créditos.',
+        error: 'A sua conta de cliente não possui créditos disponíveis. As consultas grátis renovam automaticamente no dia seguinte! Para continuar agora, ative um plano ou recarregue créditos.',
         code: 'CREDITS_EXHAUSTED'
       });
     }

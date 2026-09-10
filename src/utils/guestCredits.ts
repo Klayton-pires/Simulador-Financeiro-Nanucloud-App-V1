@@ -2,17 +2,30 @@ import { useState, useEffect } from 'react';
 
 export const DEFAULT_GUEST_FREE_CREDITS = 5;
 const STORAGE_KEY = 'nanucloud_guest_credits';
+const STORAGE_DATE_KEY = 'nanucloud_guest_credits_date';
 
 /**
  * Get current guest free credits from localStorage.
+ * Automatically restores credits on the next day (daily reset at midnight).
  * Initializes to DEFAULT_GUEST_FREE_CREDITS if not yet set.
  */
 export function getGuestCredits(): number {
   if (typeof window === 'undefined') return DEFAULT_GUEST_FREE_CREDITS;
   try {
+    const today = new Date().toISOString().slice(0, 10);
+    const savedDate = localStorage.getItem(STORAGE_DATE_KEY);
+
+    // As consultas grátis restauram no dia seguinte automaticamente!
+    if (savedDate !== today) {
+      localStorage.setItem(STORAGE_KEY, String(DEFAULT_GUEST_FREE_CREDITS));
+      localStorage.setItem(STORAGE_DATE_KEY, today);
+      return DEFAULT_GUEST_FREE_CREDITS;
+    }
+
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === null) {
       localStorage.setItem(STORAGE_KEY, String(DEFAULT_GUEST_FREE_CREDITS));
+      localStorage.setItem(STORAGE_DATE_KEY, today);
       return DEFAULT_GUEST_FREE_CREDITS;
     }
     const val = parseInt(saved, 10);
@@ -29,9 +42,11 @@ export function getGuestCredits(): number {
 export function useGuestCredit(): number {
   if (typeof window === 'undefined') return 0;
   try {
+    const today = new Date().toISOString().slice(0, 10);
     const current = getGuestCredits();
     const next = Math.max(0, current - 1);
     localStorage.setItem(STORAGE_KEY, String(next));
+    localStorage.setItem(STORAGE_DATE_KEY, today);
     window.dispatchEvent(new CustomEvent('nanucloud_credits_updated', { detail: { credits: next } }));
     return next;
   } catch {

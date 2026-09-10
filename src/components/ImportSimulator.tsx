@@ -46,7 +46,7 @@ export const ImportSimulator: React.FC<ImportSimulatorProps> = ({
   const [showExhaustedModal, setShowExhaustedModal] = useState<boolean>(false);
 
   const isStaff = isStaffOrAdmin(user?.role);
-  const isUnlocked = isStaff || !user || Boolean(user?.isImportUnlocked || user?.activePlanId);
+  const isUnlocked = isStaff || !user || Boolean(user?.isImportUnlocked || user?.activePlanId || (user?.queriesRemaining && user.queriesRemaining > 0));
 
   const [originCountry, setOriginCountry] = useState<string>('CN');
   const [destCountry, setDestCountry] = useState<string>('AO');

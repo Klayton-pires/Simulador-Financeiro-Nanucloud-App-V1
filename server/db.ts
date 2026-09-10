@@ -450,6 +450,136 @@ class DatabaseEngine {
       this.data.users.push(clientDefault);
     }
 
+    // 5. Garantir que os clientes iniciais da carteira comercial existem na base de dados
+    const seedClients: User[] = [
+      {
+        id: 'cli_001',
+        name: 'Manuel António Domingos',
+        email: 'manuel.domingos@comercialsul.ao',
+        phone: '+244 923 123 456',
+        company: 'Comercial Sul Importação & Exportação Lda',
+        address: 'Luanda, Viana',
+        nif: '5401129384',
+        country: 'AO',
+        passwordHash: bcrypt.hashSync('cliente123', salt),
+        role: 'client',
+        isActive: true,
+        queriesRemaining: 5790,
+        totalQueriesUsed: 4210,
+        activePlanId: 'plan_diamante',
+        activePlanName: 'Plano Diamante (Importação + API)',
+        planExpiresAt: '2027-12-31T23:59:59.000Z',
+        isImportUnlocked: true,
+        isBatchUnlocked: true,
+        twoFactorEnabled: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: '2026-08-21T17:10:00.000Z'
+      },
+      {
+        id: 'cli_002',
+        name: 'Ana Carolina Sousa',
+        email: 'ana.sousa@farmaciasunidas.ao',
+        phone: '+244 931 444 555',
+        company: 'Farmácias Unidas de Luanda Lda',
+        address: 'Luanda, Maianga',
+        nif: '5419082231',
+        country: 'AO',
+        passwordHash: bcrypt.hashSync('cliente123', salt),
+        role: 'client',
+        isActive: true,
+        queriesRemaining: 340,
+        totalQueriesUsed: 660,
+        activePlanId: 'plan_ouro',
+        activePlanName: 'Plano Ouro (Comércio & Lotes)',
+        planExpiresAt: '2026-10-15T00:00:00.000Z',
+        isImportUnlocked: false,
+        isBatchUnlocked: true,
+        twoFactorEnabled: false,
+        createdAt: '2026-02-10T00:00:00.000Z',
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: '2026-08-20T10:00:00.000Z'
+      },
+      {
+        id: 'cli_003',
+        name: 'Eng. Manuel Domingos',
+        email: 'm.domingos@angologistics.co.ao',
+        phone: '+244 923 777 888',
+        company: 'AngoLogistics Despachos Aduaneiros & Trânsitos',
+        address: 'Luanda, Porto de Luanda',
+        nif: '5401928374',
+        country: 'AO',
+        passwordHash: bcrypt.hashSync('cliente123', salt),
+        role: 'client',
+        isActive: true,
+        queriesRemaining: 1850,
+        totalQueriesUsed: 2150,
+        activePlanId: 'plan_diamante',
+        activePlanName: 'Plano Diamante (Importação + API)',
+        planExpiresAt: '2026-12-31T00:00:00.000Z',
+        isImportUnlocked: true,
+        isBatchUnlocked: true,
+        twoFactorEnabled: false,
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: '2026-08-21T08:20:00.000Z'
+      },
+      {
+        id: 'cli_004',
+        name: 'Dra. Teresa Van-Dúnem',
+        email: 'teresa@advogadosluanda.ao',
+        phone: '+244 944 123 456',
+        company: 'Van-Dúnem Consultores Associados RL',
+        address: 'Luanda, Ingombota',
+        nif: '5420918231',
+        country: 'AO',
+        passwordHash: bcrypt.hashSync('cliente123', salt),
+        role: 'client',
+        isActive: true,
+        queriesRemaining: 45,
+        totalQueriesUsed: 155,
+        activePlanId: 'plan_prata',
+        activePlanName: 'Plano Prata (Serviços & Honorários)',
+        planExpiresAt: '2026-09-01T00:00:00.000Z',
+        isImportUnlocked: false,
+        isBatchUnlocked: false,
+        twoFactorEnabled: false,
+        createdAt: '2026-04-12T00:00:00.000Z',
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: '2026-08-18T11:00:00.000Z'
+      },
+      {
+        id: 'cli_005',
+        name: 'Rui Miguel Castro',
+        email: 'rui.castro@iberiantrade.pt',
+        phone: '+351 912 345 678',
+        company: 'Iberian Trade Solutions Unipessoal',
+        address: 'Lisboa, Portugal',
+        nif: 'PT509887766',
+        country: 'PT',
+        passwordHash: bcrypt.hashSync('cliente123', salt),
+        role: 'client',
+        isActive: true,
+        queriesRemaining: 800,
+        totalQueriesUsed: 310,
+        activePlanId: 'plan_ouro',
+        activePlanName: 'Plano Ouro Internacional',
+        planExpiresAt: '2026-11-30T00:00:00.000Z',
+        isImportUnlocked: false,
+        isBatchUnlocked: true,
+        twoFactorEnabled: false,
+        createdAt: '2026-05-01T00:00:00.000Z',
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: '2026-08-22T09:00:00.000Z'
+      }
+    ];
+
+    for (const sc of seedClients) {
+      if (!this.data.users.some(u => u.id === sc.id || u.email.toLowerCase() === sc.email.toLowerCase())) {
+        this.data.users.push(sc);
+      }
+    }
+
     if (!this.data.botKnowledgeBase || this.data.botKnowledgeBase.length === 0) {
       this.data.botKnowledgeBase = DEFAULT_BOT_KNOWLEDGE;
     }

@@ -209,19 +209,49 @@ export function initBrowserCompatibility(): void {
       });
     }
 
-    // 10. Atalhos de Teclado Globais para Windows (F11 Fullscreen, Ctrl+P Impressão)
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', (e: KeyboardEvent) => {
-        // F11: Alternar ecrã inteiro
-        if (e.key === 'F11') {
-          e.preventDefault();
-          if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(() => {});
-          } else {
-            document.exitFullscreen().catch(() => {});
-          }
+    // 11. Intercetor Global de Fetch para Autenticação JWT e Cookie Session
+    if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+      const originalFetch = window.fetch;
+      window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+        let urlStr = '';
+        if (typeof input === 'string') {
+          urlStr = input;
+        } else if (input instanceof URL) {
+          urlStr = input.toString();
+        } else if (input && typeof (input as any).url === 'string') {
+          urlStr = (input as any).url;
         }
-      });
+
+        // Intercetar apenas chamadas para endpoints /api da aplicação
+        if (urlStr.startsWith('/api') || urlStr.includes('/api/')) {
+          const token = localStorage.getItem('nanucloud_token');
+          const modifiedInit: RequestInit = { ...init };
+          
+          let headers: Headers;
+          if (modifiedInit.headers instanceof Headers) {
+            headers = modifiedInit.headers;
+          } else if (Array.isArray(modifiedInit.headers)) {
+            headers = new Headers(modifiedInit.headers);
+          } else if (modifiedInit.headers && typeof modifiedInit.headers === 'object') {
+            headers = new Headers(modifiedInit.headers as Record<string, string>);
+          } else {
+            headers = new Headers();
+          }
+
+          if (token && !headers.has('Authorization')) {
+            headers.set('Authorization', `Bearer ${token}`);
+          }
+
+          if (!modifiedInit.credentials) {
+            modifiedInit.credentials = 'include';
+          }
+
+          modifiedInit.headers = headers;
+          return originalFetch(input, modifiedInit);
+        }
+
+        return originalFetch(input, init);
+      };
     }
   } catch (err) {
     console.warn('Compatibilidade inicializada com avisos:', err);

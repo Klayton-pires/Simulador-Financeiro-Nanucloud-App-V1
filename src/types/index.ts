@@ -117,6 +117,7 @@ export interface UserSafe {
   assignedManagerId?: string;
   assignedManagerName?: string;
   commercialNotes?: string;
+  lastDailyCreditDate?: string;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;

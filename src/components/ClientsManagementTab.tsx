@@ -89,14 +89,8 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
             u.role === 'client' || u.role === 'user' || !['super_admin', 'superadmin', 'admin_level1', 'admin_level2', 'admin', 'manager', 'staff'].includes(u.role)
           );
           if (clientAccounts.length > 0) {
-            setClients(prev => {
-              const map = new Map<string, UserSafe>();
-              prev.forEach(c => map.set(c.id, c));
-              clientAccounts.forEach((c: UserSafe) => map.set(c.id, c));
-              const merged = Array.from(map.values());
-              localStorage.setItem('nanucloud_clients_db', JSON.stringify(merged));
-              return merged;
-            });
+            setClients(clientAccounts);
+            localStorage.setItem('nanucloud_clients_db', JSON.stringify(clientAccounts));
           }
         }
       }
@@ -729,23 +723,29 @@ export const ClientsManagementTab: React.FC<ClientsManagementTabProps> = ({ curr
                   </td>
 
                   <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {/* Botão de Validar Plano */}
+                    <div className="flex items-center justify-end gap-2 flex-wrap">
+                      {/* Botão de Validar Plano com destaque para o Staff */}
                       <button
                         onClick={() => handleOpenPlanValidation(client)}
-                        className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg transition cursor-pointer"
-                        title="Validar e Ativar Plano Escolhido"
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition shadow cursor-pointer ${
+                          client.activePlanName && (client.activePlanName.includes('Pendente') || client.activePlanName.includes('Aguardando'))
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 ring-2 ring-emerald-500/40 animate-pulse'
+                            : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        }`}
+                        title="Validar e Ativar Plano Escolhido pelo Cliente"
                       >
-                        <ShieldCheck className="w-4 h-4" />
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Validar Plano</span>
                       </button>
 
                       {/* Botão de Reset de Senha */}
                       <button
                         onClick={() => handleOpenPasswordReset(client)}
-                        className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg transition cursor-pointer"
+                        className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold transition cursor-pointer"
                         title="Redefinir Palavra-passe do Cliente (Reset de Senha)"
                       >
-                        <Key className="w-4 h-4" />
+                        <Key className="w-3.5 h-3.5" />
+                        <span>Reset Senha</span>
                       </button>
 
                       {/* Botões de Exportar Dossiê do Cliente */}

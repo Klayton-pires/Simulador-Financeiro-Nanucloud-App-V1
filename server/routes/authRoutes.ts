@@ -398,6 +398,20 @@ router.get('/me', (req: AuthRequest, res: Response) => {
   if (!req.user) {
     return res.json({ user: null });
   }
+
+  // As consultas grátis restauram automaticamente no dia seguinte para clientes
+  const today = new Date().toISOString().slice(0, 10);
+  if (req.user.lastDailyCreditDate !== today) {
+    if ((!req.user.activePlanId || req.user.queriesRemaining <= 0) && ['client', 'user'].includes(req.user.role)) {
+      req.user.queriesRemaining = Math.max(req.user.queriesRemaining, 5);
+    }
+    req.user.lastDailyCreditDate = today;
+    db.updateUser(req.user.id, {
+      queriesRemaining: req.user.queriesRemaining,
+      lastDailyCreditDate: today
+    });
+  }
+
   const { passwordHash: _, ...userSafe } = req.user;
   return res.json({ user: userSafe });
 });

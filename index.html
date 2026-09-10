@@ -1,7 +1,8 @@
 <!doctype html>
-<html lang="pt">
+<html lang="pt" class="notranslate" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <meta name="google" content="notranslate" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Simulador Financeiro Nanucloud</title>
     <meta name="description" content="Simulador Financeiro Nanucloud - Formação de preços, margens comerciais, serviços, importação e intermediação. A utilização deste aplicativo não dispensa a consulta de um profissional de contas." />
@@ -11,7 +12,7 @@
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
   </head>
-  <body class="bg-[#0F172A] text-slate-200">
+  <body class="bg-[#0F172A] text-slate-200 notranslate" translate="no">
     <div id="root">
       <!-- Fallback message if opened directly via file:// or if JavaScript fails -->
       <div id="file-protocol-warning" style="display: none; min-height: 100vh; background-color: #0F172A; color: #E2E8F0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; padding: 40px 20px; align-items: center; justify-content: center;">
@@ -66,25 +67,6 @@
         }
       }
     </script>
-
-    <!-- Google Translate Auto-Localization Integration -->
-    <div id="google_translate_element" style="display: none !important;"></div>
-    <script type="text/javascript">
-      window.googleTranslateElementInit = function() {
-        try {
-          if (window.google && window.google.translate) {
-            new window.google.translate.TranslateElement({
-              pageLanguage: 'pt',
-              includedLanguages: 'pt,en,es,fr,zh-CN,ar,ja,it,ko,hi',
-              autoDisplay: false
-            }, 'google_translate_element');
-          }
-        } catch (e) {
-          console.warn('Google translate element note:', e);
-        }
-      };
-    </script>
-    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async defer></script>
 
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -29,6 +29,7 @@ export interface User {
   isImportUnlocked: boolean;
   isBatchUnlocked: boolean;
   twoFactorEnabled?: boolean;
+  lastDailyCreditDate?: string;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;

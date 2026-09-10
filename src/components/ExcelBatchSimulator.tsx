@@ -52,7 +52,7 @@ export const ExcelBatchSimulator: React.FC<ExcelBatchSimulatorProps> = ({
   const [showExhaustedModal, setShowExhaustedModal] = useState<boolean>(false);
 
   const isStaff = isStaffOrAdmin(user?.role);
-  const isUnlocked = isStaff || !user || Boolean(user?.isBatchUnlocked || user?.activePlanId);
+  const isUnlocked = isStaff || !user || Boolean(user?.isBatchUnlocked || user?.activePlanId || (user?.queriesRemaining && user.queriesRemaining > 0));
 
   const [countryCode, setCountryCode] = useState<string>('AO');
   const [vatRate, setVatRate] = useState<number>(14);
